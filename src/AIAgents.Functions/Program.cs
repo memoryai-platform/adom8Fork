@@ -1,0 +1,99 @@
+using AIAgents.Core.Configuration;
+using AIAgents.Core.Interfaces;
+using AIAgents.Core.Services;
+using AIAgents.Functions.Agents;
+using AIAgents.Functions.Services;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var host = new HostBuilder()
+    .ConfigureFunctionsWebApplication()
+    .ConfigureServices((context, services) =>
+    {
+        var configuration = context.Configuration;
+
+        // Bind configuration sections to IOptions<T>
+        services.Configure<AIOptions>(configuration.GetSection(AIOptions.SectionName));
+        services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
+        services.Configure<GitOptions>(configuration.GetSection(GitOptions.SectionName));
+        services.Configure<DeploymentOptions>(configuration.GetSection(DeploymentOptions.SectionName));
+        services.Configure<GitHubOptions>(configuration.GetSection(GitHubOptions.SectionName));
+
+        // Application Insights — register BEFORE HTTP resilience handlers
+        services.AddApplicationInsightsTelemetryWorkerService();
+        services.ConfigureFunctionsApplicationInsights();
+
+        // Named HTTP client for AI API calls with resilience pipeline
+        services.AddHttpClient("AIClient", (sp, client) =>
+        {
+            var aiOptions = new AIOptions
+            {
+                Provider = configuration[$"{AIOptions.SectionName}:Provider"] ?? "OpenAI",
+                Model = configuration[$"{AIOptions.SectionName}:Model"] ?? "gpt-4o",
+                ApiKey = configuration[$"{AIOptions.SectionName}:ApiKey"] ?? "",
+                Endpoint = configuration[$"{AIOptions.SectionName}:Endpoint"]
+            };
+            if (!string.IsNullOrEmpty(aiOptions.Endpoint))
+            {
+                client.BaseAddress = new Uri(aiOptions.Endpoint);
+            }
+            else
+            {
+                client.BaseAddress = new Uri("https://api.openai.com/");
+            }
+
+            // Set auth header based on provider
+            if (aiOptions.Provider.Equals("AzureOpenAI", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Add("api-key", aiOptions.ApiKey);
+            }
+            else
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", aiOptions.ApiKey);
+            }
+
+            client.Timeout = TimeSpan.FromMinutes(5);
+        })
+        .AddStandardResilienceHandler(options =>
+        {
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(120);
+            options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(5);
+            options.Retry.MaxRetryAttempts = 3;
+            options.Retry.Delay = TimeSpan.FromSeconds(2);
+        });
+
+        // Core services
+        services.AddSingleton<IAIClient, AIClient>();
+        services.AddSingleton<IAzureDevOpsClient, AzureDevOpsClient>();
+        services.AddSingleton<IGitOperations, GitOperations>();
+        services.AddSingleton<IStoryContextFactory, StoryContextFactory>();
+        services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
+
+        // Repository provider — GitHub or Azure DevOps Repos (based on Git:Provider config)
+        var gitProvider = configuration[$"{GitOptions.SectionName}:Provider"] ?? "GitHub";
+        if (gitProvider.Equals("GitHub", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IRepositoryProvider, GitHubRepositoryProvider>();
+        }
+        else
+        {
+            services.AddSingleton<IRepositoryProvider, AzureDevOpsRepositoryProvider>();
+        }
+
+        // Activity logging
+        services.AddSingleton<IActivityLogger, TableStorageActivityLogger>();
+
+        // Agent services — keyed DI for dispatcher routing
+        services.AddKeyedScoped<IAgentService, PlanningAgentService>("Planning");
+        services.AddKeyedScoped<IAgentService, CodingAgentService>("Coding");
+        services.AddKeyedScoped<IAgentService, TestingAgentService>("Testing");
+        services.AddKeyedScoped<IAgentService, ReviewAgentService>("Review");
+        services.AddKeyedScoped<IAgentService, DocumentationAgentService>("Documentation");
+        services.AddKeyedScoped<IAgentService, DeploymentAgentService>("Deployment");
+    })
+    .Build();
+
+host.Run();

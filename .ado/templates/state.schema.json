@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Story State",
+  "description": "Schema for .ado/stories/US-{id}/state.json",
+  "type": "object",
+  "required": ["workItemId", "currentState", "createdAt", "updatedAt"],
+  "properties": {
+    "workItemId": {
+      "type": "integer",
+      "description": "Azure DevOps work item ID"
+    },
+    "currentState": {
+      "type": "string",
+      "enum": ["New", "Story Planning", "AI Code", "AI Test", "AI Review", "AI Docs", "Ready for QA", "Needs Revision"],
+      "description": "Current state in the pipeline"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "failed"]
+          },
+          "startedAt": { "type": ["string", "null"], "format": "date-time" },
+          "completedAt": { "type": ["string", "null"], "format": "date-time" },
+          "additionalData": { "type": "object" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "docs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "agent": { "type": "string" },
+          "decisionText": { "type": "string" },
+          "rationale": { "type": "string" }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "agent": { "type": "string" },
+          "questionText": { "type": "string" },
+          "askedTo": { "type": "string" }
+        }
+      }
+    }
+  }
+}

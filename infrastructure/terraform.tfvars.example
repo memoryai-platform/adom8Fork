@@ -1,0 +1,9 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is in .gitignore — never commit real values
+
+resource_group_name  = "ai-agents-rg"
+location             = "eastus"
+environment          = "dev"
+function_app_name    = "ai-agents-func-UNIQUE"       # Must be globally unique
+storage_account_name = "aiagentsstorUNIQUE"           # Must be globally unique, lowercase, no hyphens, 3-24 chars
+static_web_app_name  = "ai-agent-dashboard-UNIQUE"    # Must be globally unique

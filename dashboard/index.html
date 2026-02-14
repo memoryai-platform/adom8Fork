@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            letter-spacing: -0.5px;
+        }
+
+        .header .subtitle {
+            font-size: 1rem;
+            opacity: 0.85;
+            font-weight: 400;
+        }
+
+        /* Stat Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        /* Main Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Agent Cards */
+        .agents-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .agent-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            border-left: 5px solid #ccc;
+            transition: all 0.3s ease;
+        }
+
+        .agent-card:hover {
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+        }
+
+        .agent-card.pending {
+            border-left-color: #bbb;
+        }
+
+        .agent-card.active {
+            border-left-color: #667eea;
+            animation: agentPulse 2s ease-in-out infinite;
+        }
+
+        .agent-card.completed {
+            border-left-color: #667eea; /* BUG: Should be #4caf50 (green) */
+            opacity: 0.8;               /* BUG: Should be 1.0 */
+        }
+
+        @keyframes agentPulse {
+            0%, 100% {
+                box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            }
+            50% {
+                box-shadow: 0 4px 25px rgba(102, 126, 234, 0.35);
+            }
+        }
+
+        .agent-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .agent-emoji {
+            font-size: 1.5rem;
+        }
+
+        .agent-name {
+            font-weight: 700;
+            font-size: 1rem;
+            flex: 1;
+        }
+
+        .status-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.pending {
+            background: #eee;
+            color: #999;
+        }
+
+        .status-badge.active {
+            background: #e8edff;
+            color: #667eea;
+            animation: badgePulse 1.5s ease-in-out infinite;
+        }
+
+        .status-badge.completed {
+            background: #e8edff;  /* BUG: Should be #e8f5e9 (green tint) */
+            color: #667eea;      /* BUG: Should be #4caf50 (green) */
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #eef0f5;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 6px;
+            transition: width 0.6s ease;
+        }
+
+        .agent-details {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .agent-details span {
+            margin-right: 12px;
+        }
+
+        /* Activity Feed */
+        .activity-panel {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            padding: 18px;
+            max-height: 620px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .activity-panel-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .activity-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .activity-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .activity-list::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 4px;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 0.85rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .activity-emoji {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .activity-text {
+            flex: 1;
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .activity-time {
+            font-size: 0.72rem;
+            color: #bbb;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* Connecting State */
+        .connecting-overlay {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .connecting-overlay.show {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .container {
+                padding: 14px;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            .header h1 {
+                font-size: 1.6rem;
+            }
+            .stat-value {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🤖 AI Agent Monitor</h1>
+            <div class="subtitle">Real-time monitoring of AI agents processing Azure DevOps work items</div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-stories">0</div>
+                <div class="stat-label">Stories Processed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-time">0s</div>
+                <div class="stat-label">Avg Completion Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-success">0%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-saved">0h</div>
+                <div class="stat-label">Time Saved</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-grid">
+            <div>
+                <div class="section-title">⚡ Agent Pipeline</div>
+                <div class="agents-list" id="agents-container">
+                    <!-- Agent cards rendered by JS -->
+                </div>
+            </div>
+            <div>
+                <div class="section-title">📡 Live Activity</div>
+                <div class="activity-panel">
+                    <div class="activity-panel-title">Recent Events</div>
+                    <div class="activity-list" id="activity-feed">
+                        <!-- Activity items rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connecting Indicator -->
+    <div class="connecting-overlay" id="connecting-overlay">
+        <div class="spinner"></div>
+        <span>Connecting to API...</span>
+    </div>
+
+    <script>
+        // ========== Configuration ==========
+        const API_URL = '/api/GetCurrentStatus';
+        const POLL_INTERVAL = 2000;
+
+        // ========== Default Agent Definitions ==========
+        const DEFAULT_AGENTS = [
+            { name: 'Planning Agent',       emoji: '📋', status: 'pending', started: null, duration: null, confidence: null },
+            { name: 'Coding Agent',         emoji: '💻', status: 'pending', started: null, duration: null, confidence: null },
+            { name: 'Testing Agent',        emoji: '🧪', status: 'pending', started: null, duration: null, confidence: null },
+            { name: 'Review Agent',         emoji: '🔍', status: 'pending', started: null, duration: null, confidence: null },
+            { name: 'Documentation Agent',  emoji: '📄', status: 'pending', started: null, duration: null, confidence: null }
+        ];
+
+        // ========== State ==========
+        let isConnected = false;
+
+        // ========== Progress Calculation ==========
+        function getProgress(data) {
+            // BUG: Should calculate based on status and elapsed time
+            // but always returns 0
+            return 0;
+        }
+
+        // ========== DOM Helpers ==========
+        function formatTime(value) {
+            if (!value) return '—';
+            return value;
+        }
+
+        function formatStatusText(status) {
+            if (status === 'active') return 'Running';
+            if (status === 'completed') return 'Done';
+            return 'Pending';
+        }
+
+        // ========== Update Functions ==========
+        function updateDashboard(data) {
+            // Stats
+            if (data.stats) {
+                document.getElementById('stat-stories').textContent = data.stats.storiesProcessed ?? 0;
+                document.getElementById('stat-time').textContent = data.stats.avgCompletionTime ?? '0s';
+                document.getElementById('stat-success').textContent = data.stats.successRate ?? '0%';
+                document.getElementById('stat-saved').textContent = data.stats.timeSaved ?? '0h';
+            }
+
+            // Agents
+            if (data.agents) {
+                updateAgents(data.agents);
+            }
+
+            // Activity
+            if (data.activities) {
+                updateActivity(data.activities);
+            }
+        }
+
+        function updateAgents(agents) {
+            const container = document.getElementById('agents-container');
+            container.innerHTML = '';
+
+            agents.forEach(agent => {
+                const progress = getProgress(agent);
+                const card = document.createElement('div');
+                card.className = `agent-card ${agent.status || 'pending'}`;
+                card.innerHTML = `
+                    <div class="agent-header">
+                        <span class="agent-emoji">${agent.emoji || '🤖'}</span>
+                        <span class="agent-name">${agent.name}</span>
+                        <span class="status-badge ${agent.status || 'pending'}">${formatStatusText(agent.status)}</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="agent-details">
+                        <span>Started: ${formatTime(agent.started)}</span>
+                        <span>Duration: ${formatTime(agent.duration)}</span>
+                        <span>Confidence: ${formatTime(agent.confidence)}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateActivity(activities) {
+            const feed = document.getElementById('activity-feed');
+            feed.innerHTML = '';
+
+            activities.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'activity-item';
+                el.innerHTML = `
+                    <span class="activity-emoji">${item.emoji || '📌'}</span>
+                    <span class="activity-text">${item.message}</span>
+                    <span class="activity-time">${item.time || ''}</span>
+                `;
+                feed.appendChild(el);
+            });
+        }
+
+        // ========== API Fetching ==========
+        async function fetchStatus() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                isConnected = true;
+                document.getElementById('connecting-overlay').classList.remove('show');
+
+                updateDashboard(data);
+            } catch (err) {
+                if (!isConnected) {
+                    document.getElementById('connecting-overlay').classList.add('show');
+                }
+                console.warn('API fetch failed:', err.message);
+            }
+        }
+
+        // ========== Init ==========
+        function init() {
+            // Render default empty state
+            updateAgents(DEFAULT_AGENTS);
+            updateActivity([
+                { emoji: '⏳', message: 'Waiting for agent activity...', time: 'now' }
+            ]);
+
+            // Start polling
+            fetchStatus();
+            setInterval(fetchStatus, POLL_INTERVAL);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
