@@ -107,10 +107,11 @@ Respond ONLY with valid JSON:
 
 Generate comprehensive documentation for these changes.";
 
-        var aiResponse = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 4096, Temperature = 0.3 }, cancellationToken);
+        state.TokenUsage.RecordUsage("Documentation", aiResult.Usage);
 
-        var docResult = ParseDocResult(aiResponse);
+        var docResult = ParseDocResult(aiResult.Content);
 
         // Render documentation template
         var templateModel = new Dictionary<string, object?>

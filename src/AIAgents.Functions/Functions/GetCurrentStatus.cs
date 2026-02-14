@@ -1,3 +1,4 @@
+using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using Microsoft.AspNetCore.Http;
@@ -46,7 +47,9 @@ public sealed class GetCurrentStatus
                 AgentsActive = storyStatuses.Count(s =>
                     s.Agents.Values.Any(a => a == "in_progress")),
                 SuccessRate = CalculateSuccessRate(storyStatuses),
-                AvgProcessingTime = "N/A"
+                AvgProcessingTime = "N/A",
+                TotalTokens = storyStatuses.Sum(s => s.TokenUsage?.TotalTokens ?? 0),
+                TotalCost = storyStatuses.Sum(s => s.TokenUsage?.TotalCost ?? 0m)
             },
             RecentActivity = recentActivity
         };
@@ -93,13 +96,38 @@ public sealed class GetCurrentStatus
             var totalAgents = 5; // Planning, Coding, Testing, Review, Documentation
             var progress = (int)((double)completedCount / totalAgents * 100);
 
+            // Aggregate token usage from activity entries
+            var storyActivities = group.ToList();
+            var totalTokens = storyActivities.Sum(a => a.Tokens);
+            var totalCost = storyActivities.Sum(a => a.Cost);
+
+            var agentTokens = storyActivities
+                .Where(a => a.Tokens > 0)
+                .GroupBy(a => a.Agent)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new AgentTokenUsageDto
+                    {
+                        TotalTokens = g.Sum(a => a.Tokens),
+                        EstimatedCost = g.Sum(a => a.Cost),
+                        Model = "",
+                        CallCount = g.Count()
+                    });
+
             statuses.Add(new StoryStatus
             {
                 WorkItemId = group.Key,
                 Title = $"US-{group.Key}",
                 CurrentAgent = currentAgent,
                 Progress = progress,
-                Agents = agents
+                Agents = agents,
+                TokenUsage = totalTokens > 0 ? new StoryTokenUsageDto
+                {
+                    TotalTokens = totalTokens,
+                    TotalCost = totalCost,
+                    Complexity = StoryTokenUsage.ClassifyComplexity(totalTokens),
+                    Agents = agentTokens.Count > 0 ? agentTokens : null
+                } : null
             });
         }
 

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
+using AIAgents.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -45,14 +46,12 @@ public sealed class AIClient : IAIClient
         _logger = logger;
     }
 
-    public async Task<string> CompleteAsync(
+    public async Task<AICompletionResult> CompleteAsync(
         string systemPrompt,
         string userPrompt,
         AICompletionOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        // Use the resilience-enabled named client but set auth per-request
-        // so each AIClient instance can target a different provider/model.
         var client = _httpClientFactory.CreateClient("AIClient");
 
         var requestBody = BuildRequestBody(systemPrompt, userPrompt, options);
@@ -85,11 +84,51 @@ public sealed class AIClient : IAIClient
             throw new InvalidOperationException("AI completion returned empty content.");
         }
 
-        _logger.LogDebug(
-            "Completion received: {TokenCount} characters",
-            content.Length);
+        // Extract token usage from API response
+        TokenUsageData? usage = null;
+        try
+        {
+            if (result?.Usage is not null)
+            {
+                var inputTokens = result.Usage.PromptTokens;
+                var outputTokens = result.Usage.CompletionTokens;
+                var totalTokens = result.Usage.TotalTokens > 0
+                    ? result.Usage.TotalTokens
+                    : inputTokens + outputTokens;
+                var cost = TokenCostCalculator.Calculate(_options.Model, inputTokens, outputTokens);
 
-        return content;
+                usage = new TokenUsageData
+                {
+                    InputTokens = inputTokens,
+                    OutputTokens = outputTokens,
+                    TotalTokens = totalTokens,
+                    EstimatedCost = cost,
+                    Model = _options.Model
+                };
+
+                _logger.LogDebug(
+                    "Token usage: {Input} in / {Output} out / ${Cost:F6} est. cost ({Model})",
+                    inputTokens, outputTokens, cost, _options.Model);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "AI response from {Provider}/{Model} did not include usage data",
+                    _options.Provider, _options.Model);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse token usage data — continuing without usage tracking");
+        }
+
+        _logger.LogDebug("Completion received: {CharCount} characters", content.Length);
+
+        return new AICompletionResult
+        {
+            Content = content,
+            Usage = usage
+        };
     }
 
     private object BuildRequestBody(string systemPrompt, string userPrompt, AICompletionOptions? options)
@@ -147,6 +186,9 @@ public sealed class AIClient : IAIClient
     {
         [JsonPropertyName("choices")]
         public List<Choice>? Choices { get; init; }
+
+        [JsonPropertyName("usage")]
+        public UsageData? Usage { get; init; }
     }
 
     private sealed class Choice
@@ -159,5 +201,17 @@ public sealed class AIClient : IAIClient
     {
         [JsonPropertyName("content")]
         public string? Content { get; init; }
+    }
+
+    private sealed class UsageData
+    {
+        [JsonPropertyName("prompt_tokens")]
+        public int PromptTokens { get; init; }
+
+        [JsonPropertyName("completion_tokens")]
+        public int CompletionTokens { get; init; }
+
+        [JsonPropertyName("total_tokens")]
+        public int TotalTokens { get; init; }
     }
 }

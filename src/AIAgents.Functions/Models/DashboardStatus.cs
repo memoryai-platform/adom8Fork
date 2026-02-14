@@ -39,6 +39,9 @@ public sealed class StoryStatus
 
     [JsonPropertyName("agents")]
     public required IReadOnlyDictionary<string, string> Agents { get; init; }
+
+    [JsonPropertyName("tokenUsage")]
+    public StoryTokenUsageDto? TokenUsage { get; init; }
 }
 
 /// <summary>
@@ -57,6 +60,12 @@ public sealed class DashboardStats
 
     [JsonPropertyName("avgProcessingTime")]
     public string AvgProcessingTime { get; init; } = "N/A";
+
+    [JsonPropertyName("totalTokens")]
+    public int TotalTokens { get; init; }
+
+    [JsonPropertyName("totalCost")]
+    public decimal TotalCost { get; init; }
 }
 
 /// <summary>
@@ -78,4 +87,46 @@ public sealed class ActivityEntry
 
     [JsonPropertyName("level")]
     public string Level { get; init; } = "info";
+
+    [JsonPropertyName("tokens")]
+    public int Tokens { get; init; }
+
+    [JsonPropertyName("cost")]
+    public decimal Cost { get; init; }
+}
+
+/// <summary>
+/// Lightweight token usage DTO for the dashboard, without the full agent breakdown.
+/// </summary>
+public sealed class StoryTokenUsageDto
+{
+    [JsonPropertyName("totalTokens")]
+    public int TotalTokens { get; init; }
+
+    [JsonPropertyName("totalCost")]
+    public decimal TotalCost { get; init; }
+
+    [JsonPropertyName("complexity")]
+    public string Complexity { get; init; } = "XS";
+
+    [JsonPropertyName("agents")]
+    public IReadOnlyDictionary<string, AgentTokenUsageDto>? Agents { get; init; }
+}
+
+/// <summary>
+/// Per-agent token usage for the dashboard.
+/// </summary>
+public sealed class AgentTokenUsageDto
+{
+    [JsonPropertyName("totalTokens")]
+    public int TotalTokens { get; init; }
+
+    [JsonPropertyName("estimatedCost")]
+    public decimal EstimatedCost { get; init; }
+
+    [JsonPropertyName("model")]
+    public string Model { get; init; } = "";
+
+    [JsonPropertyName("callCount")]
+    public int CallCount { get; init; }
 }

@@ -10,7 +10,14 @@ public interface IActivityLogger
     /// <summary>
     /// Logs an activity entry.
     /// </summary>
-    Task LogAsync(string agent, int workItemId, string message, string level = "info", CancellationToken cancellationToken = default);
+    Task LogAsync(string agent, int workItemId, string message, string level = "info",
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Logs an activity entry with token usage data.
+    /// </summary>
+    Task LogAsync(string agent, int workItemId, string message, int tokens, decimal cost,
+        string level = "info", CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Retrieves recent activity entries for the dashboard.

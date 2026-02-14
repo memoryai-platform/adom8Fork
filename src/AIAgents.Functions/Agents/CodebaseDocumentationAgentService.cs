@@ -26,6 +26,7 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
     private readonly IActivityLogger _activityLogger;
     private readonly CodebaseDocumentationOptions _options;
     private readonly ILogger<CodebaseDocumentationAgentService> _logger;
+    private readonly StoryTokenUsage _tokenUsage = new();
 
     public CodebaseDocumentationAgentService(
         IAIClientFactory aiClientFactory,
@@ -131,7 +132,7 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
         await _gitOps.CommitAndPushAsync(repoPath, commitMsg, cancellationToken);
 
         // Step 10: Post summary to work item
-        var summary = BuildSummaryComment(metadata, totalFiles, isIncremental);
+        var summary = BuildSummaryComment(metadata, totalFiles, isIncremental, _tokenUsage);
         await _adoClient.AddWorkItemCommentAsync(task.WorkItemId, summary, cancellationToken);
 
         // Update work item state to Done
@@ -336,8 +337,10 @@ Keep it concise but actionable.";
 
         var userPrompt = $"Analyze these code samples and extract coding patterns:\n\n{codeSnippets}";
 
-        return await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 4096, Temperature = 0.2 }, ct);
+        _tokenUsage.RecordUsage("CodebaseDocumentation", aiResult.Usage);
+        return aiResult.Content;
     }
 
     #endregion
@@ -478,10 +481,11 @@ If you detect a database or API, also include DATABASE_SCHEMA.md and/or API_REFE
 
 Generate comprehensive documentation files for this codebase.";
 
-        var response = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 16384, Temperature = 0.3 }, ct);
+        _tokenUsage.RecordUsage("CodebaseDocumentation", aiResult.Usage);
 
-        return ParseMultiFileResponse(response);
+        return ParseMultiFileResponse(aiResult.Content);
     }
 
     private async Task<Dictionary<string, string>> GenerateFeatureDocumentationAsync(
@@ -521,10 +525,11 @@ Story history context:
 
 Create one documentation file per feature.";
 
-            var response = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+            var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
                 new AICompletionOptions { MaxTokens = 8192, Temperature = 0.3 }, ct);
+            _tokenUsage.RecordUsage("CodebaseDocumentation", aiResult.Usage);
 
-            foreach (var (name, content) in ParseMultiFileResponse(response))
+            foreach (var (name, content) in ParseMultiFileResponse(aiResult.Content))
             {
                 docs[name] = content;
             }
@@ -703,7 +708,7 @@ Create one documentation file per feature.";
     }
 
     private static string BuildSummaryComment(
-        CodebaseAnalysisMetadata metadata, int totalDocFiles, bool incremental)
+        CodebaseAnalysisMetadata metadata, int totalDocFiles, bool incremental, StoryTokenUsage tokenUsage)
     {
         var sb = new StringBuilder();
         sb.AppendLine(incremental
@@ -718,6 +723,13 @@ Create one documentation file per feature.";
         sb.AppendLine($"- Features documented: {metadata.FeaturesDocumented}");
         sb.AppendLine($"- Languages detected: {string.Join(", ", metadata.LanguagesDetected)}");
         sb.AppendLine($"- Primary framework: {metadata.PrimaryFramework ?? "N/A"}");
+        sb.AppendLine();
+        sb.AppendLine("**AI Token Usage:**");
+        sb.AppendLine($"- Total tokens: {tokenUsage.TotalTokens:N0} (in: {tokenUsage.TotalInputTokens:N0} / out: {tokenUsage.TotalOutputTokens:N0})");
+        sb.AppendLine($"- Estimated cost: ${tokenUsage.TotalCost:F4}");
+        sb.AppendLine($"- Complexity: {tokenUsage.Complexity}");
+        if (tokenUsage.Agents.TryGetValue("CodebaseDocumentation", out var agentUsage))
+            sb.AppendLine($"- AI calls: {agentUsage.CallCount} (model: {agentUsage.Model})");
         sb.AppendLine();
         sb.AppendLine("**Documentation Created:**");
         sb.AppendLine($"- Total documentation files: {totalDocFiles}");

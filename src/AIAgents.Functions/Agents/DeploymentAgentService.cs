@@ -91,18 +91,50 @@ public sealed class DeploymentAgentService : IAgentService
         // Update ADO work item state
         await _adoClient.UpdateWorkItemStateAsync(workItem.Id, decision.FinalState, cancellationToken);
 
+        // Write token usage to ADO custom fields
+        var tokenUsage = state.TokenUsage;
+        try
+        {
+            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
+                "/fields/Custom.AITokensUsed", tokenUsage.TotalTokens, cancellationToken);
+            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
+                "/fields/Custom.AICost", $"${tokenUsage.TotalCost:F4}", cancellationToken);
+            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
+                "/fields/Custom.AIComplexity", tokenUsage.Complexity, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to update AI token custom fields on WI-{WorkItemId} — fields may not exist",
+                workItem.Id);
+        }
+
+        // Build token summary for comment
+        var tokenSummary = BuildTokenSummary(tokenUsage);
+
         // Post summary comment
         await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-            $"<b>🤖 AI Deployment Agent</b><br/>" +
+            $"<b>\ud83e\udd16 AI Deployment Agent</b><br/>" +
             $"<b>Autonomy Level:</b> {autonomyLevel}<br/>" +
             $"<b>Review Score:</b> {reviewScore?.ToString() ?? "N/A"}<br/>" +
             $"<b>Decision:</b> {decision.Action}<br/>" +
             $"<b>Reason:</b> {decision.Reason}<br/>" +
-            $"<b>Final State:</b> {decision.FinalState}",
+            $"<b>Final State:</b> {decision.FinalState}<br/><br/>" +
+            tokenSummary,
             cancellationToken);
 
         await _activityLogger.LogAsync(
             "Deployment", task.WorkItemId, decision.Action, cancellationToken: cancellationToken);
+
+        // Log token usage summary as a separate activity entry for dashboard aggregation
+        if (tokenUsage.TotalTokens > 0)
+        {
+            await _activityLogger.LogAsync(
+                "TokenSummary", task.WorkItemId,
+                $"Pipeline total: {tokenUsage.TotalTokens:N0} tokens, ${tokenUsage.TotalCost:F4}, complexity: {tokenUsage.Complexity}",
+                tokenUsage.TotalTokens, tokenUsage.TotalCost,
+                cancellationToken: cancellationToken);
+        }
 
         _logger.LogInformation(
             "Deployment agent completed for WI-{WorkItemId}: {Action} → {State}",
@@ -230,4 +262,27 @@ public sealed class DeploymentAgentService : IAgentService
     }
 
     private sealed record DeploymentDecision(string Action, string Reason, string FinalState);
+
+    private static string BuildTokenSummary(StoryTokenUsage usage)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<b>📊 AI Token Usage Summary</b><br/>");
+        sb.AppendLine($"<b>Total Tokens:</b> {usage.TotalTokens:N0} (in: {usage.TotalInputTokens:N0} / out: {usage.TotalOutputTokens:N0})<br/>");
+        sb.AppendLine($"<b>Estimated Cost:</b> ${usage.TotalCost:F4}<br/>");
+        sb.AppendLine($"<b>Complexity:</b> {usage.Complexity}<br/><br/>");
+
+        if (usage.Agents.Count > 0)
+        {
+            sb.AppendLine("<b>Per-Agent Breakdown:</b><br/>");
+            sb.AppendLine("<table><tr><th>Agent</th><th>Tokens</th><th>Cost</th><th>Model</th><th>Calls</th></tr>");
+            foreach (var (agent, data) in usage.Agents.OrderBy(kv => kv.Key))
+            {
+                sb.AppendLine($"<tr><td>{agent}</td><td>{data.TotalTokens:N0}</td>" +
+                    $"<td>${data.EstimatedCost:F4}</td><td>{data.Model}</td><td>{data.CallCount}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+
+        return sb.ToString();
+    }
 }

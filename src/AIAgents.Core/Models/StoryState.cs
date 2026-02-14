@@ -31,4 +31,7 @@ public sealed class StoryState
 
     [JsonPropertyName("questions")]
     public List<Question> Questions { get; set; } = [];
+
+    [JsonPropertyName("tokenUsage")]
+    public StoryTokenUsage TokenUsage { get; set; } = new();
 }

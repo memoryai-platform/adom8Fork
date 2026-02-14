@@ -1,3 +1,5 @@
+using AIAgents.Core.Models;
+
 namespace AIAgents.Core.Interfaces;
 
 /// <summary>
@@ -13,8 +15,8 @@ public interface IAIClient
     /// <param name="userPrompt">The user-level content prompt.</param>
     /// <param name="options">Optional overrides for temperature, max tokens, etc.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The AI-generated completion text.</returns>
-    Task<string> CompleteAsync(
+    /// <returns>The AI completion result containing generated text and token usage data.</returns>
+    Task<AICompletionResult> CompleteAsync(
         string systemPrompt,
         string userPrompt,
         AICompletionOptions? options = null,

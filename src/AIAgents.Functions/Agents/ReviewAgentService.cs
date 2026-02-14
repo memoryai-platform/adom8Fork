@@ -96,10 +96,11 @@ Check for: SQL injection, XSS, hardcoded secrets, null reference, race condition
 
 Perform a comprehensive code review.";
 
-        var aiResponse = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 4096, Temperature = 0.2 }, cancellationToken);
+        state.TokenUsage.RecordUsage("Review", aiResult.Usage);
 
-        var reviewResult = ParseReviewResult(aiResponse);
+        var reviewResult = ParseReviewResult(aiResult.Content);
 
         // Render review template
         var templateModel = new Dictionary<string, object?>

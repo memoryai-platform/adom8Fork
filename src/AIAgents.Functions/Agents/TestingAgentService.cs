@@ -114,11 +114,12 @@ Use xUnit and Moq for .NET test projects. Include edge cases and error scenarios
 
 Generate comprehensive tests for this implementation.";
 
-        var aiResponse = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 8192, Temperature = 0.2 }, cancellationToken);
+        state.TokenUsage.RecordUsage("Testing", aiResult.Usage);
 
         // Parse response
-        var (testCases, testFiles) = ParseTestResponse(aiResponse);
+        var (testCases, testFiles) = ParseTestResponse(aiResult.Content);
 
         // Write test files
         foreach (var file in testFiles)

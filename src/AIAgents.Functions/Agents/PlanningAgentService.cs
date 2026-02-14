@@ -98,11 +98,12 @@ Respond ONLY with valid JSON matching this structure:
 
 Analyze this story and create a comprehensive implementation plan.";
 
-        var aiResponse = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { Temperature = 0.3 }, cancellationToken);
+        state.TokenUsage.RecordUsage("Planning", aiResult.Usage);
 
         // 6. Parse AI response
-        var planResult = ParsePlanningResult(aiResponse);
+        var planResult = ParsePlanningResult(aiResult.Content);
 
         // 7. Render plan template
         var templateModel = new Dictionary<string, object?>

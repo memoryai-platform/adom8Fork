@@ -47,7 +47,7 @@
         /* Stat Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 16px;
             margin-bottom: 28px;
         }
@@ -322,6 +322,12 @@
         }
 
         /* Responsive */
+        @media (max-width: 1100px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
         @media (max-width: 900px) {
             .main-grid {
                 grid-template-columns: 1fr;
@@ -625,6 +631,14 @@
                 <div class="stat-value" id="stat-saved">0h</div>
                 <div class="stat-label">Time Saved</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-tokens" style="color: #e67e22;">0</div>
+                <div class="stat-label">Total Tokens</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-cost" style="color: #27ae60;">$0.00</div>
+                <div class="stat-label">AI Cost</div>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -801,20 +815,90 @@
             // Stats
             if (data.stats) {
                 document.getElementById('stat-stories').textContent = data.stats.storiesProcessed ?? 0;
-                document.getElementById('stat-time').textContent = data.stats.avgCompletionTime ?? '0s';
-                document.getElementById('stat-success').textContent = data.stats.successRate ?? '0%';
+                document.getElementById('stat-time').textContent = data.stats.avgProcessingTime ?? '0s';
+                document.getElementById('stat-success').textContent = (data.stats.successRate ?? 0) + '%';
                 document.getElementById('stat-saved').textContent = data.stats.timeSaved ?? '0h';
+                document.getElementById('stat-tokens').textContent =
+                    (data.stats.totalTokens ?? 0).toLocaleString();
+                document.getElementById('stat-cost').textContent =
+                    '$' + (data.stats.totalCost ?? 0).toFixed(4);
             }
 
-            // Agents
-            if (data.agents) {
+            // Stories (agent pipeline progress per work item)
+            if (data.stories && data.stories.length > 0) {
+                updateStoryAgents(data.stories);
+            } else if (data.agents) {
                 updateAgents(data.agents);
             }
 
             // Activity
-            if (data.activities) {
+            if (data.recentActivity) {
+                updateActivity(data.recentActivity.map(a => ({
+                    emoji: a.level === 'error' ? '❌' : getAgentEmoji(a.agent),
+                    message: `[${a.agent}] WI-${a.workItemId}: ${a.message}` +
+                        (a.tokens > 0 ? ` (${a.tokens.toLocaleString()} tokens, $${a.cost.toFixed(4)})` : ''),
+                    time: new Date(a.timestamp).toLocaleTimeString()
+                })));
+            } else if (data.activities) {
                 updateActivity(data.activities);
             }
+        }
+
+        function getAgentEmoji(agent) {
+            const map = { Planning: '📋', Coding: '💻', Testing: '🧪',
+                Review: '🔍', Documentation: '📄', Deployment: '🚀',
+                TokenSummary: '📊', CodebaseDocumentation: '🧠' };
+            return map[agent] || '🤖';
+        }
+
+        function updateStoryAgents(stories) {
+            const container = document.getElementById('agents-container');
+            container.innerHTML = '';
+            stories.forEach(story => {
+                const agentNames = ['Planning', 'Coding', 'Testing', 'Review', 'Documentation'];
+                agentNames.forEach(name => {
+                    const status = story.agents[name] || 'pending';
+                    const emoji = getAgentEmoji(name);
+                    const tokInfo = story.tokenUsage?.agents?.[name];
+                    const card = document.createElement('div');
+                    card.className = `agent-card ${status}`;
+                    card.innerHTML = `
+                        <div class="agent-header">
+                            <span class="agent-emoji">${emoji}</span>
+                            <span class="agent-name">${name} Agent</span>
+                            <span class="status-badge ${status}">${formatStatusText(status)}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${status === 'completed' ? 100 : status === 'in_progress' ? 50 : 0}%"></div>
+                        </div>
+                        <div class="agent-details">
+                            <span>WI: US-${story.workItemId}</span>
+                            <span>Tokens: ${tokInfo ? tokInfo.totalTokens.toLocaleString() : '—'}</span>
+                            <span>Cost: ${tokInfo ? '$' + tokInfo.estimatedCost.toFixed(4) : '—'}</span>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+                // Show story-level token summary if available
+                if (story.tokenUsage && story.tokenUsage.totalTokens > 0) {
+                    const summary = document.createElement('div');
+                    summary.className = 'agent-card completed';
+                    summary.style.borderLeftColor = '#e67e22';
+                    summary.innerHTML = `
+                        <div class="agent-header">
+                            <span class="agent-emoji">📊</span>
+                            <span class="agent-name">US-${story.workItemId} Token Summary</span>
+                            <span class="status-badge completed">${story.tokenUsage.complexity}</span>
+                        </div>
+                        <div class="agent-details">
+                            <span>Total: ${story.tokenUsage.totalTokens.toLocaleString()} tokens</span>
+                            <span>Cost: $${story.tokenUsage.totalCost.toFixed(4)}</span>
+                            <span>Complexity: ${story.tokenUsage.complexity}</span>
+                        </div>
+                    `;
+                    container.appendChild(summary);
+                }
+            });
         }
 
         function updateAgents(agents) {

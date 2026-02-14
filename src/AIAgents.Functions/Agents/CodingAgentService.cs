@@ -97,11 +97,12 @@ Follow these guidelines:
 
 Generate all necessary code files for this story.";
 
-        var aiResponse = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
+        var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { MaxTokens = 8192, Temperature = 0.2 }, cancellationToken);
+        state.TokenUsage.RecordUsage("Coding", aiResult.Usage);
 
         // Parse and write code files
-        var codeFiles = ParseCodeFiles(aiResponse);
+        var codeFiles = ParseCodeFiles(aiResult.Content);
 
         foreach (var file in codeFiles)
         {

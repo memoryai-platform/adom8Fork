@@ -38,6 +38,18 @@ public sealed class TableStorageActivityLogger : IActivityLogger
         string level = "info",
         CancellationToken cancellationToken = default)
     {
+        await LogAsync(agent, workItemId, message, tokens: 0, cost: 0m, level, cancellationToken);
+    }
+
+    public async Task LogAsync(
+        string agent,
+        int workItemId,
+        string message,
+        int tokens,
+        decimal cost,
+        string level = "info",
+        CancellationToken cancellationToken = default)
+    {
         var now = DateTime.UtcNow;
 
         // Inverted tick count for reverse-chronological ordering
@@ -49,7 +61,9 @@ public sealed class TableStorageActivityLogger : IActivityLogger
             ["WorkItemId"] = workItemId,
             ["Message"] = message,
             ["Level"] = level,
-            ["Timestamp_Utc"] = now.ToString("O")
+            ["Timestamp_Utc"] = now.ToString("O"),
+            ["Tokens"] = tokens,
+            ["Cost"] = (double)cost
         };
 
         try
@@ -88,7 +102,9 @@ public sealed class TableStorageActivityLogger : IActivityLogger
                 Agent = entity.GetString("Agent") ?? "Unknown",
                 WorkItemId = entity.GetInt32("WorkItemId") ?? 0,
                 Message = entity.GetString("Message") ?? string.Empty,
-                Level = entity.GetString("Level") ?? "info"
+                Level = entity.GetString("Level") ?? "info",
+                Tokens = entity.GetInt32("Tokens") ?? 0,
+                Cost = (decimal)(entity.GetDouble("Cost") ?? 0.0)
             });
 
             taken++;
