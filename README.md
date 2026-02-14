@@ -120,6 +120,27 @@ func start
 # Update API_URL in the script to http://localhost:7071
 ```
 
+## For Developers
+
+This codebase uses AI agents for development automation. To work effectively:
+
+1. **Read the developer guide:** [DEVELOPERS.md](DEVELOPERS.md)
+2. **Review .agent/ documentation:** [.agent/README.md](.agent/README.md)
+3. **Use helper scripts:** [scripts/README.md](scripts/README.md)
+
+### Quick Start
+
+```bash
+# Before coding a complex feature
+cat .agent/CONTEXT_INDEX.md
+cat .agent/FEATURES/{relevant-area}.md
+
+# Using Claude Code CLI with context
+./scripts/claude-with-context.sh "your task description"
+```
+
+**Important:** Even if you're coding manually (not using AI), follow patterns documented in `.agent/CODING_STANDARDS.md` to maintain consistency.
+
 ## License
 
 MIT
