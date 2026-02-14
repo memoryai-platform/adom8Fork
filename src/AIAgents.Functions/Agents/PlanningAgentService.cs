@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
@@ -43,8 +44,10 @@ public sealed class PlanningAgentService : IAgentService
         _taskQueue = taskQueue;
     }
 
-    public async Task ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
+    public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
+        try
+        {
         _logger.LogInformation("Planning agent starting for WI-{WorkItemId}", task.WorkItemId);
 
         // 1. Get the work item details
@@ -174,6 +177,25 @@ Analyze this story and create a comprehensive implementation plan.";
         await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
 
         _logger.LogInformation("Planning agent completed for WI-{WorkItemId}, enqueued Coding agent", task.WorkItemId);
+
+            return AgentResult.Ok();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return AgentResult.Fail(ErrorCategory.Transient, $"Rate limit hit for Planning agent on WI-{task.WorkItemId}", ex);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return AgentResult.Fail(ErrorCategory.Configuration, $"Authentication failed for Planning agent on WI-{task.WorkItemId}. Check API key.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            return AgentResult.Fail(ErrorCategory.Transient, $"HTTP error in Planning agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Planning agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
     }
 
     private static PlanningResult ParsePlanningResult(string aiResponse)

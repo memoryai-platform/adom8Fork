@@ -1,7 +1,9 @@
 using System.Text.Json;
 using AIAgents.Core.Interfaces;
+using AIAgents.Core.Telemetry;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
+using Microsoft.ApplicationInsights;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,6 +14,7 @@ namespace AIAgents.Functions.Functions;
 /// Queue trigger that dispatches agent tasks to the appropriate agent service.
 /// Uses .NET 8 keyed DI to resolve the correct IAgentService implementation.
 /// Enforces autonomy-level early exits: Level 1 stops after Planning, Level 2 stops after Testing.
+/// Handles <see cref="AgentResult"/> from agents: retries transient errors, fails permanently on configuration/data errors.
 /// </summary>
 public sealed class AgentTaskDispatcher
 {
@@ -19,17 +22,20 @@ public sealed class AgentTaskDispatcher
     private readonly ILogger<AgentTaskDispatcher> _logger;
     private readonly IActivityLogger _activityLogger;
     private readonly IAzureDevOpsClient _adoClient;
+    private readonly TelemetryClient _telemetry;
 
     public AgentTaskDispatcher(
         IServiceProvider serviceProvider,
         ILogger<AgentTaskDispatcher> logger,
         IActivityLogger activityLogger,
-        IAzureDevOpsClient adoClient)
+        IAzureDevOpsClient adoClient,
+        TelemetryClient telemetry)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _activityLogger = activityLogger;
         _adoClient = adoClient;
+        _telemetry = telemetry;
     }
 
     [Function("AgentTaskDispatcher")]
@@ -102,34 +108,142 @@ public sealed class AgentTaskDispatcher
             $"{agentKey} agent started processing",
             cancellationToken: cancellationToken);
 
+        _telemetry.TrackEvent(TelemetryEvents.AgentStarted, new Dictionary<string, string>
+        {
+            [TelemetryProperties.WorkItemId] = agentTask.WorkItemId.ToString(),
+            [TelemetryProperties.AgentType] = agentKey,
+            [TelemetryProperties.CorrelationId] = agentTask.CorrelationId
+        });
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        AgentResult result;
+
         try
         {
-            await agentService.ExecuteAsync(agentTask, cancellationToken);
+            result = await agentService.ExecuteAsync(agentTask, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Agent threw instead of returning AgentResult — treat as Code error
+            result = AgentResult.Fail(ErrorCategory.Code, $"Unhandled exception in {agentKey}: {ex.Message}", ex);
+        }
 
+        stopwatch.Stop();
+
+        if (result.Success)
+        {
             await _activityLogger.LogAsync(
                 agentKey,
                 agentTask.WorkItemId,
                 $"{agentKey} agent completed successfully",
                 cancellationToken: cancellationToken);
 
+            _telemetry.TrackEvent(TelemetryEvents.AgentCompleted, new Dictionary<string, string>
+            {
+                [TelemetryProperties.WorkItemId] = agentTask.WorkItemId.ToString(),
+                [TelemetryProperties.AgentType] = agentKey,
+                [TelemetryProperties.CorrelationId] = agentTask.CorrelationId
+            },
+            new Dictionary<string, double>
+            {
+                [TelemetryProperties.Duration] = stopwatch.ElapsedMilliseconds
+            });
+
             _logger.LogInformation(
-                "{AgentType} agent completed for WI-{WorkItemId}",
-                agentTask.AgentType, agentTask.WorkItemId);
+                "{AgentType} agent completed for WI-{WorkItemId} in {Duration}ms",
+                agentTask.AgentType, agentTask.WorkItemId, stopwatch.ElapsedMilliseconds);
         }
-        catch (Exception ex)
+        else
         {
+            _telemetry.TrackEvent(TelemetryEvents.AgentFailed, new Dictionary<string, string>
+            {
+                [TelemetryProperties.WorkItemId] = agentTask.WorkItemId.ToString(),
+                [TelemetryProperties.AgentType] = agentKey,
+                [TelemetryProperties.CorrelationId] = agentTask.CorrelationId,
+                [TelemetryProperties.ErrorCategory] = result.Category.ToString()!,
+                [TelemetryProperties.ErrorMessage] = result.ErrorMessage ?? "Unknown error"
+            });
+
+            _logger.LogError(
+                result.Exception,
+                "{AgentType} agent failed for WI-{WorkItemId} ({ErrorCategory}): {ErrorMessage}",
+                agentTask.AgentType, agentTask.WorkItemId, result.Category, result.ErrorMessage);
+
             await _activityLogger.LogAsync(
                 agentKey,
                 agentTask.WorkItemId,
-                $"{agentKey} agent failed: {ex.Message}",
+                $"{agentKey} agent failed ({result.Category}): {result.ErrorMessage}",
                 "error",
                 cancellationToken);
 
-            _logger.LogError(ex,
-                "{AgentType} agent failed for WI-{WorkItemId}",
-                agentTask.AgentType, agentTask.WorkItemId);
+            // Decide retry vs. permanent failure based on error category
+            switch (result.Category)
+            {
+                case ErrorCategory.Transient:
+                    // Let queue retry — throw so message stays in queue
+                    throw result.Exception ?? new InvalidOperationException(result.ErrorMessage);
 
-            throw; // Re-throw to trigger queue retry
+                case ErrorCategory.Configuration:
+                case ErrorCategory.Data:
+                    // Permanent failure — don't waste retries, notify user
+                    if (agentTask.WorkItemId > 0)
+                    {
+                        await PostFailureCommentAsync(agentTask, result, cancellationToken);
+                        await _adoClient.UpdateWorkItemStateAsync(
+                            agentTask.WorkItemId, "Agent Failed", cancellationToken);
+                    }
+
+                    _telemetry.TrackEvent(TelemetryEvents.AgentPermanentFailure, new Dictionary<string, string>
+                    {
+                        [TelemetryProperties.WorkItemId] = agentTask.WorkItemId.ToString(),
+                        [TelemetryProperties.AgentType] = agentKey,
+                        [TelemetryProperties.CorrelationId] = agentTask.CorrelationId,
+                        [TelemetryProperties.ErrorCategory] = result.Category.ToString()!
+                    });
+                    break; // Consume message — no retry
+
+                case ErrorCategory.Code:
+                default:
+                    // Bug — retry once in case it's transient, then it'll hit DLQ
+                    throw result.Exception ?? new InvalidOperationException(result.ErrorMessage);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Posts a formatted failure comment to the Azure DevOps work item.
+    /// </summary>
+    private async Task PostFailureCommentAsync(AgentTask task, AgentResult result, CancellationToken ct)
+    {
+        var recommendation = result.Category switch
+        {
+            ErrorCategory.Configuration => "Check configuration settings (API keys, PATs, credentials).",
+            ErrorCategory.Data => "Review work item content for formatting issues or invalid data.",
+            _ => "Check Application Insights logs for details."
+        };
+
+        var comment = $"""
+            ❌ Agent execution failed — permanent error (will not retry)
+
+            **Failed Agent:** {task.AgentType}
+            **Error Category:** {result.Category}
+            **Error:** {result.ErrorMessage}
+
+            **Recommended Action:** {recommendation}
+
+            **Troubleshooting:**
+            1. Check Application Insights with CorrelationId: {task.CorrelationId}
+            2. See TROUBLESHOOTING.md for common solutions
+            3. Fix the issue, then set work item state back to re-trigger
+            """;
+
+        try
+        {
+            await _adoClient.AddWorkItemCommentAsync(task.WorkItemId, comment, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to post failure comment to WI-{WorkItemId}", task.WorkItemId);
         }
     }
 

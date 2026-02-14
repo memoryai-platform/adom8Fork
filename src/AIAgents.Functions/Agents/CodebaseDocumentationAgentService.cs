@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -46,8 +47,10 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
+    public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
+        try
+        {
         _logger.LogInformation("CodebaseDocumentation agent starting for WI-{WorkItemId}", task.WorkItemId);
 
         var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
@@ -144,6 +147,25 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
         _logger.LogInformation(
             "CodebaseDocumentation agent completed for WI-{WorkItemId}: {FileCount} files, {FeatureCount} features",
             task.WorkItemId, fileCount, featureDocs.Count);
+
+            return AgentResult.Ok();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return AgentResult.Fail(ErrorCategory.Transient, $"Rate limit hit for CodebaseDocumentation agent on WI-{task.WorkItemId}", ex);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return AgentResult.Fail(ErrorCategory.Configuration, $"Authentication failed for CodebaseDocumentation agent on WI-{task.WorkItemId}. Check API key.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            return AgentResult.Fail(ErrorCategory.Transient, $"HTTP error in CodebaseDocumentation agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in CodebaseDocumentation agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
     }
 
     #region Step 2: Codebase Scanning

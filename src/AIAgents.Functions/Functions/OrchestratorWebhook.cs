@@ -1,11 +1,12 @@
 using System.Text.Json;
+using AIAgents.Core.Interfaces;
+using AIAgents.Core.Telemetry;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
-using Azure.Storage.Queues;
+using Microsoft.ApplicationInsights;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace AIAgents.Functions.Functions;
@@ -13,12 +14,16 @@ namespace AIAgents.Functions.Functions;
 /// <summary>
 /// HTTP trigger that receives Azure DevOps Service Hook webhooks.
 /// Routes work item state changes into the agent pipeline by enqueuing AgentTask messages.
+/// Validates input before queuing to prevent prompt injection, malicious content, and excessive costs.
 /// </summary>
 public sealed class OrchestratorWebhook
 {
     private readonly ILogger<OrchestratorWebhook> _logger;
     private readonly IActivityLogger _activityLogger;
-    private readonly QueueClient _queueClient;
+    private readonly IAgentTaskQueue _taskQueue;
+    private readonly IAzureDevOpsClient _adoClient;
+    private readonly IInputValidator _inputValidator;
+    private readonly TelemetryClient _telemetry;
 
     // Maps ADO work item states to the agent that processes them
     private static readonly Dictionary<string, AgentType> s_stateToAgent = new(StringComparer.OrdinalIgnoreCase)
@@ -33,15 +38,17 @@ public sealed class OrchestratorWebhook
     public OrchestratorWebhook(
         ILogger<OrchestratorWebhook> logger,
         IActivityLogger activityLogger,
-        IConfiguration configuration)
+        IAgentTaskQueue taskQueue,
+        IAzureDevOpsClient adoClient,
+        IInputValidator inputValidator,
+        TelemetryClient telemetry)
     {
         _logger = logger;
         _activityLogger = activityLogger;
-
-        var connectionString = configuration["AzureWebJobsStorage"]
-            ?? throw new InvalidOperationException("AzureWebJobsStorage is required.");
-        _queueClient = new QueueClient(connectionString, "agent-tasks");
-        _queueClient.CreateIfNotExists();
+        _taskQueue = taskQueue;
+        _adoClient = adoClient;
+        _inputValidator = inputValidator;
+        _telemetry = telemetry;
     }
 
     [Function("OrchestratorWebhook")]
@@ -108,6 +115,59 @@ public sealed class OrchestratorWebhook
             return new OkObjectResult(new { status = "skipped", reason = $"State '{newState}' is not an agent trigger" });
         }
 
+        // Validate work item content before queuing
+        try
+        {
+            var workItem = await _adoClient.GetWorkItemAsync(workItemId, cancellationToken);
+            var validation = _inputValidator.ValidateWorkItem(workItem);
+
+            if (!validation.IsValid)
+            {
+                _telemetry.TrackEvent(TelemetryEvents.InputValidationFailed, new Dictionary<string, string>
+                {
+                    [TelemetryProperties.WorkItemId] = workItemId.ToString(),
+                    [TelemetryProperties.ErrorMessage] = string.Join("; ", validation.Errors)
+                });
+
+                var errorComment = $"⚠️ **Input Validation Failed** — work item will not be processed.\n\n" +
+                    string.Join("\n", validation.Errors.Select(e => $"- {e}"));
+
+                await _adoClient.AddWorkItemCommentAsync(workItemId, errorComment, cancellationToken);
+
+                _logger.LogWarning(
+                    "Input validation failed for WI-{WorkItemId}: {Errors}",
+                    workItemId, string.Join("; ", validation.Errors));
+
+                return new OkObjectResult(new
+                {
+                    status = "validation_failed",
+                    workItemId,
+                    errors = validation.Errors
+                });
+            }
+
+            if (validation.Warnings.Count > 0)
+            {
+                _telemetry.TrackEvent(TelemetryEvents.InputValidationWarning, new Dictionary<string, string>
+                {
+                    [TelemetryProperties.WorkItemId] = workItemId.ToString(),
+                    [TelemetryProperties.ErrorMessage] = string.Join("; ", validation.Warnings)
+                });
+
+                var warningComment = $"⚠️ **Input Validation Warnings** — processing will continue.\n\n" +
+                    string.Join("\n", validation.Warnings.Select(w => $"- {w}"));
+
+                await _adoClient.AddWorkItemCommentAsync(workItemId, warningComment, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            // If we can't fetch the work item for validation, log but still proceed
+            _logger.LogWarning(ex,
+                "Could not validate WI-{WorkItemId} content — proceeding without validation",
+                workItemId);
+        }
+
         // Enqueue the agent task
         var agentTask = new AgentTask
         {
@@ -115,9 +175,7 @@ public sealed class OrchestratorWebhook
             AgentType = agentType
         };
 
-        var messageJson = JsonSerializer.Serialize(agentTask);
-        var base64Message = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(messageJson));
-        await _queueClient.SendMessageAsync(base64Message, cancellationToken);
+        await _taskQueue.EnqueueAsync(agentTask, cancellationToken);
 
         await _activityLogger.LogAsync(
             "Orchestrator",

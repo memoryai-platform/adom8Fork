@@ -10,8 +10,9 @@ public interface IAgentService
 {
     /// <summary>
     /// Executes the agent's logic for the given task.
+    /// Returns an <see cref="AgentResult"/> indicating success or categorized failure.
     /// </summary>
     /// <param name="task">The agent task to process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default);
+    Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default);
 }

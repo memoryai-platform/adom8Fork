@@ -21,6 +21,7 @@ var host = new HostBuilder()
         services.Configure<DeploymentOptions>(configuration.GetSection(DeploymentOptions.SectionName));
         services.Configure<GitHubOptions>(configuration.GetSection(GitHubOptions.SectionName));
         services.Configure<CodebaseDocumentationOptions>(configuration.GetSection(CodebaseDocumentationOptions.SectionName));
+        services.Configure<InputValidationOptions>(configuration.GetSection(InputValidationOptions.SectionName));
 
         // Application Insights — register BEFORE HTTP resilience handlers
         services.AddApplicationInsightsTelemetryWorkerService();
@@ -29,6 +30,7 @@ var host = new HostBuilder()
         // Named HTTP client for AI API calls with resilience pipeline.
         // Base URL and auth are set per-request by AIClient so that
         // per-agent model overrides can target different providers.
+        // Circuit breaker trips after 5 consecutive failures, stays open 30s.
         services.AddHttpClient("AIClient")
         .AddStandardResilienceHandler(options =>
         {
@@ -36,6 +38,10 @@ var host = new HostBuilder()
             options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(5);
             options.Retry.MaxRetryAttempts = 3;
             options.Retry.Delay = TimeSpan.FromSeconds(2);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+            options.CircuitBreaker.FailureRatio = 0.8;
+            options.CircuitBreaker.MinimumThroughput = 5;
+            options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
         });
 
         // Core services
@@ -65,6 +71,9 @@ var host = new HostBuilder()
 
         // Codebase context provider (loads .agent/ docs for AI prompts)
         services.AddSingleton<ICodebaseContextProvider, CodebaseContextLoader>();
+
+        // Input validation — security, length limits, prompt injection detection
+        services.AddSingleton<IInputValidator, InputValidator>();
 
         // Agent services — keyed DI for dispatcher routing
         services.AddKeyedScoped<IAgentService, PlanningAgentService>("Planning");
