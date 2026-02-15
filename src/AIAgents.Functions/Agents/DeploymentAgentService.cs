@@ -1,5 +1,6 @@
 using System.Net;
 using AIAgents.Core.Configuration;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -94,21 +95,62 @@ public sealed class DeploymentAgentService : IAgentService
         // Update ADO work item state
         await _adoClient.UpdateWorkItemStateAsync(workItem.Id, decision.FinalState, cancellationToken);
 
-        // Write token usage to ADO custom fields
+        // Write all AI tracking fields to ADO custom fields (single batch API call)
         var tokenUsage = state.TokenUsage;
         try
         {
-            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
-                "/fields/Custom.AITokensUsed", tokenUsage.TotalTokens, cancellationToken);
-            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
-                "/fields/Custom.AICost", $"${tokenUsage.TotalCost:F4}", cancellationToken);
-            await _adoClient.UpdateWorkItemFieldAsync(workItem.Id,
-                "/fields/Custom.AIComplexity", tokenUsage.Complexity, cancellationToken);
+            var fieldUpdates = new Dictionary<string, object>
+            {
+                [CustomFieldNames.Paths.TokensUsed] = tokenUsage.TotalTokens,
+                [CustomFieldNames.Paths.Cost] = $"${tokenUsage.TotalCost:F4}",
+                [CustomFieldNames.Paths.Complexity] = tokenUsage.Complexity,
+                [CustomFieldNames.Paths.LastAgent] = "Deployment",
+                [CustomFieldNames.Paths.DeploymentDecision] = decision.Action
+            };
+
+            // Build per-agent model summary (e.g., "Planning: gpt-4o, Coding: claude-opus")
+            var modelParts = tokenUsage.Agents
+                .Where(kv => !string.IsNullOrEmpty(kv.Value.Model))
+                .OrderBy(kv => kv.Key)
+                .Select(kv => $"{kv.Key}: {kv.Value.Model}")
+                .ToList();
+            if (modelParts.Count > 0)
+                fieldUpdates[CustomFieldNames.Paths.Model] = string.Join(", ", modelParts);
+
+            // Add review score if available
+            if (reviewScore.HasValue)
+                fieldUpdates[CustomFieldNames.Paths.ReviewScore] = reviewScore.Value;
+
+            // Add critical issues count from review
+            var criticalCount = ExtractCriticalIssueCount(state);
+            if (criticalCount.HasValue)
+                fieldUpdates[CustomFieldNames.Paths.CriticalIssues] = criticalCount.Value;
+
+            // Add files generated count from coding agent
+            var filesGenerated = ExtractFilesGenerated(state);
+            if (filesGenerated.HasValue)
+                fieldUpdates[CustomFieldNames.Paths.FilesGenerated] = filesGenerated.Value;
+
+            // Add tests generated count from testing agent
+            var testsGenerated = ExtractTestsGenerated(state);
+            if (testsGenerated.HasValue)
+                fieldUpdates[CustomFieldNames.Paths.TestsGenerated] = testsGenerated.Value;
+
+            // Add PR number from documentation agent
+            if (prId.HasValue)
+                fieldUpdates[CustomFieldNames.Paths.PRNumber] = prId.Value;
+
+            // Add processing time from state timestamps
+            var processingTime = (state.UpdatedAt - state.CreatedAt).TotalSeconds;
+            if (processingTime > 0)
+                fieldUpdates[CustomFieldNames.Paths.ProcessingTime] = Math.Round((decimal)processingTime, 1);
+
+            await _adoClient.UpdateWorkItemFieldsAsync(workItem.Id, fieldUpdates, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Failed to update AI token custom fields on WI-{WorkItemId} — fields may not exist",
+                "Failed to update AI custom fields on WI-{WorkItemId} — some fields may not exist yet",
                 workItem.Id);
         }
 
@@ -253,6 +295,60 @@ public sealed class DeploymentAgentService : IAgentService
             && reviewStatus.AdditionalData?.TryGetValue("score", out var scoreObj) == true)
         {
             return scoreObj switch
+            {
+                int i => i,
+                long l => (int)l,
+                double d => (int)d,
+                System.Text.Json.JsonElement je when je.TryGetInt32(out var jInt) => jInt,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static int? ExtractCriticalIssueCount(StoryState state)
+    {
+        if (state.Agents.TryGetValue("Review", out var reviewStatus)
+            && reviewStatus.AdditionalData?.TryGetValue("criticalIssues", out var obj) == true)
+        {
+            return obj switch
+            {
+                int i => i,
+                long l => (int)l,
+                double d => (int)d,
+                System.Text.Json.JsonElement je when je.TryGetInt32(out var jInt) => jInt,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static int? ExtractFilesGenerated(StoryState state)
+    {
+        if (state.Agents.TryGetValue("Coding", out var codingStatus)
+            && codingStatus.AdditionalData?.TryGetValue("filesGenerated", out var obj) == true)
+        {
+            return obj switch
+            {
+                int i => i,
+                long l => (int)l,
+                double d => (int)d,
+                System.Text.Json.JsonElement je when je.TryGetInt32(out var jInt) => jInt,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static int? ExtractTestsGenerated(StoryState state)
+    {
+        if (state.Agents.TryGetValue("Testing", out var testingStatus)
+            && testingStatus.AdditionalData?.TryGetValue("testsGenerated", out var obj) == true)
+        {
+            return obj switch
             {
                 int i => i,
                 long l => (int)l,

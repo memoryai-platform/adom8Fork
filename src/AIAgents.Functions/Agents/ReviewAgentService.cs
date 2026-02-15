@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -158,10 +159,15 @@ Perform a comprehensive code review.";
         state.Agents["Review"].AdditionalData = new Dictionary<string, object>
         {
             ["score"] = reviewResult.Score,
-            ["recommendation"] = reviewResult.Recommendation
+            ["recommendation"] = reviewResult.Recommendation,
+            ["criticalIssues"] = reviewResult.CriticalIssues.Count
         };
         state.CurrentState = "AI Docs";
         await context.SaveStateAsync(state, cancellationToken);
+
+        // Track last agent in ADO
+        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Review", cancellationToken); }
+        catch { /* field may not exist yet */ }
 
         await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Docs", cancellationToken);
 

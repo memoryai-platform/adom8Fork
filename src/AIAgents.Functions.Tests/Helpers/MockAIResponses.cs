@@ -278,12 +278,21 @@ public static class MockAIResponses
 
         state.Agents["Planning"] = Core.Models.AgentStatus.Completed();
         state.Agents["Coding"] = Core.Models.AgentStatus.Completed();
+        state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+        {
+            ["filesGenerated"] = 2
+        };
         state.Agents["Testing"] = Core.Models.AgentStatus.Completed();
+        state.Agents["Testing"].AdditionalData = new Dictionary<string, object>
+        {
+            ["testsGenerated"] = 3
+        };
         state.Agents["Review"] = Core.Models.AgentStatus.Completed();
         state.Agents["Review"].AdditionalData = new Dictionary<string, object>
         {
             ["score"] = reviewScore,
-            ["recommendation"] = "Approve"
+            ["recommendation"] = "Approve",
+            ["criticalIssues"] = 0
         };
         state.Agents["Documentation"] = Core.Models.AgentStatus.Completed();
         state.Agents["Documentation"].AdditionalData = new Dictionary<string, object>

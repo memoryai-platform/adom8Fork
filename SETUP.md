@@ -133,28 +133,139 @@ Map each column to its matching state. This gives you a visual Kanban board show
 
 > **Note:** You don't need to add a "Closed" column — Azure DevOps automatically includes a rightmost column for the **Completed** category (which contains "Deployed" and the default "Closed" state). Stories in "Deployed" will appear in that final column. The default "Closed" state can be used to archive stories that are fully done.
 
-### 3e. Add Custom Fields (Autonomy Levels)
+### 3e. Add Custom Fields
 
 Still in **Organization Settings → Process → User Story**:
+
+The AI pipeline uses **14 custom fields** organized into two groups: **Input Fields** (you set per-story) and **AI Tracking** (written automatically by agents).
+
+#### Input Fields — "AI Agent Settings" Group
 
 1. Click the **Layout** tab
 2. Click **+ New field** to add the first field:
    - **Name:** `AI Autonomy Level`
    - **Type:** Integer
    - **Default:** `3`
-   - **Description:** Controls how far the AI pipeline goes automatically
+   - **Description:** Controls how far the AI pipeline goes automatically (1-5)
    - **Group:** Select **"Create new group"** → name it **AI Agent Settings**
    - **Page:** Details
 
-3. Click **+ New field** again for the second field:
+3. Click **+ New field** again:
    - **Name:** `AI Minimum Review Score`
    - **Type:** Integer
    - **Default:** `85`
    - **Description:** Min score (0–100) for auto-merge at Levels 4–5
-   - **Group:** Select **AI Agent Settings** (the group you just created)
+   - **Group:** Select **AI Agent Settings**
    - **Page:** Details
 
-> **Note:** ADO auto-generates the reference names (`Custom.AIAutonomyLevel` and `Custom.AIMinimumReviewScore`) from the field names. You won't see a separate input for this — it happens automatically.
+#### Output Fields — "AI Tracking" Group
+
+These fields are written automatically by the agents during processing. They show up on every user story so you can see exactly what the AI did.
+
+4. Click **+ New field**:
+   - **Name:** `AI Tokens Used`
+   - **Type:** Integer
+   - **Description:** Total tokens consumed across all agents
+   - **Group:** Select **"Create new group"** → name it **AI Tracking**
+   - **Page:** Details
+
+5. Click **+ New field**:
+   - **Name:** `AI Cost`
+   - **Type:** String
+   - **Description:** Estimated USD cost (e.g., "$0.1234")
+   - **Group:** Select **AI Tracking**
+   - **Page:** Details
+
+6. Click **+ New field**:
+   - **Name:** `AI Complexity`
+   - **Type:** String
+   - **Description:** Complexity classification: XS, S, M, L, XL
+   - **Group:** Select **AI Tracking**
+   - **Page:** Details
+
+7. Click **+ New field**:
+   - **Name:** `AI Model`
+   - **Type:** String
+   - **Description:** Per-agent AI model breakdown (e.g., "Planning: gpt-4o, Coding: claude-opus")
+   - **Group:** Select **AI Tracking**
+   - **Page:** Details
+
+8. Click **+ New field**:
+   - **Name:** `AI Review Score`
+   - **Type:** Integer
+   - **Description:** Code review score (0–100) from the Review agent
+   - **Group:** Select **AI Tracking**
+   - **Page:** Details
+
+9. Click **+ New field**:
+   - **Name:** `AI Processing Time`
+   - **Type:** Decimal
+   - **Description:** Total pipeline processing time in seconds
+   - **Group:** Select **AI Tracking**
+   - **Page:** Details
+
+10. Click **+ New field**:
+    - **Name:** `AI Files Generated`
+    - **Type:** Integer
+    - **Description:** Number of source code files generated
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+11. Click **+ New field**:
+    - **Name:** `AI Tests Generated`
+    - **Type:** Integer
+    - **Description:** Number of test cases generated
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+12. Click **+ New field**:
+    - **Name:** `AI PR Number`
+    - **Type:** Integer
+    - **Description:** Pull request number created for this story
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+13. Click **+ New field**:
+    - **Name:** `AI Last Agent`
+    - **Type:** String
+    - **Description:** Last agent that processed this story
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+14. Click **+ New field**:
+    - **Name:** `AI Critical Issues`
+    - **Type:** Integer
+    - **Description:** Critical issues found during code review
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+15. Click **+ New field**:
+    - **Name:** `AI Deployment Decision`
+    - **Type:** String
+    - **Description:** Final deployment action taken (e.g., "Auto-merged", "Assigned for human review")
+    - **Group:** Select **AI Tracking**
+    - **Page:** Details
+
+> **Note:** ADO auto-generates the reference names from the field names (e.g., `AI Tokens Used` → `Custom.AITokensUsed`). You won't see a separate input for this — it happens automatically.
+
+**What you'll see on each user story after agents process it:**
+
+| Group | Field | Example Value |
+|-------|-------|---------------|
+| AI Agent Settings | AI Autonomy Level | 3 |
+| AI Agent Settings | AI Minimum Review Score | 85 |
+| AI Tracking | AI Tokens Used | 24,500 |
+| AI Tracking | AI Cost | $0.1234 |
+| AI Tracking | AI Complexity | M |
+| AI Tracking | AI Model | Coding: gpt-4o, Planning: gpt-4o, Review: gpt-4o-mini |
+| AI Tracking | AI Review Score | 92 |
+| AI Tracking | AI Processing Time | 45.3 |
+| AI Tracking | AI Files Generated | 5 |
+| AI Tracking | AI Tests Generated | 12 |
+| AI Tracking | AI PR Number | 42 |
+| AI Tracking | AI Last Agent | Deployment |
+| AI Tracking | AI Critical Issues | 0 |
+| AI Tracking | AI Deployment Decision | Auto-merged PR #42 |
 
 **Autonomy Level reference:**
 
@@ -166,7 +277,7 @@ Still in **Organization Settings → Process → User Story**:
 | 4 | Auto-Merge | All agents run → auto-merges PR if review score meets threshold |
 | 5 | Full Autonomy | All agents run → auto-merges + triggers deployment pipeline |
 
-> **Tip:** If you skip this step, the agent defaults to Level 3, Score 85 — safe manual-review behavior. The custom fields just let you override per-story.
+> **Tip:** If you skip the AI Tracking fields, the pipeline still works — it just won't display the values on the work item. The agents gracefully handle missing fields. But you MUST add the two AI Agent Settings fields (Autonomy Level and Minimum Review Score) for the pipeline to function correctly.
 
 ---
 

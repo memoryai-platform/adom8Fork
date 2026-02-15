@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -178,6 +179,10 @@ Generate comprehensive documentation for these changes.";
         };
         state.CurrentState = "AI Deployment";
         await context.SaveStateAsync(state, cancellationToken);
+
+        // Track last agent in ADO
+        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Documentation", cancellationToken); }
+        catch { /* field may not exist yet */ }
 
         // Enqueue Deployment agent (handles merge/deploy based on autonomy level)
         var nextTask = new AgentTask

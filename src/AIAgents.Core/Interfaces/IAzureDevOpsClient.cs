@@ -31,4 +31,13 @@ public interface IAzureDevOpsClient
         string fieldPath,
         object value,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates multiple work item fields in a single API call.
+    /// Keys are JSON patch paths (e.g., "/fields/Custom.AITokensUsed"), values are the field values.
+    /// </summary>
+    Task UpdateWorkItemFieldsAsync(
+        int workItemId,
+        IDictionary<string, object> fieldUpdates,
+        CancellationToken cancellationToken = default);
 }

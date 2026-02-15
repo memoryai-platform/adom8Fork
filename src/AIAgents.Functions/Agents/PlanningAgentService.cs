@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -164,6 +165,10 @@ Analyze this story and create a comprehensive implementation plan.";
             Rationale = planResult.TechnicalApproach
         });
         await context.SaveStateAsync(state, cancellationToken);
+
+        // Track last agent in ADO
+        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
+        catch { /* field may not exist yet */ }
 
         // 13. Transition ADO state and enqueue next agent
         await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Code", cancellationToken);

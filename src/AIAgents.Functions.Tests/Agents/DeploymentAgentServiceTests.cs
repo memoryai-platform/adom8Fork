@@ -56,6 +56,8 @@ public sealed class DeploymentAgentServiceTests
         // Allow token field writes to succeed (or silently fail)
         _adoMock.Setup(a => a.UpdateWorkItemFieldAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        _adoMock.Setup(a => a.UpdateWorkItemFieldsAsync(It.IsAny<int>(), It.IsAny<IDictionary<string, object>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         _adoMock.Setup(a => a.UpdateWorkItemStateAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _adoMock.Setup(a => a.AddWorkItemCommentAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -192,23 +194,38 @@ public sealed class DeploymentAgentServiceTests
     // ── Token field writes ──
 
     [Fact]
-    public async Task ExecuteAsync_WritesTokenFieldsToADO()
+    public async Task ExecuteAsync_WritesAllAIFieldsInBatch()
     {
         SetupBase(autonomyLevel: 3, reviewScore: 90);
         var service = CreateService();
+        IDictionary<string, object>? capturedFields = null;
+        _adoMock.Setup(a => a.UpdateWorkItemFieldsAsync(12345, It.IsAny<IDictionary<string, object>>(), It.IsAny<CancellationToken>()))
+            .Callback<int, IDictionary<string, object>, CancellationToken>((_, fields, _) => capturedFields = fields)
+            .Returns(Task.CompletedTask);
 
         await service.ExecuteAsync(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Deployment });
 
-        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345, "/fields/Custom.AITokensUsed", It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
-        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345, "/fields/Custom.AICost", It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
-        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345, "/fields/Custom.AIComplexity", It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(capturedFields);
+        Assert.True(capturedFields!.ContainsKey("/fields/Custom.AITokensUsed"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AICost"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AIComplexity"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AILastAgent"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AIDeploymentDecision"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AIModel"));
+        Assert.True(capturedFields.ContainsKey("/fields/Custom.AIReviewScore"));
+        Assert.Equal("Deployment", capturedFields["/fields/Custom.AILastAgent"]);
+        // Model should be per-agent format: "Agent: model, Agent: model"
+        var model = capturedFields["/fields/Custom.AIModel"] as string;
+        Assert.NotNull(model);
+        Assert.Contains("Coding: gpt-4o", model);
+        Assert.Contains("Planning: gpt-4o", model);
     }
 
     [Fact]
-    public async Task ExecuteAsync_TokenFieldWriteFailure_DoesNotThrow()
+    public async Task ExecuteAsync_FieldWriteFailure_DoesNotThrow()
     {
         SetupBase(autonomyLevel: 3, reviewScore: 90);
-        _adoMock.Setup(a => a.UpdateWorkItemFieldAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()))
+        _adoMock.Setup(a => a.UpdateWorkItemFieldsAsync(It.IsAny<int>(), It.IsAny<IDictionary<string, object>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Custom field not found"));
         var service = CreateService();
 

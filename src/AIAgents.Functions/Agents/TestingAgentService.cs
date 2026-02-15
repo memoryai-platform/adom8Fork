@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -161,8 +162,16 @@ Generate comprehensive tests for this implementation.";
 
         // Update state and enqueue next
         state.Agents["Testing"] = AgentStatus.Completed();
+        state.Agents["Testing"].AdditionalData = new Dictionary<string, object>
+        {
+            ["testsGenerated"] = testCases.Count
+        };
         state.CurrentState = "AI Review";
         await context.SaveStateAsync(state, cancellationToken);
+
+        // Track last agent in ADO
+        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Testing", cancellationToken); }
+        catch { /* field may not exist yet */ }
 
         await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Review", cancellationToken);
 

@@ -1,4 +1,5 @@
 using AIAgents.Core.Configuration;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -107,6 +108,30 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
     }
 
+    public async Task UpdateWorkItemFieldsAsync(
+        int workItemId,
+        IDictionary<string, object> fieldUpdates,
+        CancellationToken cancellationToken = default)
+    {
+        if (fieldUpdates.Count == 0) return;
+
+        _logger.LogDebug("Updating {Count} fields on work item {WorkItemId}", fieldUpdates.Count, workItemId);
+
+        var patchDocument = new JsonPatchDocument();
+        foreach (var (path, value) in fieldUpdates)
+        {
+            patchDocument.Add(new JsonPatchOperation
+            {
+                Operation = Operation.Replace,
+                Path = path,
+                Value = value
+            });
+        }
+
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
+    }
+
     public void Dispose()
     {
         if (_connection.IsValueCreated)
@@ -136,10 +161,33 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
                 .ToList() ?? [],
             CreatedDate = GetField<DateTime>(fields, "System.CreatedDate"),
             ChangedDate = GetField<DateTime>(fields, "System.ChangedDate"),
-            AutonomyLevel = GetField<double?>(fields, "Custom.AIAutonomyLevel") is double al
+
+            // AI Input Fields
+            AutonomyLevel = GetField<double?>(fields, CustomFieldNames.AutonomyLevel) is double al
                 ? (int)al : 3,
-            MinimumReviewScore = GetField<double?>(fields, "Custom.AIMinimumReviewScore") is double mrs
-                ? (int)mrs : 85
+            MinimumReviewScore = GetField<double?>(fields, CustomFieldNames.MinimumReviewScore) is double mrs
+                ? (int)mrs : 85,
+
+            // AI Output Fields (written by agents, readable for dashboards/queries)
+            AITokensUsed = GetField<double?>(fields, CustomFieldNames.TokensUsed) is double tu
+                ? (int)tu : null,
+            AICost = GetField<string>(fields, CustomFieldNames.Cost),
+            AIComplexity = GetField<string>(fields, CustomFieldNames.Complexity),
+            AIModel = GetField<string>(fields, CustomFieldNames.Model),
+            AIReviewScore = GetField<double?>(fields, CustomFieldNames.ReviewScore) is double rs
+                ? (int)rs : null,
+            AIProcessingTime = GetField<double?>(fields, CustomFieldNames.ProcessingTime) is double pt
+                ? (decimal)pt : null,
+            AIFilesGenerated = GetField<double?>(fields, CustomFieldNames.FilesGenerated) is double fg
+                ? (int)fg : null,
+            AITestsGenerated = GetField<double?>(fields, CustomFieldNames.TestsGenerated) is double tg
+                ? (int)tg : null,
+            AIPRNumber = GetField<double?>(fields, CustomFieldNames.PRNumber) is double prn
+                ? (int)prn : null,
+            AILastAgent = GetField<string>(fields, CustomFieldNames.LastAgent),
+            AICriticalIssues = GetField<double?>(fields, CustomFieldNames.CriticalIssues) is double ci
+                ? (int)ci : null,
+            AIDeploymentDecision = GetField<string>(fields, CustomFieldNames.DeploymentDecision)
         };
     }
 
