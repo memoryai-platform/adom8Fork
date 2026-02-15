@@ -8,10 +8,13 @@
 ## Table of Contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Create an Azure DevOps PAT](#2-create-an-azure-devops-pat)
+2. [Create Personal Access Tokens](#2-create-personal-access-tokens)
+   - [2a. Azure DevOps PAT](#2a-azure-devops-pat)
+   - [2b. GitHub PAT](#2b-github-pat-if-using-github-for-code)
 3. [Customize Your ADO Board (States & Fields)](#3-customize-your-ado-board-states--fields)
 4. [Clone the Repository](#4-clone-the-repository)
 5. [Deploy Azure Infrastructure (Terraform)](#5-deploy-azure-infrastructure-terraform)
+   - [5d. VS Enterprise / MSDN Subscription Notes](#5d-visual-studio-enterprise--msdn-subscription-notes)
 6. [Configure the Azure Function App](#6-configure-the-azure-function-app)
 7. [Deploy the Functions Code](#7-deploy-the-functions-code)
 8. [Deploy the Dashboard](#8-deploy-the-dashboard)
@@ -43,7 +46,9 @@ Install these before you begin:
 
 ---
 
-## 2. Create an Azure DevOps PAT
+## 2. Create Personal Access Tokens
+
+### 2a. Azure DevOps PAT
 
 The agents need a Personal Access Token to read/write work items, push code, create PRs, and (optionally) trigger pipelines.
 
@@ -65,7 +70,41 @@ The agents need a Personal Access Token to read/write work items, push code, cre
 
 4. Click **Create** → **copy the token immediately** (you won't see it again)
 
-> **Tip:** You'll use this same PAT for both `AzureDevOps__Pat` and `Git__Token` settings.
+> **Tip:** If using Azure DevOps Repos (not GitHub) for your code, this same PAT is used for `AzureDevOps__Pat`, `Git__Token`, and code operations.
+
+### 2b. GitHub PAT (if using GitHub for code)
+
+If your target code repository is on GitHub (recommended for POC), you need a GitHub Personal Access Token.
+
+1. Go to [github.com](https://github.com) → click your **profile icon** → **Settings**
+2. Click **Developer settings** → **Personal access tokens**
+3. Choose either **Classic** or **Fine-grained** token:
+
+**Option 1: Classic Token** (simpler)
+
+Click **Tokens (classic)** → **Generate new token (classic)**:
+
+| Scope | Why |
+|-------|-----|
+| **repo** (full control) | Push branches, create PRs |
+| **workflow** | Trigger deploy workflows (Level 5 autonomy) |
+
+**Option 2: Fine-grained Token** (more secure — scoped to one repo)
+
+Click **Fine-grained tokens** → **Generate new token**:
+- **Repository access:** Select your target repo only
+- **Permissions:**
+
+| Permission | Access | Why |
+|------------|--------|-----|
+| **Contents** | Read and Write | Push code to feature branches |
+| **Pull requests** | Read and Write | Create PRs for code review |
+| **Actions** | Read and Write | Trigger workflow_dispatch (Level 5 autonomy) |
+| **Metadata** | Read | Auto-granted, required |
+
+4. Click **Generate token** → **copy immediately**
+
+> **Tip:** This GitHub PAT is used for three settings: `Git__Token`, `GitHub__Token`, and `GitHub__Owner`/`GitHub__Repo` configuration. It's the same token for all three.
 
 ---
 
@@ -319,6 +358,7 @@ environment          = "dev"
 function_app_name    = "ai-agents-func-YOURNAME"    # Must be globally unique
 storage_account_name = "aiagentsstoryourname"        # Globally unique, lowercase, no hyphens, 3-24 chars
 static_web_app_name  = "ai-agent-dashboard-YOURNAME" # Globally unique
+alert_email          = "your-email@example.com"      # Receives monitoring alert notifications
 ```
 
 ### 5c. Run Terraform
@@ -342,6 +382,38 @@ dashboard_url             = "https://your-dashboard.azurestaticapps.net"
 
 > To see outputs later: `terraform output`  
 > For sensitive values: `terraform output -raw storage_connection_string`
+
+### 5d. Visual Studio Enterprise / MSDN Subscription Notes
+
+If you're deploying under a **Visual Studio Enterprise** (or other MSDN) subscription, you may encounter a **"Dynamic VMs quota = 0"** error when Terraform tries to create the Consumption plan. This is a known limitation — the Terraform API creates the plan differently than the Azure CLI.
+
+**Workaround:** Create the Function App via Azure CLI first, then import into Terraform:
+
+```bash
+# 1. Create the function app (Azure auto-creates the consumption plan named "<Region>Plan")
+az functionapp create \
+  --name <YOUR_FUNCTION_APP_NAME> \
+  --resource-group ai-agents-rg \
+  --storage-account <YOUR_STORAGE_ACCOUNT> \
+  --consumption-plan-location eastus \
+  --runtime dotnet-isolated \
+  --runtime-version 8 \
+  --os-type Windows \
+  --app-insights <YOUR_FUNCTION_APP_NAME>-insights \
+  --functions-version 4
+
+# 2. Import both resources into Terraform state
+terraform import azurerm_service_plan.functions \
+  "/subscriptions/<SUB_ID>/resourceGroups/ai-agents-rg/providers/Microsoft.Web/serverFarms/EastUSPlan"
+
+terraform import azurerm_windows_function_app.agents \
+  "/subscriptions/<SUB_ID>/resourceGroups/ai-agents-rg/providers/Microsoft.Web/sites/<YOUR_FUNCTION_APP_NAME>"
+
+# 3. Apply remaining resources (alerts, etc.)
+terraform apply
+```
+
+> **Cost note:** This entire POC runs on free-tier or near-free resources. A typical Visual Studio Enterprise subscription gets $150/month in Azure credits — this POC will use **< $5/month** even with regular usage. The Consumption (Y1) plan gives you 1 million free executions/month.
 
 ---
 
@@ -504,14 +576,14 @@ This connects Azure DevOps to your Function App. When a work item's state change
    - **Field:** `State`
 6. Click **Next**
 7. Configure the action:
-   - **URL:** `https://<YOUR_FUNCTION_APP>.azurewebsites.net/api/webhook`
+   - **URL:** `https://<YOUR_FUNCTION_APP>.azurewebsites.net/api/OrchestratorWebhook`
    - **HTTP headers:** *(leave empty)*
    - **Resource details to send:** `All`
    - **Messages to send:** `All`
 8. Click **Test** → you should see a `200 OK` response with `{"status":"skipped",...}` (expected — the test payload isn't a real state change)
 9. Click **Finish**
 
-> **Security:** The webhook URL uses Function-level auth by default. To add extra security, append a function key: `https://...azurewebsites.net/api/webhook?code=<FUNCTION_KEY>`  
+> **Security:** The webhook URL uses Function-level auth by default. To add extra security, append a function key: `https://...azurewebsites.net/api/OrchestratorWebhook?code=<FUNCTION_KEY>`  
 > Get it from: Azure Portal → Function App → Functions → OrchestratorWebhook → Function Keys
 
 ---
@@ -764,9 +836,9 @@ ngrok http 7071
 ## 14. Troubleshooting
 
 ### Service hook not firing
-- Verify the webhook URL: `https://<func-app>.azurewebsites.net/api/webhook`
+- Verify the webhook URL: `https://<func-app>.azurewebsites.net/api/OrchestratorWebhook`
 - ADO → **Project Settings → Service hooks** → check for ❌ errors
-- Test manually: `curl -X POST https://<func-app>.azurewebsites.net/api/webhook -H "Content-Type: application/json" -d '{}'`
+- Test manually: `curl -X POST https://<func-app>.azurewebsites.net/api/OrchestratorWebhook -H "Content-Type: application/json" -d '{}'`
 
 ### Functions not processing queue messages
 - Azure Portal → Storage Account → **Queues** → check `agent-tasks` for waiting messages
@@ -805,3 +877,6 @@ ngrok http 7071
 - Storage account name conflicts: must be globally unique, lowercase, 3-24 chars
 - Function app name conflicts: must be globally unique
 - Locked resources: `terraform plan` will show what it wants to change before applying
+- **"Dynamic VMs quota = 0"** — VS Enterprise subscription limitation. See [Step 5d](#5d-visual-studio-enterprise--msdn-subscription-notes) for the CLI workaround
+- **`workspace_id` cannot be removed** — App Insights was auto-created with a managed workspace. The Terraform config pins `workspace_id` to match; don't remove it
+- **`skip_provider_registration = true`** — required for azurerm provider v3.x to avoid timeout errors registering unused providers. Already set in `main.tf`
