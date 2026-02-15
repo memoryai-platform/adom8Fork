@@ -201,64 +201,33 @@ The AI pipeline uses **20 custom fields** organized into three groups: **Input F
 
 These fields let users override which AI model each agent uses on a per-story basis. Leave them blank to use the system defaults. Most users won't touch these — they exist for stories that need heavier (or lighter) models than the default.
 
-> **Important:** All fields in this group use **Picklist (string)** type, not plain String. This prevents typos and ensures users pick valid model identifiers.
+> **Already created!** If you ran the setup script (or followed the API steps above), these 6 fields and their picklists are already created and added to the User Story form. The section below documents what exists so you can verify, set defaults, or add new models later.
 
-4. Click **+ New field**:
-   - **Name:** `AI Model Tier`
-   - **Type:** Picklist (string)
-   - **Items:** `Standard`, `Premium`, `Economy`
-   - **Description:** Quick preset that switches all agents to a pre-configured model set
-   - **Group:** Select **"Create new group"** → name it **AI Model Settings**
-   - **Page:** Details
+All fields in this group use **Picklist (string)** type with a **shared picklist** — update the model list once and all 5 agent fields get the change.
 
-5. Click **+ New field**:
-   - **Name:** `AI Planning Model`
-   - **Type:** Picklist (string)
-   - **Items:** *(use the model picklist below)*
-   - **Description:** Override model for the Planning agent
-   - **Group:** Select **AI Model Settings**
-   - **Page:** Details
+**Fields on the form (AI Model Settings group):**
 
-6. Click **+ New field**:
-   - **Name:** `AI Coding Model`
-   - **Type:** Picklist (string)
-   - **Items:** *(use the model picklist below)*
-   - **Description:** Override model for the Coding agent
-   - **Group:** Select **AI Model Settings**
-   - **Page:** Details
+| # | Field Name | Reference Name (backend) | Type | Picklist | Default Value |
+|---|-----------|--------------------------|------|----------|---------------|
+| 1 | AI Model Tier | `Custom.AIModelTier` | Picklist (string) | Standard, Premium, Economy | *(blank)* — uses system default |
+| 2 | AI Planning Model | `Custom.AIPlanningModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
+| 3 | AI Coding Model | `Custom.AICodingModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
+| 4 | AI Testing Model | `Custom.AITestingModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
+| 5 | AI Review Model | `Custom.AIReviewModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
+| 6 | AI Documentation Model | `Custom.AIDocumentationModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
 
-7. Click **+ New field**:
-   - **Name:** `AI Testing Model`
-   - **Type:** Picklist (string)
-   - **Items:** *(use the model picklist below)*
-   - **Description:** Override model for the Testing agent
-   - **Group:** Select **AI Model Settings**
-   - **Page:** Details
+> **Reference names matter!** The backend code reads these exact `Custom.AI*` reference names. If you recreate a field manually instead of using the API, make sure the reference name matches exactly (ADO auto-generates it from the field name, e.g., "AI Planning Model" → `Custom.AIPlanningModel`).
 
-8. Click **+ New field**:
-   - **Name:** `AI Review Model`
-   - **Type:** Picklist (string)
-   - **Items:** *(use the model picklist below)*
-   - **Description:** Override model for the Review agent
-   - **Group:** Select **AI Model Settings**
-   - **Page:** Details
+> **Default values:** All model fields default to **blank**, which means "use the system default" (`AI__Model` in Function App settings, currently `claude-sonnet-4-20250514`). You do NOT need to set a default on the fields themselves — blank is intentional. Only fill in a value on a specific User Story when you want to override the default for that story.
 
-9. Click **+ New field**:
-   - **Name:** `AI Documentation Model`
-   - **Type:** Picklist (string)
-   - **Items:** *(use the model picklist below)*
-   - **Description:** Override model for the Documentation agent
-   - **Group:** Select **AI Model Settings**
-   - **Page:** Details
-
-**Model Picklist Values** — Add these items to each of the 5 per-agent model fields:
+**Shared Model Picklist** — All 5 per-agent model fields share this single picklist:
 
 | Picklist Value | Provider | Tier | Best For |
 |---|---|---|---|
-| `claude-opus-4-20250514` | Claude | Premium | Complex architecture, difficult refactors |
-| `claude-sonnet-4.5-20250514` | Claude | Premium | Latest Sonnet, strong reasoning + code |
-| `claude-sonnet-4-20250514` | Claude | Standard | Great all-rounder, default recommendation |
-| `claude-haiku-4.5` | Claude | Economy | Fast & cheap, formulaic tasks |
+| `claude-opus-4-20250514` | Anthropic | Premium | Complex architecture, difficult refactors |
+| `claude-sonnet-4.5-20250514` | Anthropic | Premium | Latest Sonnet, strong reasoning + code |
+| `claude-sonnet-4-20250514` | Anthropic | Standard | Great all-rounder, default recommendation |
+| `claude-haiku-4.5` | Anthropic | Economy | Fast & cheap, formulaic tasks |
 | `gpt-5.1-codex` | OpenAI | Premium | Code-specialized, large context |
 | `gpt-5.1-codex-mini` | OpenAI | Economy | Code-specialized, budget-friendly |
 | `gpt-4.1` | OpenAI | Standard | Strong reasoning + code generation |
@@ -267,7 +236,35 @@ These fields let users override which AI model each agent uses on a per-story ba
 | `gemini-2.5-pro` | Google | Standard | Long context, good analysis |
 | `gemini-3-flash` | Google | Economy | Fastest, cheapest, great for docs |
 
-> **Tip:** You don't need to add every model — just the ones relevant to the providers you have API keys for. You can always add more later in **Organization Settings → Process → Fields → AI Planning Model → Edit picklist**.
+> **Important:** The picklist values must match exactly what your AI provider expects as a model identifier. For example, Anthropic uses `claude-sonnet-4-20250514` (with the date suffix). If you enter a model name that doesn't match, the API call will fail with a model-not-found error.
+
+#### How to Add a New Model (e.g., when Opus 4.7 releases)
+
+Since all 5 per-agent model fields share **one picklist**, you only update it once:
+
+**Option A — Via ADO UI (easiest):**
+1. Go to **Organization Settings → Boards → Process → Agile - AI Agents**
+2. Click **User Story** → find any of the 5 model fields (e.g., "AI Planning Model")
+3. Click the field → **Edit** → scroll to the picklist items
+4. Add the new model value (e.g., `claude-opus-4.7-20260801`)
+5. **Done** — all 5 fields automatically get the new option because they share the same picklist
+
+**Option B — Via REST API (scriptable):**
+```powershell
+# The shared picklist ID (find it via the field API if you don't have it)
+$picklistId = "e5b25e1d-0133-4334-86ca-e5c680d75227"
+
+# Get current items, add the new model, PUT to update
+$current = Invoke-RestMethod -Uri "$baseUrl/_apis/work/processes/lists/$picklistId?api-version=7.1-preview.1" -Headers $headers
+$current.items += "claude-opus-4.7-20260801"
+$body = @{ id = $picklistId; name = $current.name; type = "String"; items = $current.items } | ConvertTo-Json
+Invoke-RestMethod -Uri "$baseUrl/_apis/work/processes/lists/$picklistId?api-version=7.1-preview.1" -Method Put -Headers $headers -Body $body
+```
+
+**Option C — No picklist change needed (for one-off use):**
+If you just want to try a new model on one story without adding it to the picklist permanently, you can set it directly via the ADO REST API or the work item API — the backend reads the field value as a string regardless of picklist membership.
+
+> **Remember:** After adding a new model to the picklist, also make sure your Function App has the correct API endpoint and key for that model's provider. For example, to use a Gemini model, you'd need `AI__AgentModels__Planning__Endpoint` set to the Google AI endpoint and `AI__AgentModels__Planning__ApiKey` set to your Google API key.
 
 #### Output Fields — "AI Tracking" Group
 
