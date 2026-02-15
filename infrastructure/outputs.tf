@@ -5,17 +5,17 @@ output "resource_group_name" {
 
 output "function_app_name" {
   description = "Function App name"
-  value       = azurerm_linux_function_app.agents.name
+  value       = azurerm_windows_function_app.agents.name
 }
 
 output "function_app_url" {
   description = "Function App URL"
-  value       = "https://${azurerm_linux_function_app.agents.default_hostname}"
+  value       = "https://${azurerm_windows_function_app.agents.default_hostname}"
 }
 
 output "orchestrator_webhook_url" {
   description = "URL for Azure DevOps Service Hook"
-  value       = "https://${azurerm_linux_function_app.agents.default_hostname}/api/OrchestratorWebhook"
+  value       = "https://${azurerm_windows_function_app.agents.default_hostname}/api/OrchestratorWebhook"
 }
 
 output "dashboard_url" {
@@ -47,7 +47,7 @@ output "next_steps" {
   
   1. Configure Function App Settings:
      az functionapp config appsettings set \
-       --name ${azurerm_linux_function_app.agents.name} \
+       --name ${azurerm_windows_function_app.agents.name} \
        --resource-group ${azurerm_resource_group.ai_agents.name} \
        --settings \
          "AI__ApiKey=YOUR_CLAUDE_OR_OPENAI_KEY" \
@@ -59,18 +59,18 @@ output "next_steps" {
   
   2. Deploy Function Code:
      cd src/AIAgents.Functions
-     func azure functionapp publish ${azurerm_linux_function_app.agents.name}
+     func azure functionapp publish ${azurerm_windows_function_app.agents.name}
   
   3. Configure Azure DevOps Service Hook:
      - Project Settings > Service Hooks > Web Hooks
      - Trigger: Work item updated (state field)
-     - URL: https://${azurerm_linux_function_app.agents.default_hostname}/api/OrchestratorWebhook
+     - URL: https://${azurerm_windows_function_app.agents.default_hostname}/api/OrchestratorWebhook
   
   4. Deploy Dashboard:
      See .github/workflows/deploy-dashboard.yml
   
   Dashboard: https://${azurerm_static_web_app.dashboard.default_host_name}
-  Functions: https://${azurerm_linux_function_app.agents.default_hostname}
+  Functions: https://${azurerm_windows_function_app.agents.default_hostname}
   
   EOT
 }

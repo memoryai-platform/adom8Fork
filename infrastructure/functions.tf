@@ -1,9 +1,11 @@
 # App Service Plan (Consumption Y1 - serverless)
+# Note: Azure auto-names consumption plans "<Region>Plan" when created via CLI.
+# We match that name here so Terraform can manage the imported resource.
 resource "azurerm_service_plan" "functions" {
-  name                = "${var.function_app_name}-plan"
+  name                = "EastUSPlan"
   resource_group_name = azurerm_resource_group.ai_agents.name
   location            = azurerm_resource_group.ai_agents.location
-  os_type             = "Linux"
+  os_type             = "Windows"
   sku_name            = "Y1"
   
   tags = {
@@ -18,14 +20,15 @@ resource "azurerm_application_insights" "functions" {
   location            = azurerm_resource_group.ai_agents.location
   application_type    = "web"
   retention_in_days   = 30
+  workspace_id        = "/subscriptions/21fe80a2-de59-4fdc-9c3c-6eb24a30dcfa/resourceGroups/ai_ai-agents-func-todd-insights_f258de07-36da-4d6c-ba3f-714653f3ccb6_managed/providers/Microsoft.OperationalInsights/workspaces/managed-ai-agents-func-todd-insights-ws"
   
   tags = {
     Environment = var.environment
   }
 }
 
-# Linux Function App (.NET 8 Isolated)
-resource "azurerm_linux_function_app" "agents" {
+# Windows Function App (.NET 8 Isolated)
+resource "azurerm_windows_function_app" "agents" {
   name                       = var.function_app_name
   resource_group_name        = azurerm_resource_group.ai_agents.name
   location                   = azurerm_resource_group.ai_agents.location
@@ -35,7 +38,7 @@ resource "azurerm_linux_function_app" "agents" {
   
   site_config {
     application_stack {
-      dotnet_version              = "8.0"
+      dotnet_version              = "v8.0"
       use_dotnet_isolated_runtime = true
     }
     

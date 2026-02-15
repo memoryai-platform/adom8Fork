@@ -24,7 +24,7 @@ resource "azurerm_monitor_action_group" "alerts" {
 resource "azurerm_monitor_metric_alert" "function_errors" {
   name                = "${var.function_app_name}-function-errors"
   resource_group_name = azurerm_resource_group.ai_agents.name
-  scopes              = [azurerm_linux_function_app.agents.id]
+  scopes              = [azurerm_windows_function_app.agents.id]
   description         = "Alert when function error rate exceeds 10 errors in 5 minutes"
   severity            = 2
   frequency           = "PT1M"
@@ -48,25 +48,40 @@ resource "azurerm_monitor_metric_alert" "function_errors" {
 }
 
 # Alert: Queue depth > 100 messages (stuck processing)
-resource "azurerm_monitor_metric_alert" "queue_depth" {
+# Uses a log-based query since queue metrics require sub-resource scoping
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "queue_depth" {
   name                = "${var.function_app_name}-queue-depth"
   resource_group_name = azurerm_resource_group.ai_agents.name
-  scopes              = [azurerm_storage_account.functions.id]
+  location            = azurerm_resource_group.ai_agents.location
   description         = "Alert when agent-tasks queue has too many pending messages"
   severity            = 3
-  frequency           = "PT1M"
-  window_size         = "PT5M"
+  enabled             = true
+
+  evaluation_frequency = "PT5M"
+  window_duration      = "PT5M"
+
+  scopes = [azurerm_application_insights.functions.id]
 
   criteria {
-    metric_namespace = "Microsoft.Storage/storageAccounts/queueServices"
-    metric_name      = "MessageCount"
-    aggregation      = "Average"
-    operator         = "GreaterThan"
-    threshold        = 100
+    query = <<-QUERY
+      customMetrics
+      | where name == "QueueDepth"
+      | summarize avg(value) by bin(timestamp, 5m)
+      | where avg_value > 100
+    QUERY
+
+    time_aggregation_method = "Count"
+    operator                = "GreaterThan"
+    threshold               = 0
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
   }
 
   action {
-    action_group_id = azurerm_monitor_action_group.alerts.id
+    action_groups = [azurerm_monitor_action_group.alerts.id]
   }
 
   tags = {
@@ -78,7 +93,7 @@ resource "azurerm_monitor_metric_alert" "queue_depth" {
 resource "azurerm_monitor_metric_alert" "function_duration" {
   name                = "${var.function_app_name}-function-duration"
   resource_group_name = azurerm_resource_group.ai_agents.name
-  scopes              = [azurerm_linux_function_app.agents.id]
+  scopes              = [azurerm_windows_function_app.agents.id]
   description         = "Alert when average function execution exceeds 10 minutes"
   severity            = 3
   frequency           = "PT5M"
