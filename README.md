@@ -19,6 +19,79 @@ Azure DevOps Service Hook (work item state change)
 
 **State Machine:** `Story Planning` → `AI Code` → `AI Test` → `AI Review` → `AI Docs` → `Ready for QA`
 
+### System Components
+
+```mermaid
+graph TB
+    ADO[Azure DevOps<br/>Service Hook] -->|Work item state change| WH[OrchestratorWebhook<br/>HTTP Function]
+    WH -->|Validate & enqueue| Q[(agent-tasks<br/>Azure Storage Queue)]
+    Q --> D[AgentTaskDispatcher<br/>Queue Function]
+    D -->|Keyed DI| PA[PlanningAgent]
+    D -->|Keyed DI| CA[CodingAgent]
+    D -->|Keyed DI| TA[TestingAgent]
+    D -->|Keyed DI| RA[ReviewAgent]
+    D -->|Keyed DI| DA[DocsAgent]
+    D -->|Keyed DI| DEP[DeploymentAgent]
+    D -->|Keyed DI| CBD[CodebaseDocAgent]
+    PA & CA & TA & RA & DA & DEP & CBD -->|CompleteAsync| AI[AI Provider<br/>Claude / OpenAI / Azure OpenAI]
+    PA & CA & TA & RA & DA & DEP -->|Update state| ADO
+    CA & TA -->|Branch, commit, push| GIT[Git Repository]
+    DEP -->|Create PR| GIT
+    Q -->|After 5 failures| PQ[(agent-tasks-poison<br/>Dead Letter Queue)]
+    PQ -->|Every 15 min| DLQ[DeadLetterQueueHandler<br/>Timer Function]
+    DLQ -->|Post failure comment| ADO
+    HC[HealthCheck<br/>GET /api/health] -->|Checks connectivity| ADO & Q & AI
+    DASH[Dashboard<br/>Static Web App] -->|Polls| HC
+    AI_INS[Application Insights] -.->|Telemetry| D & WH & DLQ
+```
+
+### Work Item Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant U as Developer
+    participant ADO as Azure DevOps
+    participant WH as OrchestratorWebhook
+    participant Q as Storage Queue
+    participant D as AgentTaskDispatcher
+    participant A as Agent Service
+    participant AI as AI Provider
+    participant G as Git Repository
+
+    U->>ADO: Move story to "Story Planning"
+    ADO->>WH: Service Hook (state change)
+    WH->>WH: Validate input
+    WH->>Q: Enqueue agent task
+    WH-->>ADO: 200 OK
+    Q->>D: Dequeue message
+    D->>A: ExecuteAsync(task)
+    A->>AI: CompleteAsync(prompt)
+    AI-->>A: AI response
+    A->>G: Commit generated files
+    A->>ADO: Update state → next agent
+    A-->>D: AgentResult.Ok()
+    Note over Q,D: Repeats for each agent in pipeline
+```
+
+### Error Handling Flow
+
+```mermaid
+flowchart TD
+    START[Agent Executes] --> RESULT{AgentResult?}
+    RESULT -->|Ok| SUCCESS[Log success<br/>Track telemetry]
+    RESULT -->|Fail| CATEGORY{Error Category}
+    CATEGORY -->|Transient<br/>429, timeout| RETRY[Throw → Queue retry]
+    RETRY --> RETRIES{Retries < 5?}
+    RETRIES -->|Yes| START
+    RETRIES -->|No| DLQ[Poison Queue]
+    CATEGORY -->|Configuration<br/>401, bad key| PERMANENT[Post comment to ADO<br/>Set state: Agent Failed<br/>Consume message]
+    CATEGORY -->|Data<br/>bad input| PERMANENT
+    CATEGORY -->|Code<br/>unexpected| RETRY
+    DLQ -->|Every 15 min| HANDLER[DLQ Handler]
+    HANDLER --> COMMENT[Post failure comment<br/>Set state: Agent Failed]
+    CB[Circuit Breaker] -.->|80% failure rate<br/>30s pause| RETRY
+```
+
 **Key Design Choices:**
 - **Queue-based** — No HTTP timeouts, infinite scalability, automatic retry with poison queue
 - **Single dispatcher** — Azure Storage Queues have no message filtering; one function dispatches via keyed DI
@@ -140,6 +213,16 @@ cat .agent/FEATURES/{relevant-area}.md
 ```
 
 **Important:** Even if you're coding manually (not using AI), follow patterns documented in `.agent/CODING_STANDARDS.md` to maintain consistency.
+
+## Monitoring & Troubleshooting
+
+- **Health endpoint:** `GET /api/health` — component-level status (ADO, queue, AI, config, Git)
+- **Dashboard:** System Health panel with live status indicators and poison queue count
+- **Alerts:** Azure Monitor alerts for errors, queue depth, duration, dead letters, AI API failures
+- **Dead letter handler:** Automatic processing every 15 min — posts failure comments to work items
+- **Circuit breaker:** Protects AI API calls — trips at 80% failure rate, resets after 30 seconds
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for diagnosis steps, common issues, and emergency procedures.
 
 ## License
 

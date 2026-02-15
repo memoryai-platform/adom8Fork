@@ -4,6 +4,9 @@ using AIAgents.Functions.Functions;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using AIAgents.Functions.Tests.Helpers;
+using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Channel;
+using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -19,6 +22,20 @@ public sealed class AgentTaskDispatcherTests
     private readonly Mock<IActivityLogger> _activityMock = new();
     private readonly Mock<IAzureDevOpsClient> _adoMock = new();
     private readonly Mock<IAgentService> _agentServiceMock = new();
+    private readonly TelemetryClient _telemetry;
+
+    public AgentTaskDispatcherTests()
+    {
+        var config = new TelemetryConfiguration
+        {
+            TelemetryChannel = new Mock<ITelemetryChannel>().Object
+        };
+        _telemetry = new TelemetryClient(config);
+
+        // Default: agent returns success
+        _agentServiceMock.Setup(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgentResult.Ok());
+    }
 
     private AgentTaskDispatcher CreateDispatcher(int autonomyLevel = 3, bool registerAgent = true)
     {
@@ -44,7 +61,8 @@ public sealed class AgentTaskDispatcherTests
             provider,
             NullLogger<AgentTaskDispatcher>.Instance,
             _activityMock.Object,
-            _adoMock.Object);
+            _adoMock.Object,
+            _telemetry);
     }
 
     private static string Serialize(AgentTask task) => JsonSerializer.Serialize(task);

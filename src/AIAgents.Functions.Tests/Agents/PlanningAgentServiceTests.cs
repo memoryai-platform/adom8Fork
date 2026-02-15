@@ -246,11 +246,14 @@ public sealed class PlanningAgentServiceTests
         var service = CreateService();
         var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => service.ExecuteAsync(task));
+        var result = await service.ExecuteAsync(task);
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
     }
 
     [Fact]
-    public async Task ExecuteAsync_GitFailure_PropagatesException()
+    public async Task ExecuteAsync_GitFailure_ReturnsFailedResult()
     {
         SetupHappyPath();
         _gitMock.Setup(g => g.EnsureBranchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -259,11 +262,14 @@ public sealed class PlanningAgentServiceTests
         var service = CreateService();
         var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ExecuteAsync(task));
+        var result = await service.ExecuteAsync(task);
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
     }
 
     [Fact]
-    public async Task ExecuteAsync_AdoUnavailable_PropagatesException()
+    public async Task ExecuteAsync_AdoUnavailable_ReturnsFailedResult()
     {
         SetupHappyPath();
         _adoMock.Setup(a => a.GetWorkItemAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -272,6 +278,9 @@ public sealed class PlanningAgentServiceTests
         var service = CreateService();
         var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
 
-        await Assert.ThrowsAsync<TimeoutException>(() => service.ExecuteAsync(task));
+        var result = await service.ExecuteAsync(task);
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
     }
 }

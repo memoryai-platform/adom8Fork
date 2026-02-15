@@ -35,3 +35,8 @@ variable "static_web_app_name" {
   type        = string
   default     = "ai-agent-dashboard"
 }
+
+variable "alert_email" {
+  description = "Email address for monitoring alert notifications"
+  type        = string
+}

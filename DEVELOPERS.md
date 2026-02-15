@@ -578,6 +578,7 @@ If you set **Autonomy Level 1 (Plan Only)**, the story stops after `Story Planni
 ## Further Reading
 
 - [SETUP.md](SETUP.md) — Infrastructure and deployment setup
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Diagnosis, common issues, and emergency procedures
 - [DEMO_GUIDE.md](DEMO_GUIDE.md) — Live demo walkthrough
 - [.agent/README.md](.agent/README.md) — AI documentation folder explained
 - [scripts/README.md](scripts/README.md) — Helper scripts reference

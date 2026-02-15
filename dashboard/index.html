@@ -603,6 +603,120 @@
             gap: 8px;
             color: #555;
         }
+
+        /* System Health Panel */
+        .health-panel {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            margin-bottom: 28px;
+        }
+
+        .health-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .health-panel-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .health-overall-badge {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .health-overall-badge.healthy {
+            background: #e8f5e9;
+            color: #4caf50;
+        }
+
+        .health-overall-badge.degraded {
+            background: #fff3e0;
+            color: #ff9800;
+        }
+
+        .health-overall-badge.unhealthy {
+            background: #ffebee;
+            color: #f44336;
+        }
+
+        .health-overall-badge.unknown {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .health-checks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .health-check-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 14px;
+            border-left: 4px solid #ccc;
+        }
+
+        .health-check-card.healthy {
+            border-left-color: #4caf50;
+        }
+
+        .health-check-card.degraded {
+            border-left-color: #ff9800;
+        }
+
+        .health-check-card.unhealthy {
+            border-left-color: #f44336;
+        }
+
+        .health-check-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .health-check-status {
+            font-size: 0.75rem;
+            color: #666;
+        }
+
+        .health-check-detail {
+            font-size: 0.72rem;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .health-poison-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: #ffebee;
+            color: #f44336;
+        }
+
+        .health-poison-count.zero {
+            background: #e8f5e9;
+            color: #4caf50;
+        }
     </style>
 </head>
 <body>
@@ -642,6 +756,23 @@
         </div>
 
         <!-- Main Content -->
+        <!-- System Health -->
+        <div class="health-panel" id="health-panel">
+            <div class="health-panel-header">
+                <div class="health-panel-title">
+                    🏥 System Health
+                    <span class="health-overall-badge unknown" id="health-overall-badge">Checking...</span>
+                </div>
+                <div id="health-poison-indicator"></div>
+            </div>
+            <div class="health-checks-grid" id="health-checks-grid">
+                <div class="health-check-card">
+                    <div class="health-check-name">Waiting for health data...</div>
+                    <div class="health-check-status">Polling /api/health every 60s</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Codebase Intelligence -->
         <div class="codebase-panel" id="codebase-panel">
             <div class="codebase-panel-header">
@@ -1110,6 +1241,80 @@
         }
 
         // ========== API Fetching ==========
+        const HEALTH_URL = API_URL.replace('/GetCurrentStatus', '/health');
+        const HEALTH_POLL_INTERVAL = 60000; // 60 seconds
+
+        async function fetchHealth() {
+            try {
+                const response = await fetch(HEALTH_URL);
+                const data = await response.json();
+                updateHealthPanel(data);
+            } catch (err) {
+                updateHealthPanel(null);
+                console.warn('Health fetch failed:', err.message);
+            }
+        }
+
+        function updateHealthPanel(data) {
+            const badge = document.getElementById('health-overall-badge');
+            const grid = document.getElementById('health-checks-grid');
+            const poisonIndicator = document.getElementById('health-poison-indicator');
+
+            if (!data) {
+                badge.className = 'health-overall-badge unknown';
+                badge.textContent = 'Unreachable';
+                grid.innerHTML = '<div class="health-check-card"><div class="health-check-name">Unable to reach health endpoint</div><div class="health-check-status">Check if function app is running</div></div>';
+                poisonIndicator.innerHTML = '';
+                return;
+            }
+
+            // Overall status badge
+            const status = (data.status || 'Unknown').toLowerCase();
+            badge.className = 'health-overall-badge ' + status;
+            badge.textContent = data.status || 'Unknown';
+
+            // Component checks
+            const componentLabels = {
+                'azureDevOps': '🔗 Azure DevOps',
+                'storageQueue': '📦 Storage Queue',
+                'aiApi': '🤖 AI API',
+                'configuration': '⚙️ Configuration',
+                'gitConfiguration': '🔧 Git Config'
+            };
+
+            let html = '';
+            if (data.checks) {
+                for (const [key, check] of Object.entries(data.checks)) {
+                    const checkStatus = (check.status || 'Unknown').toLowerCase();
+                    const label = componentLabels[key] || key;
+                    let detail = '';
+
+                    if (check.responseTime) detail += check.responseTime;
+                    if (check.message) detail += (detail ? ' · ' : '') + check.message;
+                    if (check.missingVars && check.missingVars.length > 0) {
+                        detail += (detail ? ' · ' : '') + 'Missing: ' + check.missingVars.join(', ');
+                    }
+                    if (check.messageCount !== undefined && check.messageCount !== null) {
+                        detail += (detail ? ' · ' : '') + check.messageCount + ' queued';
+                    }
+
+                    html += `<div class="health-check-card ${checkStatus}">
+                        <div class="health-check-name">${label}</div>
+                        <div class="health-check-status">${check.status || 'Unknown'}</div>
+                        ${detail ? '<div class="health-check-detail">' + detail + '</div>' : ''}
+                    </div>`;
+
+                    // Show poison queue count
+                    if (key === 'storageQueue' && check.poisonMessageCount !== undefined) {
+                        const count = check.poisonMessageCount || 0;
+                        const cls = count === 0 ? 'zero' : '';
+                        poisonIndicator.innerHTML = `<span class="health-poison-count ${cls}">☠️ Poison Queue: ${count}</span>`;
+                    }
+                }
+            }
+            grid.innerHTML = html || '<div class="health-check-card"><div class="health-check-name">No checks available</div></div>';
+        }
+
         async function fetchStatus() {
             try {
                 const response = await fetch(API_URL);
@@ -1143,6 +1348,10 @@
             // Fetch codebase intelligence
             fetchCodebaseIntelligence();
             setInterval(fetchCodebaseIntelligence, CODEBASE_POLL_INTERVAL);
+
+            // Fetch system health
+            fetchHealth();
+            setInterval(fetchHealth, HEALTH_POLL_INTERVAL);
         }
 
         document.addEventListener('DOMContentLoaded', init);
