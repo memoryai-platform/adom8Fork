@@ -20,7 +20,7 @@
       "maxPollingInterval": "00:00:05",
       "visibilityTimeout": "00:10:00",
       "batchSize": 1,
-      "maxDequeueCount": 5,
+      "maxDequeueCount": 2,
       "newBatchThreshold": 0
     }
   },

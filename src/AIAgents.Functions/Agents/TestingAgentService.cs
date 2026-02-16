@@ -198,7 +198,8 @@ Generate comprehensive tests for this implementation.";
         }
         catch (HttpRequestException ex)
         {
-            return AgentResult.Fail(ErrorCategory.Transient, $"HTTP error in Testing agent for WI-{task.WorkItemId}: {ex.Message} [StatusCode={ex.StatusCode}, Stack={ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim()}]", ex);
+            // 404/5xx from AI API — treat as Code error to avoid burning tokens on retries
+            return AgentResult.Fail(ErrorCategory.Code, $"HTTP error in Testing agent for WI-{task.WorkItemId}: {ex.Message} [StatusCode={ex.StatusCode}, Stack={ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim()}]", ex);
         }
         catch (Exception ex)
         {
