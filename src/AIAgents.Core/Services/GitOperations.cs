@@ -47,28 +47,44 @@ public sealed class GitOperations : IGitOperations
         }
         else
         {
-            _logger.LogDebug("Repository already exists at {RepoDir}, fetching latest", repoDir);
-            using var repo = new Repository(repoDir);
+            _logger.LogDebug("Repository already exists at {RepoDir}", repoDir);
+        }
+
+        using (var repo = new Repository(repoDir))
+        {
+            // Always fetch latest before branch operations
             var remote = repo.Network.Remotes["origin"];
             var fetchOptions = new FetchOptions
             {
                 CredentialsProvider = (_, _, _) => _credentials
             };
             Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(r => r.Specification), fetchOptions, null);
-        }
 
-        using (var repo = new Repository(repoDir))
-        {
             var branch = repo.Branches[branchName];
+            var remoteBranch = repo.Branches[$"origin/{branchName}"];
 
-            if (branch is null)
+            if (branch is null && remoteBranch is not null)
             {
-                // Create branch from default branch (typically main or master)
+                // Remote branch exists but no local tracking branch — create it tracking the remote
+                _logger.LogInformation("Creating local branch '{BranchName}' tracking 'origin/{BranchName}'",
+                    branchName, branchName);
+                branch = repo.CreateBranch(branchName, remoteBranch.Tip);
+                repo.Branches.Update(branch, b => b.TrackedBranch = remoteBranch.CanonicalName);
+            }
+            else if (branch is null)
+            {
+                // Brand new branch — create from default branch
                 var defaultBranch = repo.Head;
                 _logger.LogInformation("Creating branch '{BranchName}' from '{DefaultBranch}'",
                     branchName, defaultBranch.FriendlyName);
-
                 branch = repo.CreateBranch(branchName, defaultBranch.Tip);
+            }
+            else if (remoteBranch is not null)
+            {
+                // Both local and remote exist — fast-forward local to remote
+                _logger.LogDebug("Fast-forwarding '{BranchName}' to match 'origin/{BranchName}'",
+                    branchName, branchName);
+                repo.Refs.UpdateTarget(branch.Reference, remoteBranch.Tip.Id);
             }
 
             Commands.Checkout(repo, branch);
@@ -108,7 +124,10 @@ public sealed class GitOperations : IGitOperations
         };
 
         var currentBranch = repo.Head;
-        repo.Network.Push(currentBranch, pushOptions);
+
+        // Use explicit refspec to handle new branches without upstream tracking
+        var pushRefSpec = $"refs/heads/{currentBranch.FriendlyName}:refs/heads/{currentBranch.FriendlyName}";
+        repo.Network.Push(remote, pushRefSpec, pushOptions);
 
         _logger.LogInformation("Pushed branch '{BranchName}' to origin", currentBranch.FriendlyName);
 
