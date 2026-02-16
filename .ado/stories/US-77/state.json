@@ -1,29 +1,46 @@
 {
   "workItemId": 77,
-  "currentState": "Story Planning",
+  "currentState": "AI Code",
   "createdAt": "2026-02-16T18:01:30.2148475Z",
-  "updatedAt": "2026-02-16T18:01:30.2242018Z",
+  "updatedAt": "2026-02-16T18:02:36.8362744Z",
   "agents": {
     "Planning": {
       "status": "in_progress",
       "startedAt": "2026-02-16T18:01:30.2241517Z",
       "completedAt": null,
       "additionalData": null
+    },
+    "Coding": {
+      "status": "in_progress",
+      "startedAt": "2026-02-16T18:01:48.3604617Z",
+      "completedAt": null,
+      "additionalData": null
     }
   },
   "artifacts": {
-    "code": [],
+    "code": [
+      "dashboard/index.html"
+    ],
     "tests": [],
     "docs": []
   },
   "decisions": [],
   "questions": [],
   "tokenUsage": {
-    "totalInputTokens": 0,
-    "totalOutputTokens": 0,
-    "totalTokens": 0,
-    "totalCost": 0,
-    "complexity": "XS",
-    "agents": {}
+    "totalInputTokens": 317187,
+    "totalOutputTokens": 1748,
+    "totalTokens": 318935,
+    "totalCost": 0.977781,
+    "complexity": "XL",
+    "agents": {
+      "Coding": {
+        "inputTokens": 317187,
+        "outputTokens": 1748,
+        "totalTokens": 318935,
+        "estimatedCost": 0.977781,
+        "model": "claude-sonnet-4-20250514",
+        "callCount": 1
+      }
+    }
   }
 }
