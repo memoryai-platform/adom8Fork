@@ -53,11 +53,16 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
         {
         _logger.LogInformation("CodebaseDocumentation agent starting for WI-{WorkItemId}", task.WorkItemId);
 
-        var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
+        // WI-0 is a sentinel for standalone/dashboard-triggered analysis (no ADO work item)
+        StoryWorkItem? workItem = null;
+        if (task.WorkItemId > 0)
+        {
+            workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
+        }
 
         // Determine timeframe from work item description or use default
-        var timeframe = ParseTimeframe(workItem.Description);
-        var isIncremental = workItem.Description?.Contains("incremental", StringComparison.OrdinalIgnoreCase) == true;
+        var timeframe = ParseTimeframe(workItem?.Description);
+        var isIncremental = workItem?.Description?.Contains("incremental", StringComparison.OrdinalIgnoreCase) == true;
 
         // Step 1: Clone/open repo on main branch
         await LogProgress(task.WorkItemId, "Cloning repository...", cancellationToken);
@@ -88,7 +93,7 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
 
         // Step 5: Analyze git commit history
         var commitSummary = string.Empty;
-        if (workItem.Description?.Contains("includeGitHistory=false", StringComparison.OrdinalIgnoreCase) != true)
+        if (workItem?.Description?.Contains("includeGitHistory=false", StringComparison.OrdinalIgnoreCase) != true)
         {
             await LogProgress(task.WorkItemId, "Analyzing git commit history...", cancellationToken);
             commitSummary = await AnalyzeCommitHistoryAsync(repoPath, timeframe, cancellationToken);
@@ -137,12 +142,13 @@ public sealed class CodebaseDocumentationAgentService : IAgentService
             : $"[AI] Initial codebase documentation — {fileCount} files analyzed, {featureDocs.Count} features documented";
         await _gitOps.CommitAndPushAsync(repoPath, commitMsg, cancellationToken);
 
-        // Step 10: Post summary to work item
-        var summary = BuildSummaryComment(metadata, totalFiles, isIncremental, _tokenUsage);
-        await _adoClient.AddWorkItemCommentAsync(task.WorkItemId, summary, cancellationToken);
-
-        // Update work item state to Done
-        await _adoClient.UpdateWorkItemStateAsync(task.WorkItemId, "Done", cancellationToken);
+        // Step 10: Post summary to work item (skip for standalone WI-0 analysis)
+        if (task.WorkItemId > 0)
+        {
+            var summary = BuildSummaryComment(metadata, totalFiles, isIncremental, _tokenUsage);
+            await _adoClient.AddWorkItemCommentAsync(task.WorkItemId, summary, cancellationToken);
+            await _adoClient.UpdateWorkItemStateAsync(task.WorkItemId, "Done", cancellationToken);
+        }
 
         _logger.LogInformation(
             "CodebaseDocumentation agent completed for WI-{WorkItemId}: {FileCount} files, {FeatureCount} features",
