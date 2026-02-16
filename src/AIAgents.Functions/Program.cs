@@ -34,11 +34,11 @@ var host = new HostBuilder()
         services.AddHttpClient("AIClient")
         .AddStandardResilienceHandler(options =>
         {
-            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(180);
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(300);
             options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(9);
-            options.Retry.MaxRetryAttempts = 3;
+            options.Retry.MaxRetryAttempts = 1;
             options.Retry.Delay = TimeSpan.FromSeconds(2);
-            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(400);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(620);
             options.CircuitBreaker.FailureRatio = 0.8;
             options.CircuitBreaker.MinimumThroughput = 5;
             options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);

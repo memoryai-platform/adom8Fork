@@ -513,7 +513,7 @@ If you detect a database or API, also include DATABASE_SCHEMA.md and/or API_REFE
 Generate comprehensive documentation files for this codebase.";
 
         var aiResult = await _aiClient.CompleteAsync(systemPrompt, userPrompt,
-            new AICompletionOptions { MaxTokens = 16384, Temperature = 0.3 }, ct);
+            new AICompletionOptions { MaxTokens = 8192, Temperature = 0.3 }, ct);
         _tokenUsage.RecordUsage("CodebaseDocumentation", aiResult.Usage);
 
         return ParseMultiFileResponse(aiResult.Content);
