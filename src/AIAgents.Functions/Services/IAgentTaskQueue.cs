@@ -12,4 +12,10 @@ public interface IAgentTaskQueue
     /// Enqueues an agent task for processing by the next agent in the pipeline.
     /// </summary>
     Task EnqueueAsync(AgentTask task, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Peeks at queued tasks without dequeuing them.
+    /// Returns up to <paramref name="maxMessages"/> tasks currently waiting in the queue.
+    /// </summary>
+    Task<IReadOnlyList<AgentTask>> PeekAsync(int maxMessages = 32, CancellationToken cancellationToken = default);
 }

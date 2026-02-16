@@ -112,4 +112,57 @@ public sealed class TableStorageActivityLogger : IActivityLogger
 
         return entries;
     }
+
+    public async Task<int> ClearAsync(CancellationToken cancellationToken = default)
+    {
+        var count = 0;
+
+        try
+        {
+            // Delete all entries row-by-row (faster and avoids table deletion propagation delays)
+            var entitiesToDelete = new List<TableEntity>();
+            await foreach (var entity in _tableClient.QueryAsync<TableEntity>(
+                filter: $"PartitionKey eq '{PartitionKey}'",
+                select: new[] { "PartitionKey", "RowKey" },
+                cancellationToken: cancellationToken))
+            {
+                entitiesToDelete.Add(entity);
+            }
+
+            foreach (var entity in entitiesToDelete)
+            {
+                try
+                {
+                    await _tableClient.DeleteEntityAsync(entity.PartitionKey, entity.RowKey, entity.ETag, cancellationToken);
+                    count++;
+                }
+                catch (RequestFailedException ex) when (ex.Status == 404)
+                {
+                    // Already deleted, skip
+                }
+            }
+
+            _logger.LogInformation("Activity log cleared — {Count} entries removed", count);
+        }
+        catch (RequestFailedException ex) when (ex.Status is 404 or 409)
+        {
+            // Table missing or still being deleted — recreate it
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    await _tableClient.CreateIfNotExistsAsync(cancellationToken);
+                    break;
+                }
+                catch (RequestFailedException retry) when (retry.Status == 409)
+                {
+                    await Task.Delay(3000, cancellationToken);
+                    if (attempt == 4) throw;
+                }
+            }
+            _logger.LogInformation("Activity table recreated (was missing or being deleted)");
+        }
+
+        return count;
+    }
 }

@@ -15,12 +15,17 @@ namespace AIAgents.Functions.Tests.Functions;
 public sealed class GetCurrentStatusTests
 {
     private readonly Mock<IActivityLogger> _activityMock = new();
+    private readonly Mock<IAgentTaskQueue> _taskQueueMock = new();
 
     private GetCurrentStatus CreateFunction()
     {
+        _taskQueueMock.Setup(q => q.PeekAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<AgentTask>());
+
         return new GetCurrentStatus(
             NullLogger<GetCurrentStatus>.Instance,
-            _activityMock.Object);
+            _activityMock.Object,
+            _taskQueueMock.Object);
     }
 
     private static HttpRequest CreateRequest()

@@ -23,4 +23,9 @@ public interface IActivityLogger
     /// Retrieves recent activity entries for the dashboard.
     /// </summary>
     Task<IReadOnlyList<ActivityEntry>> GetRecentAsync(int count = 50, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears all activity log entries (dashboard reset).
+    /// </summary>
+    Task<int> ClearAsync(CancellationToken cancellationToken = default);
 }

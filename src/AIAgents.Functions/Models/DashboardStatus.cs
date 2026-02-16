@@ -19,8 +19,26 @@ public sealed class DashboardStatus
     [JsonPropertyName("recentActivity")]
     public required IReadOnlyList<ActivityEntry> RecentActivity { get; init; }
 
+    [JsonPropertyName("queuedTasks")]
+    public IReadOnlyList<QueuedTaskInfo> QueuedTasks { get; init; } = [];
+
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Lightweight representation of a task waiting in the queue.
+/// </summary>
+public sealed class QueuedTaskInfo
+{
+    [JsonPropertyName("workItemId")]
+    public required int WorkItemId { get; init; }
+
+    [JsonPropertyName("agentType")]
+    public required string AgentType { get; init; }
+
+    [JsonPropertyName("enqueuedAt")]
+    public DateTime EnqueuedAt { get; init; }
 }
 
 /// <summary>

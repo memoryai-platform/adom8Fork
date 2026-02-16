@@ -16,13 +16,16 @@ public sealed class GetCurrentStatus
 {
     private readonly ILogger<GetCurrentStatus> _logger;
     private readonly IActivityLogger _activityLogger;
+    private readonly IAgentTaskQueue _taskQueue;
 
     public GetCurrentStatus(
         ILogger<GetCurrentStatus> logger,
-        IActivityLogger activityLogger)
+        IActivityLogger activityLogger,
+        IAgentTaskQueue taskQueue)
     {
         _logger = logger;
         _activityLogger = activityLogger;
+        _taskQueue = taskQueue;
     }
 
     [Function("GetCurrentStatus")]
@@ -33,6 +36,17 @@ public sealed class GetCurrentStatus
         _logger.LogDebug("Dashboard status request received");
 
         var recentActivity = await _activityLogger.GetRecentAsync(50, cancellationToken);
+
+        // Peek at queued tasks waiting to be processed
+        IReadOnlyList<AgentTask> queuedTasks;
+        try
+        {
+            queuedTasks = await _taskQueue.PeekAsync(32, cancellationToken);
+        }
+        catch
+        {
+            queuedTasks = [];
+        }
 
         // Build story statuses from activity log
         var storyStatuses = BuildStoryStatuses(recentActivity);
@@ -81,7 +95,13 @@ public sealed class GetCurrentStatus
                 TotalTokens = storyStatuses.Sum(s => s.TokenUsage?.TotalTokens ?? 0),
                 TotalCost = storyStatuses.Sum(s => s.TokenUsage?.TotalCost ?? 0m)
             },
-            RecentActivity = recentActivity
+            RecentActivity = recentActivity,
+            QueuedTasks = queuedTasks.Select(t => new QueuedTaskInfo
+            {
+                WorkItemId = t.WorkItemId,
+                AgentType = t.AgentType.ToString(),
+                EnqueuedAt = t.EnqueuedAt
+            }).ToList()
         };
 
         return new OkObjectResult(status);
