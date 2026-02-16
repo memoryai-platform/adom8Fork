@@ -221,7 +221,7 @@ public sealed class GetCurrentStatusTests
     // ── Progress calculation ──
 
     [Fact]
-    public async Task Run_ThreeOfFiveCompleted_Shows60Percent()
+    public async Task Run_ThreeOfSixCompleted_Shows50Percent()
     {
         var activities = new List<ActivityEntry>
         {
@@ -238,6 +238,6 @@ public sealed class GetCurrentStatusTests
 
         var status = ((OkObjectResult)result).Value as DashboardStatus;
         var story = status!.Stories[0];
-        Assert.Equal(60, story.Progress); // 3/5 = 60%
+        Assert.Equal(50, story.Progress); // 3/6 = 50%
     }
 }

@@ -7,6 +7,9 @@ namespace AIAgents.Functions.Models;
 /// </summary>
 public sealed class DashboardStatus
 {
+    [JsonPropertyName("currentWorkItem")]
+    public CurrentWorkItemInfo? CurrentWorkItem { get; init; }
+
     [JsonPropertyName("stories")]
     public required IReadOnlyList<StoryStatus> Stories { get; init; }
 
@@ -18,6 +21,27 @@ public sealed class DashboardStatus
 
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Represents the current work item being processed by the agent pipeline.
+/// </summary>
+public sealed class CurrentWorkItemInfo
+{
+    [JsonPropertyName("id")]
+    public required int Id { get; init; }
+
+    [JsonPropertyName("title")]
+    public required string Title { get; init; }
+
+    [JsonPropertyName("state")]
+    public string? State { get; init; }
+
+    [JsonPropertyName("autonomyLevel")]
+    public string? AutonomyLevel { get; init; }
+
+    [JsonPropertyName("elapsedTime")]
+    public string? ElapsedTime { get; init; }
 }
 
 /// <summary>

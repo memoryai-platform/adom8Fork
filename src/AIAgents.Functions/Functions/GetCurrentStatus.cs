@@ -37,8 +37,38 @@ public sealed class GetCurrentStatus
         // Build story statuses from activity log
         var storyStatuses = BuildStoryStatuses(recentActivity);
 
+        // Identify the currently active work item (most recent story with an in-progress agent)
+        var activeStory = storyStatuses.FirstOrDefault(s =>
+            s.CurrentAgent != null || s.Agents.Values.Any(a => a == "in_progress"));
+
+        CurrentWorkItemInfo? currentWorkItem = null;
+        if (activeStory != null)
+        {
+            var firstActivity = recentActivity
+                .Where(a => a.WorkItemId == activeStory.WorkItemId)
+                .OrderBy(a => a.Timestamp)
+                .FirstOrDefault();
+
+            var elapsed = firstActivity != null
+                ? FormatElapsed(DateTime.UtcNow - firstActivity.Timestamp)
+                : null;
+
+            currentWorkItem = new CurrentWorkItemInfo
+            {
+                Id = activeStory.WorkItemId,
+                Title = activeStory.Title.StartsWith("US-")
+                    ? activeStory.Title
+                    : $"US-{activeStory.WorkItemId}",
+                State = activeStory.CurrentAgent != null
+                    ? $"AI {activeStory.CurrentAgent}"
+                    : null,
+                ElapsedTime = elapsed
+            };
+        }
+
         var status = new DashboardStatus
         {
+            CurrentWorkItem = currentWorkItem,
             Stories = storyStatuses,
             Stats = new DashboardStats
             {
@@ -93,7 +123,7 @@ public sealed class GetCurrentStatus
             }
 
             var completedCount = agents.Values.Count(v => v == "completed");
-            var totalAgents = 5; // Planning, Coding, Testing, Review, Documentation
+            var totalAgents = 6; // Planning, Coding, Testing, Review, Documentation, Deployment
             var progress = (int)((double)completedCount / totalAgents * 100);
 
             // Aggregate token usage from activity entries
@@ -145,5 +175,14 @@ public sealed class GetCurrentStatus
 
         var total = completed + failed;
         return total > 0 ? Math.Round((double)completed / total * 100, 1) : 100.0;
+    }
+
+    private static string FormatElapsed(TimeSpan ts)
+    {
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        if (ts.TotalMinutes >= 1)
+            return $"{(int)ts.TotalMinutes}m {ts.Seconds}s";
+        return $"{ts.Seconds}s";
     }
 }

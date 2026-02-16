@@ -130,14 +130,22 @@
         .agent-card.completed {
             border-left-color: #667eea; /* BUG: Should be #4caf50 (green) */
             opacity: 0.8;               /* BUG: Should be 1.0 */
+            background: #e0e7ff;        /* BUG: Should be #e8f5e9 (light green) */
+        }
+
+        .agent-card.failed {
+            border-left-color: #f44336;
+            background: #ffebee;
         }
 
         @keyframes agentPulse {
             0%, 100% {
-                box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+                box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
+                transform: scale(1);
             }
             50% {
-                box-shadow: 0 4px 25px rgba(102, 126, 234, 0.35);
+                box-shadow: 0 0 40px rgba(102, 126, 234, 0.8);
+                transform: scale(1.02);
             }
         }
 
@@ -717,13 +725,99 @@
             background: #e8f5e9;
             color: #4caf50;
         }
+
+        /* Current Work Item */
+        .work-item-panel {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            margin-bottom: 28px;
+            border-left: 6px solid #667eea;
+        }
+
+        .work-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .work-item-title-label {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .work-item-state-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 14px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #e8edff;
+            color: #667eea;
+        }
+
+        .work-item-state-badge.completed {
+            background: #e8f5e9;
+            color: #4caf50;
+        }
+
+        .work-item-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+
+        .work-item-title.empty {
+            color: #bbb;
+            font-weight: 400;
+            font-size: 1.1rem;
+        }
+
+        .work-item-meta {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .work-item-meta-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .work-item-meta-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .work-item-meta-label {
+            font-size: 0.72rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.failed {
+            background: #ffebee;
+            color: #f44336;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🤖 AI Agent Monitor</h1>
+            <h1>⚡ AI Agent Monitor</h1>
             <div class="subtitle">Real-time monitoring of AI agents processing Azure DevOps work items</div>
         </div>
 
@@ -877,6 +971,29 @@
             </div>
         </div>
 
+        <!-- Current Work Item -->
+        <div class="work-item-panel" id="work-item-panel">
+            <div class="work-item-header">
+                <div class="work-item-title-label">📝 Current Work Item</div>
+                <span class="work-item-state-badge" id="wi-state">—</span>
+            </div>
+            <div class="work-item-title empty" id="wi-title">No active work item</div>
+            <div class="work-item-meta">
+                <div class="work-item-meta-item">
+                    <span class="work-item-meta-value" id="wi-autonomy">—</span>
+                    <span class="work-item-meta-label">Autonomy</span>
+                </div>
+                <div class="work-item-meta-item">
+                    <span class="work-item-meta-value" id="wi-elapsed">—</span>
+                    <span class="work-item-meta-label">Elapsed</span>
+                </div>
+                <div class="work-item-meta-item">
+                    <span class="work-item-meta-value" id="wi-progress">—</span>
+                    <span class="work-item-meta-label">Progress</span>
+                </div>
+            </div>
+        </div>
+
         <div class="main-grid">
             <div>
                 <div class="section-title">⚡ Agent Pipeline</div>
@@ -912,11 +1029,12 @@
 
         // ========== Default Agent Definitions ==========
         const DEFAULT_AGENTS = [
-            { name: 'Planning Agent',       emoji: '📋', status: 'pending', started: null, duration: null, confidence: null },
-            { name: 'Coding Agent',         emoji: '💻', status: 'pending', started: null, duration: null, confidence: null },
-            { name: 'Testing Agent',        emoji: '🧪', status: 'pending', started: null, duration: null, confidence: null },
-            { name: 'Review Agent',         emoji: '🔍', status: 'pending', started: null, duration: null, confidence: null },
-            { name: 'Documentation Agent',  emoji: '📄', status: 'pending', started: null, duration: null, confidence: null }
+            { name: 'Planning Agent',       emoji: '📋', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null },
+            { name: 'Coding Agent',         emoji: '💻', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null },
+            { name: 'Testing Agent',        emoji: '🧪', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null },
+            { name: 'Review Agent',         emoji: '🔍', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null },
+            { name: 'Documentation Agent',  emoji: '📄', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null },
+            { name: 'Deployment Agent',     emoji: '🚀', status: 'pending', started: null, duration: null, confidence: null, tokens: null, cost: null }
         ];
 
         // ========== State ==========
@@ -936,13 +1054,55 @@
         }
 
         function formatStatusText(status) {
-            if (status === 'active') return 'Running';
+            if (status === 'active' || status === 'in_progress') return 'Running';
             if (status === 'completed') return 'Done';
+            if (status === 'failed') return 'Failed';
             return 'Pending';
         }
 
         // ========== Update Functions ==========
+        function updateWorkItem(data) {
+            const titleEl = document.getElementById('wi-title');
+            const stateEl = document.getElementById('wi-state');
+            const autonomyEl = document.getElementById('wi-autonomy');
+            const elapsedEl = document.getElementById('wi-elapsed');
+            const progressEl = document.getElementById('wi-progress');
+
+            if (data.currentWorkItem) {
+                const wi = data.currentWorkItem;
+                titleEl.textContent = `US-${wi.id}: ${wi.title}`;
+                titleEl.classList.remove('empty');
+                stateEl.textContent = wi.state || '—';
+                autonomyEl.textContent = wi.autonomyLevel || '—';
+                elapsedEl.textContent = wi.elapsedTime || '—';
+                // Calculate progress from agents
+                if (data.stories && data.stories.length > 0) {
+                    progressEl.textContent = data.stories[0].progress + '%';
+                } else {
+                    progressEl.textContent = '—';
+                }
+            } else if (data.stories && data.stories.length > 0) {
+                const story = data.stories[0];
+                titleEl.textContent = story.title || `US-${story.workItemId}`;
+                titleEl.classList.remove('empty');
+                stateEl.textContent = story.currentAgent ? `AI ${story.currentAgent}` : '—';
+                autonomyEl.textContent = '—';
+                elapsedEl.textContent = '—';
+                progressEl.textContent = story.progress + '%';
+            } else {
+                titleEl.textContent = 'No active work item';
+                titleEl.classList.add('empty');
+                stateEl.textContent = '—';
+                autonomyEl.textContent = '—';
+                elapsedEl.textContent = '—';
+                progressEl.textContent = '—';
+            }
+        }
+
         function updateDashboard(data) {
+            // Current Work Item
+            updateWorkItem(data);
+
             // Stats
             if (data.stats) {
                 document.getElementById('stat-stories').textContent = data.stats.storiesProcessed ?? 0;
@@ -986,7 +1146,7 @@
             const container = document.getElementById('agents-container');
             container.innerHTML = '';
             stories.forEach(story => {
-                const agentNames = ['Planning', 'Coding', 'Testing', 'Review', 'Documentation'];
+                const agentNames = ['Planning', 'Coding', 'Testing', 'Review', 'Documentation', 'Deployment'];
                 agentNames.forEach(name => {
                     const status = story.agents[name] || 'pending';
                     const emoji = getAgentEmoji(name);
@@ -1004,6 +1164,7 @@
                         </div>
                         <div class="agent-details">
                             <span>WI: US-${story.workItemId}</span>
+                            <span>Duration: ${tokInfo ? tokInfo.callCount + ' calls' : '—'}</span>
                             <span>Tokens: ${tokInfo ? tokInfo.totalTokens.toLocaleString() : '—'}</span>
                             <span>Cost: ${tokInfo ? '$' + tokInfo.estimatedCost.toFixed(4) : '—'}</span>
                         </div>
@@ -1040,9 +1201,11 @@
                 const progress = getProgress(agent);
                 const card = document.createElement('div');
                 card.className = `agent-card ${agent.status || 'pending'}`;
+                const tokenStr = agent.tokens ? agent.tokens.toLocaleString() : '—';
+                const costStr = agent.cost ? '$' + agent.cost.toFixed(4) : '—';
                 card.innerHTML = `
                     <div class="agent-header">
-                        <span class="agent-emoji">${agent.emoji || '🤖'}</span>
+                        <span class="agent-emoji">${agent.emoji || '⚡'}</span>
                         <span class="agent-name">${agent.name}</span>
                         <span class="status-badge ${agent.status || 'pending'}">${formatStatusText(agent.status)}</span>
                     </div>
@@ -1053,6 +1216,7 @@
                         <span>Started: ${formatTime(agent.started)}</span>
                         <span>Duration: ${formatTime(agent.duration)}</span>
                         <span>Confidence: ${formatTime(agent.confidence)}</span>
+                        <span>Tokens: ${tokenStr} (${costStr})</span>
                     </div>
                 `;
                 container.appendChild(card);
