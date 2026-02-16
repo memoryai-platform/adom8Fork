@@ -201,7 +201,7 @@ Generate comprehensive documentation for these changes.";
             "Documentation agent completed for WI-{WorkItemId}. PR #{PrId} created. Enqueued Deployment agent.",
             task.WorkItemId, prId);
 
-            return AgentResult.Ok();
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {

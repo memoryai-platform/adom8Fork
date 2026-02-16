@@ -185,13 +185,13 @@ public sealed class GetCurrentStatus
             var totalAgents = 6; // Planning, Coding, Testing, Review, Documentation, Deployment
             var progress = (int)((double)completedCount / totalAgents * 100);
 
-            // Aggregate token usage from activity entries
+            // Aggregate token usage from activity entries (exclude TokenSummary to avoid double-counting)
             var storyActivities = group.ToList();
-            var totalTokens = storyActivities.Sum(a => a.Tokens);
-            var totalCost = storyActivities.Sum(a => a.Cost);
+            var tokenActivities = storyActivities.Where(a => a.Tokens > 0 && a.Agent != "TokenSummary").ToList();
+            var totalTokens = tokenActivities.Sum(a => a.Tokens);
+            var totalCost = tokenActivities.Sum(a => a.Cost);
 
-            var agentTokens = storyActivities
-                .Where(a => a.Tokens > 0)
+            var agentTokens = tokenActivities
                 .GroupBy(a => a.Agent)
                 .ToDictionary(
                     g => g.Key,

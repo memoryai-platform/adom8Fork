@@ -186,7 +186,7 @@ Analyze this story and create a comprehensive implementation plan.";
 
         _logger.LogInformation("Planning agent completed for WI-{WorkItemId}, enqueued Coding agent", task.WorkItemId);
 
-            return AgentResult.Ok();
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {

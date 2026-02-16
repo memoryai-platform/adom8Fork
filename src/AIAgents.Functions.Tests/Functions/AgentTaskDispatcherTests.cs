@@ -203,6 +203,8 @@ public sealed class AgentTaskDispatcherTests
         _activityMock.Verify(a => a.LogAsync(
             "Planning", 12345,
             It.Is<string>(m => m.Contains("completed")),
+            It.IsAny<int>(),
+            It.IsAny<decimal>(),
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }

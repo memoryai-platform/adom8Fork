@@ -182,7 +182,7 @@ Perform a comprehensive code review.";
 
         _logger.LogInformation("Review agent completed for WI-{WorkItemId}, enqueued Documentation agent", task.WorkItemId);
 
-            return AgentResult.Ok();
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {

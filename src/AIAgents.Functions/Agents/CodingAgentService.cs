@@ -192,7 +192,9 @@ public sealed class CodingAgentService : IAgentService
 
             _logger.LogInformation("Coding agent completed for WI-{WorkItemId}, enqueued Testing agent", task.WorkItemId);
 
-            return AgentResult.Ok();
+            var codingTokens = agenticResult.TotalUsage?.TotalTokens ?? 0;
+            var codingCost = agenticResult.TotalUsage?.EstimatedCost ?? 0m;
+            return AgentResult.Ok(codingTokens, codingCost);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -224,11 +226,18 @@ public sealed class CodingAgentService : IAgentService
 
         YOUR WORKFLOW:
         1. First, call list_files to understand the project structure
-        2. Call read_file to examine existing code mentioned in the plan
+        2. Call read_file to examine existing code that needs to be modified
         3. Call search_code to find relevant patterns, imports, or existing implementations
         4. Implement the changes by calling write_file (for new files) or edit_file (for modifying existing files)
         5. After writing/editing, call read_file to verify your changes look correct
         6. When all changes are complete, respond with a summary of what you did
+
+        USING edit_file CORRECTLY:
+        - read_file shows content with line numbers (e.g., "  42| some code here")
+        - When using edit_file, the "search" parameter must contain the ACTUAL file text WITHOUT line numbers
+        - For example, if read_file shows "  42| </body>", use "</body>" in the search, NOT "  42| </body>"
+        - Include enough surrounding context (3-5 lines) in search to ensure a unique match
+        - Line endings are normalized automatically — don't worry about \\r\\n vs \\n
 
         RULES:
         - You MUST call tools to make changes — never respond without having called at least one write or edit tool
@@ -236,6 +245,7 @@ public sealed class CodingAgentService : IAgentService
         - Match existing code style, naming conventions, and patterns
         - Use edit_file for surgical changes to existing files (preferred over write_file for edits)
         - Use write_file only for creating new files or when edit_file can't express the change
+        - If edit_file fails with "Search text not found", read the file again and use the exact text shown
         - Do NOT create or modify test files — the Testing agent handles that
         - Do NOT modify infrastructure files (Terraform, CI/CD pipelines) unless explicitly asked
         - Ensure all new code compiles and is syntactically correct

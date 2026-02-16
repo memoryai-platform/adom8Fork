@@ -186,7 +186,7 @@ Generate comprehensive tests for this implementation.";
 
         _logger.LogInformation("Testing agent completed for WI-{WorkItemId}, enqueued Review agent", task.WorkItemId);
 
-            return AgentResult.Ok();
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {

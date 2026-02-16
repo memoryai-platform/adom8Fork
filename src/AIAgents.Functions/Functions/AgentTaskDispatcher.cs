@@ -136,6 +136,8 @@ public sealed class AgentTaskDispatcher
                 agentKey,
                 agentTask.WorkItemId,
                 $"{agentKey} agent completed successfully",
+                result.TokensUsed,
+                result.CostIncurred,
                 cancellationToken: cancellationToken);
 
             _telemetry.TrackEvent(TelemetryEvents.AgentCompleted, new Dictionary<string, string>

@@ -18,10 +18,17 @@ public sealed class AgentResult
     /// <summary>Original exception, if any. Null when <see cref="Success"/> is true.</summary>
     public Exception? Exception { get; private init; }
 
+    /// <summary>Total tokens consumed by this agent (for dashboard display).</summary>
+    public int TokensUsed { get; init; }
+
+    /// <summary>Estimated cost incurred by this agent (for dashboard display).</summary>
+    public decimal CostIncurred { get; init; }
+
     private AgentResult() { }
 
     /// <summary>Creates a successful result.</summary>
-    public static AgentResult Ok() => new() { Success = true };
+    public static AgentResult Ok(int tokens = 0, decimal cost = 0m) =>
+        new() { Success = true, TokensUsed = tokens, CostIncurred = cost };
 
     /// <summary>
     /// Creates a failed result with error categorization.

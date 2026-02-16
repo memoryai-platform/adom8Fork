@@ -185,7 +185,9 @@ public sealed class DeploymentAgentService : IAgentService
             "Deployment agent completed for WI-{WorkItemId}: {Action} → {State}",
             task.WorkItemId, decision.Action, decision.FinalState);
 
-            return AgentResult.Ok();
+            // Deployment agent doesn't call AI itself, so report 0 tokens
+            // (pipeline totals are in the TokenSummary activity entry)
+            return AgentResult.Ok(0, 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {

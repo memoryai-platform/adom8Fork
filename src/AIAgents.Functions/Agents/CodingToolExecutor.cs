@@ -91,14 +91,14 @@ public sealed class CodingToolExecutor
         new ToolDefinition
         {
             Name = "edit_file",
-            Description = "Apply a search-and-replace edit to an existing file. The search text must exactly match text in the file. More precise than write_file for small changes.",
+            Description = "Apply a search-and-replace edit to an existing file. The search text must match the actual file content (NOT including line numbers shown by read_file). Copy the exact text from the file for the search parameter. Line endings are normalized automatically.",
             InputSchema = new
             {
                 type = "object",
                 properties = new
                 {
                     path = new { type = "string", description = "Relative path to the file to edit" },
-                    search = new { type = "string", description = "Exact text to find in the file (must match exactly)" },
+                    search = new { type = "string", description = "Exact text to find in the file. Do NOT include the line numbers from read_file output. Copy the actual code/text only." },
                     replace = new { type = "string", description = "Text to replace the search text with" }
                 },
                 required = new[] { "path", "search", "replace" }
@@ -133,8 +133,17 @@ public sealed class CodingToolExecutor
         if (content is null)
             return $"Error: File not found: {path}";
 
-        _logger.LogDebug("Tool read_file: {Path} ({Length} chars)", path, content.Length);
-        return content;
+        // Normalize line endings so AI sees consistent \n everywhere
+        content = NormalizeLineEndings(content);
+
+        // Add line numbers so AI can reference exact locations
+        var lines = content.Split('\n');
+        var numbered = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+            numbered.AppendLine($"{i + 1,4}| {lines[i]}");
+
+        _logger.LogDebug("Tool read_file: {Path} ({Lines} lines, {Length} chars)", path, lines.Length, content.Length);
+        return numbered.ToString();
     }
 
     private async Task<string> WriteFileAsync(JsonElement input, CancellationToken ct)
@@ -188,10 +197,11 @@ public sealed class CodingToolExecutor
 
         foreach (var file in allFiles.Take(100)) // Cap to prevent excessive I/O
         {
-            var content = await _gitOps.ReadFileAsync(_repoPath, file, ct);
-            if (content is null) continue;
+            var rawContent = await _gitOps.ReadFileAsync(_repoPath, file, ct);
+            if (rawContent is null) continue;
             filesSearched++;
 
+            var content = NormalizeLineEndings(rawContent);
             var lines = content.Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
@@ -227,8 +237,32 @@ public sealed class CodingToolExecutor
         if (content is null)
             return $"Error: File not found: {path}";
 
+        // Normalize line endings in both content and search to prevent \r\n vs \n mismatches
+        content = NormalizeLineEndings(content);
+        search = NormalizeLineEndings(search);
+        replace = NormalizeLineEndings(replace);
+
         if (!content.Contains(search))
-            return $"Error: Search text not found in {path}. Make sure the search text matches exactly (including whitespace).";
+        {
+            // Provide helpful context: show nearby lines that partially match
+            var firstLine = search.Split('\n')[0].Trim();
+            var hints = new List<string>();
+            if (!string.IsNullOrEmpty(firstLine))
+            {
+                var lines = content.Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Contains(firstLine, StringComparison.OrdinalIgnoreCase))
+                        hints.Add($"  Line {i + 1}: {lines[i].TrimEnd()}");
+                }
+            }
+
+            var hint = hints.Count > 0
+                ? $"\nPartial matches for '{firstLine}':\n{string.Join("\n", hints.Take(5))}\nTip: Use read_file to see the exact content, then copy the exact text for search."
+                : "\nTip: Use read_file to see the exact file content, then use the exact text (without line numbers) as the search string.";
+
+            return $"Error: Search text not found in {path}. The search string ({search.Length} chars, {search.Split('\n').Length} lines) did not match any part of the file.{hint}";
+        }
 
         var occurrences = CountOccurrences(content, search);
         var newContent = content.Replace(search, replace);
@@ -249,4 +283,8 @@ public sealed class CodingToolExecutor
         }
         return count;
     }
+
+    /// <summary>Normalize \r\n → \n to prevent Windows line-ending mismatches in AI tool calls.</summary>
+    private static string NormalizeLineEndings(string text) =>
+        text.Replace("\r\n", "\n").Replace("\r", "\n");
 }
