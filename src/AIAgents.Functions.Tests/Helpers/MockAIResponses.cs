@@ -99,6 +99,15 @@ public static class MockAIResponses
 
     public static string ValidPlanningResponse => JsonSerializer.Serialize(new
     {
+        readiness = new
+        {
+            proceed = true,
+            readinessScore = 92,
+            blockers = Array.Empty<string>(),
+            questions = Array.Empty<string>(),
+            suggestedBreakdown = Array.Empty<string>(),
+            reason = "Story is well-defined with clear acceptance criteria"
+        },
         problemAnalysis = "The story requires implementing a user registration feature with email verification.",
         technicalApproach = "Create a RegistrationService with email verification flow using SMTP.",
         affectedFiles = new[] { "src/Services/RegistrationService.cs", "src/Controllers/AuthController.cs", "src/Models/User.cs" },
@@ -109,6 +118,49 @@ public static class MockAIResponses
         risks = new[] { "Email delivery reliability", "Token expiration handling" },
         assumptions = new[] { "SMTP server is available", "Database supports the schema" },
         testingStrategy = "Unit tests for service logic, integration tests for email flow"
+    });
+
+    /// <summary>
+    /// Planning response where the triage gate rejects the story.
+    /// </summary>
+    public static string RejectedPlanningResponse => JsonSerializer.Serialize(new
+    {
+        readiness = new
+        {
+            proceed = false,
+            readinessScore = 35,
+            blockers = new[] { "No acceptance criteria provided", "Description is too vague to implement" },
+            questions = new[] { "What specific UI changes are expected?", "Should this support mobile devices?" },
+            suggestedBreakdown = new[] { "Story 1: Design the UI mockups", "Story 2: Implement the frontend", "Story 3: Add API endpoints" },
+            reason = "Story lacks acceptance criteria and the description is too vague for implementation"
+        },
+        problemAnalysis = "The story asks to 'make the dashboard better' without specifics.",
+        technicalApproach = "Cannot determine approach without clearer requirements.",
+        affectedFiles = new[] { "dashboard/index.html" },
+        complexity = 13,
+        architecture = "Unknown — depends on requirements clarification",
+        subTasks = new[] { "Clarify requirements", "Design approach", "Implement" },
+        dependencies = Array.Empty<string>(),
+        risks = new[] { "Requirements are ambiguous", "Scope could expand significantly" },
+        assumptions = Array.Empty<string>(),
+        testingStrategy = "Cannot define without clear acceptance criteria"
+    });
+
+    /// <summary>
+    /// Planning response with NO readiness field (backward compatibility).
+    /// </summary>
+    public static string PlanningResponseNoReadiness => JsonSerializer.Serialize(new
+    {
+        problemAnalysis = "Simple analysis.",
+        technicalApproach = "Simple approach.",
+        affectedFiles = new[] { "file.txt" },
+        complexity = 3,
+        architecture = "Simple",
+        subTasks = new[] { "Do the thing" },
+        dependencies = Array.Empty<string>(),
+        risks = Array.Empty<string>(),
+        assumptions = Array.Empty<string>(),
+        testingStrategy = "Basic tests"
     });
 
     public static string MalformedPlanningResponse => "This is not valid JSON at all - just plain text analysis";

@@ -72,22 +72,44 @@ public sealed class PlanningAgentService : IAgentService
         state.Agents["Planning"] = AgentStatus.InProgress();
         await context.SaveStateAsync(state, cancellationToken);
 
-        // 5. Call AI for planning analysis
+        // 5. Call AI for planning analysis with triage gate
         var systemPrompt = @"You are a senior software architect analyzing Azure DevOps user stories.
-Analyze the story and produce a detailed implementation plan.
+You have TWO jobs:
+1. TRIAGE — Assess whether the story is ready for AI coding.
+2. PLAN — If ready, create a detailed implementation plan.
+
+TRIAGE CHECKS (evaluate all 5):
+- Completeness: Does the story have a clear title, description, and acceptance criteria?
+- Complexity: Is the estimated complexity ≤ 13 story points? Stories over 13 should be broken down.
+- Ambiguity: Are the requirements specific enough to implement without guessing? Are there vague terms like 'improve', 'optimize', 'make better' without measurable criteria?
+- Risk: Are there architectural risks that need human review first?
+- Feasibility: Can this be implemented with the existing codebase and tech stack?
+
+If ANY check fails, set readiness.proceed=false with clear blockers and questions.
+
 Respond ONLY with valid JSON matching this structure:
 {
+  ""readiness"": {
+    ""proceed"": true/false,
+    ""readinessScore"": number (0-100),
+    ""blockers"": [""string — blocking issue""],
+    ""questions"": [""string — question for the analyst""],
+    ""suggestedBreakdown"": [""string — suggested sub-stories if too complex""],
+    ""reason"": ""brief rationale for the decision""
+  },
   ""problemAnalysis"": ""string"",
   ""technicalApproach"": ""string"",
   ""affectedFiles"": [""string""],
-  ""complexity"": number (1-13 fibonacci),
+  ""complexity"": number (1-13 fibonacci scale),
   ""architecture"": ""string"",
   ""subTasks"": [""string""],
   ""dependencies"": [""string""],
   ""risks"": [""string""],
   ""assumptions"": [""string""],
   ""testingStrategy"": ""string""
-}";
+}
+
+ALWAYS include the full plan even when proceed=false — the analyst needs the analysis to fix the story.";
 
         var userPrompt = $@"## Story Details
 **ID:** {workItem.Id}
@@ -153,9 +175,74 @@ Analyze this story and create a comprehensive implementation plan.";
         await _gitOps.CommitAndPushAsync(repoPath,
             $"[AI Planning] US-{workItem.Id}: {workItem.Title}", cancellationToken);
 
-        // 11. Update ADO work item
+        // 11. Triage gate — check readiness
+        var readiness = planResult.Readiness;
+        if (readiness is not null && !readiness.Proceed)
+        {
+            // Story is NOT ready — send back with feedback
+            _logger.LogInformation(
+                "Planning agent REJECTED WI-{WorkItemId}: score={Score}, blockers={Blockers}",
+                task.WorkItemId, readiness.ReadinessScore, readiness.Blockers.Count);
+
+            var blockerList = readiness.Blockers.Count > 0
+                ? string.Join("<br/>", readiness.Blockers.Select(b => $"❌ {b}"))
+                : "None";
+            var questionList = readiness.Questions.Count > 0
+                ? string.Join("<br/>", readiness.Questions.Select(q => $"❓ {q}"))
+                : "None";
+            var breakdownList = readiness.SuggestedBreakdown.Count > 0
+                ? string.Join("<br/>", readiness.SuggestedBreakdown.Select(s => $"📋 {s}"))
+                : "";
+
+            var rejectComment = $"<b>🚫 AI Planning Agent — Story Not Ready for Coding</b><br/>" +
+                $"<b>Readiness Score:</b> {readiness.ReadinessScore}/100<br/>" +
+                $"<b>Reason:</b> {System.Net.WebUtility.HtmlEncode(readiness.Reason)}<br/><br/>" +
+                $"<b>Blockers:</b><br/>{blockerList}<br/><br/>" +
+                $"<b>Questions to Answer:</b><br/>{questionList}";
+
+            if (readiness.SuggestedBreakdown.Count > 0)
+                rejectComment += $"<br/><br/><b>Suggested Breakdown:</b><br/>{breakdownList}";
+
+            rejectComment += $"<br/><br/><b>Complexity Estimate:</b> {planResult.Complexity} story points" +
+                $"<br/><b>Risks:</b> {string.Join(", ", planResult.Risks)}" +
+                $"<br/><br/><i>Please address the blockers and questions above, then move the story back to 'Story Planning' to re-trigger the pipeline.</i>";
+
+            await _adoClient.AddWorkItemCommentAsync(workItem.Id, rejectComment, cancellationToken);
+
+            // Update state — mark planning as completed with rejection info
+            state.Agents["Planning"] = AgentStatus.Completed();
+            state.Agents["Planning"].AdditionalData = new Dictionary<string, object>
+            {
+                ["triageResult"] = "rejected",
+                ["readinessScore"] = readiness.ReadinessScore,
+                ["blockerCount"] = readiness.Blockers.Count
+            };
+            state.CurrentState = "New";
+            state.Decisions.Add(new Decision
+            {
+                Agent = "Planning",
+                DecisionText = $"Story rejected by triage gate (score: {readiness.ReadinessScore}/100)",
+                Rationale = readiness.Reason
+            });
+            await context.SaveStateAsync(state, cancellationToken);
+
+            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
+            catch { /* field may not exist yet */ }
+
+            // Move story back to New — do NOT enqueue Coding agent
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "New", cancellationToken);
+
+            _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to New", task.WorkItemId);
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
+        }
+
+        // Story IS ready — proceed to coding
+        var readinessInfo = readiness is not null
+            ? $"<br/>Readiness: {readiness.ReadinessScore}/100"
+            : "";
+
         await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-            $"<b>🤖 AI Planning Agent Complete</b><br/>Complexity: {planResult.Complexity} story points<br/>Sub-tasks: {planResult.SubTasks.Count}<br/>Risks: {planResult.Risks.Count}",
+            $"<b>🤖 AI Planning Agent Complete</b><br/>Complexity: {planResult.Complexity} story points<br/>Sub-tasks: {planResult.SubTasks.Count}<br/>Risks: {planResult.Risks.Count}{readinessInfo}",
             cancellationToken);
 
         // 12. Update story state
@@ -206,7 +293,7 @@ Analyze this story and create a comprehensive implementation plan.";
         }
     }
 
-    private static PlanningResult ParsePlanningResult(string aiResponse)
+    internal static PlanningResult ParsePlanningResult(string aiResponse)
     {
         // Strip markdown code fences if present
         var json = aiResponse.Trim();
@@ -225,6 +312,21 @@ Analyze this story and create a comprehensive implementation plan.";
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
+            // Parse readiness assessment if present
+            PlanningReadiness? readiness = null;
+            if (root.TryGetProperty("readiness", out var readinessEl) && readinessEl.ValueKind == JsonValueKind.Object)
+            {
+                readiness = new PlanningReadiness
+                {
+                    Proceed = readinessEl.TryGetProperty("proceed", out var p) && p.GetBoolean(),
+                    ReadinessScore = readinessEl.TryGetProperty("readinessScore", out var rs) ? rs.GetInt32() : (readinessEl.TryGetProperty("proceed", out var p2) && p2.GetBoolean() ? 100 : 0),
+                    Blockers = GetStringArray(readinessEl, "blockers"),
+                    Questions = GetStringArray(readinessEl, "questions"),
+                    SuggestedBreakdown = GetStringArray(readinessEl, "suggestedBreakdown"),
+                    Reason = readinessEl.TryGetProperty("reason", out var r) ? r.GetString() ?? "" : ""
+                };
+            }
+
             return new PlanningResult
             {
                 ProblemAnalysis = root.GetProperty("problemAnalysis").GetString() ?? "",
@@ -236,7 +338,8 @@ Analyze this story and create a comprehensive implementation plan.";
                 Dependencies = GetStringArray(root, "dependencies"),
                 Risks = GetStringArray(root, "risks"),
                 Assumptions = GetStringArray(root, "assumptions"),
-                TestingStrategy = root.GetProperty("testingStrategy").GetString() ?? ""
+                TestingStrategy = root.GetProperty("testingStrategy").GetString() ?? "",
+                Readiness = readiness
             };
         }
         catch (JsonException)

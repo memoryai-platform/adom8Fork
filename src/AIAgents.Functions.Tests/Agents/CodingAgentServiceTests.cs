@@ -259,8 +259,7 @@ public sealed class CodingAgentServiceTests
         Assert.Contains("write_file", prompt);
         Assert.Contains("edit_file", prompt);
         Assert.Contains("list_files", prompt);
-        Assert.Contains("search_code", prompt);
-        Assert.Contains("Do NOT create or modify test files", prompt);
+        Assert.Contains("Do NOT modify test files", prompt);
     }
 
     [Fact]
@@ -304,5 +303,55 @@ public sealed class CodingAgentServiceTests
     {
         var result = CodingAgentService.ExtractReferencedFiles("", new List<string> { "src/Program.cs" });
         Assert.Empty(result);
+    }
+
+    // ========== GET MAX ROUNDS FOR COMPLEXITY ==========
+
+    [Theory]
+    [InlineData(1, 10)]
+    [InlineData(2, 10)]
+    [InlineData(3, 15)]
+    [InlineData(5, 15)]
+    [InlineData(8, 20)]
+    [InlineData(13, 25)]
+    public void GetMaxRoundsForComplexity_ScalesByStoryPoints(int points, int expectedRounds)
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = $"Estimated complexity: {points} story points",
+            Rationale = "Test"
+        });
+
+        var result = CodingAgentService.GetMaxRoundsForComplexity(state);
+
+        Assert.Equal(expectedRounds, result);
+    }
+
+    [Fact]
+    public void GetMaxRoundsForComplexity_NoDecision_Returns15()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+
+        var result = CodingAgentService.GetMaxRoundsForComplexity(state);
+
+        Assert.Equal(15, result);
+    }
+
+    [Fact]
+    public void GetMaxRoundsForComplexity_NonPlanningDecision_Returns15()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Review",
+            DecisionText = "Estimated complexity: 13 story points",
+            Rationale = "Wrong agent"
+        });
+
+        var result = CodingAgentService.GetMaxRoundsForComplexity(state);
+
+        Assert.Equal(15, result);
     }
 }

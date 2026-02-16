@@ -283,4 +283,118 @@ public sealed class PlanningAgentServiceTests
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
     }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_MovesToNew()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("New", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "New", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_DoesNotEnqueueCoding()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _taskQueueMock.Verify(q => q.EnqueueAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_PostsRejectComment()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Story Not Ready for Coding") && c.Contains("Blockers")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_RecordsTriageDecision()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Contains(_capturedState.Decisions, d =>
+            d.Agent == "Planning" && d.DecisionText.Contains("rejected by triage gate"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReadyStory_ProceedsToCoding()
+    {
+        SetupHappyPath(); // ValidPlanningResponse has proceed=true
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("AI Code", _capturedState.CurrentState);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(
+            It.Is<AgentTask>(t => t.AgentType == AgentType.Coding),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoReadinessField_ProceedsToCoding()
+    {
+        // Backward compatibility: if AI response has no readiness field, proceed as before
+        SetupHappyPath(aiResponse: MockAIResponses.PlanningResponseNoReadiness);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("AI Code", _capturedState.CurrentState);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(
+            It.Is<AgentTask>(t => t.AgentType == AgentType.Coding),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void ParsePlanningResult_ParsesReadiness()
+    {
+        var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.ValidPlanningResponse);
+
+        Assert.NotNull(result.Readiness);
+        Assert.True(result.Readiness.Proceed);
+        Assert.Equal(92, result.Readiness.ReadinessScore);
+    }
+
+    [Fact]
+    public void ParsePlanningResult_RejectedReadiness()
+    {
+        var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.RejectedPlanningResponse);
+
+        Assert.NotNull(result.Readiness);
+        Assert.False(result.Readiness.Proceed);
+        Assert.Equal(35, result.Readiness.ReadinessScore);
+        Assert.Equal(2, result.Readiness.Blockers.Count);
+        Assert.Equal(2, result.Readiness.Questions.Count);
+        Assert.Equal(3, result.Readiness.SuggestedBreakdown.Count);
+    }
+
+    [Fact]
+    public void ParsePlanningResult_NoReadinessField_ReturnsNull()
+    {
+        var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.PlanningResponseNoReadiness);
+
+        Assert.Null(result.Readiness);
+    }
 }

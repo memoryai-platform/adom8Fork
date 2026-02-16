@@ -84,8 +84,11 @@ public sealed class CodingAgentService : IAgentService
             var systemPrompt = BuildSystemPrompt();
             var userPrompt = BuildUserPrompt(workItem, plan, fileListSummary, codebaseCtx);
 
+            // Scale MaxRounds by complexity from the planning decision
+            var maxRounds = GetMaxRoundsForComplexity(state);
+
             await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                "Starting agentic coding loop with tool use", "info", cancellationToken);
+                $"Starting agentic coding loop (maxRounds={maxRounds})", "info", cancellationToken);
 
             // Run the agentic tool-use loop
             var agenticResult = await aiClient.CompleteWithToolsAsync(
@@ -93,7 +96,7 @@ public sealed class CodingAgentService : IAgentService
                 userPrompt,
                 CodingToolExecutor.GetToolDefinitions(),
                 toolExecutor.ExecuteAsync,
-                new AgenticOptions { MaxRounds = 25, MaxTokens = 8192, Temperature = 0.2 },
+                new AgenticOptions { MaxRounds = maxRounds, MaxTokens = 8192, Temperature = 0.2 },
                 cancellationToken);
 
             // Record token usage
@@ -216,43 +219,33 @@ public sealed class CodingAgentService : IAgentService
 
     /// <summary>
     /// Build system prompt for the agentic coding loop.
+    /// Optimized for efficiency — direct instructions to minimize unnecessary exploration.
     /// </summary>
     internal static string BuildSystemPrompt() =>
         """
-        You are an expert software developer implementing code changes for a user story.
-        You have access to tools that let you read, write, edit, list, and search files in the repository.
-        
-        IMPORTANT: You MUST use the provided tools to implement the changes. Do NOT just describe what to do — actually do it by calling the tools. Every task requires at least reading files and making edits.
+        You are an expert developer implementing code changes. Use ONLY the provided tools.
 
-        YOUR WORKFLOW:
-        1. First, call list_files to understand the project structure
-        2. Call read_file to examine existing code that needs to be modified
-        3. Call search_code to find relevant patterns, imports, or existing implementations
-        4. Implement the changes by calling write_file (for new files) or edit_file (for modifying existing files)
-        5. After writing/editing, call read_file to verify your changes look correct
-        6. When all changes are complete, respond with a summary of what you did
+        WORKFLOW (be efficient — minimize unnecessary calls):
+        1. list_files to see the project structure
+        2. read_file to examine the specific files you need to change
+        3. edit_file or write_file to make changes
+        4. Respond with a brief summary when done
 
-        USING edit_file CORRECTLY:
-        - read_file shows content with line numbers (e.g., "  42| some code here")
-        - When using edit_file, the "search" parameter must contain the ACTUAL file text WITHOUT line numbers
-        - For example, if read_file shows "  42| </body>", use "</body>" in the search, NOT "  42| </body>"
-        - Include enough surrounding context (3-5 lines) in search to ensure a unique match
-        - Line endings are normalized automatically — don't worry about \\r\\n vs \\n
+        EDIT_FILE RULES:
+        - read_file shows "  42| code" — use the actual text WITHOUT line numbers in edit_file search
+        - Include 3-5 lines of surrounding context in search for unique matching
+        - Line endings are normalized automatically
+        - If search fails, re-read the file and use exact text
 
         RULES:
-        - You MUST call tools to make changes — never respond without having called at least one write or edit tool
-        - Follow the implementation plan closely
-        - Match existing code style, naming conventions, and patterns
-        - Use edit_file for surgical changes to existing files (preferred over write_file for edits)
-        - Use write_file only for creating new files or when edit_file can't express the change
-        - If edit_file fails with "Search text not found", read the file again and use the exact text shown
-        - Do NOT create or modify test files — the Testing agent handles that
-        - Do NOT modify infrastructure files (Terraform, CI/CD pipelines) unless explicitly asked
-        - Ensure all new code compiles and is syntactically correct
-        - Add appropriate imports/usings when adding new dependencies
-        - Keep changes minimal and focused on the story requirements
+        - Focus on the story requirements — do not refactor unrelated code
+        - Match existing code style
+        - Use edit_file for modifications (preferred), write_file only for new files
+        - Do NOT modify test files or infrastructure (Terraform/CI)
+        - Ensure correct syntax, imports, and compilation
+        - Be direct: read what you need, make the edit, move on
 
-        Start by calling list_files now.
+        Start by calling list_files.
         """;
 
     /// <summary>
@@ -312,5 +305,36 @@ public sealed class CodingAgentService : IAgentService
         }
 
         return referenced.ToList();
+    }
+
+    /// <summary>
+    /// Determines MaxRounds for the agentic loop based on the Planning agent's
+    /// complexity assessment. Reduces cost for simple stories by limiting rounds.
+    /// </summary>
+    internal static int GetMaxRoundsForComplexity(StoryState state)
+    {
+        // Look for the Planning agent's complexity decision
+        var planningDecision = state.Decisions
+            .FirstOrDefault(d => d.Agent == "Planning" &&
+                                 d.DecisionText.Contains("complexity", StringComparison.OrdinalIgnoreCase));
+
+        if (planningDecision is not null)
+        {
+            // Parse "Estimated complexity: N story points"
+            var match = Regex.Match(planningDecision.DecisionText, @"(\d+)\s*story\s*points?", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var points))
+            {
+                return points switch
+                {
+                    <= 2 => 10,  // trivial: 10 rounds max (~$0.40-0.70)
+                    <= 5 => 15,  // moderate: 15 rounds (~$0.70-1.00)
+                    <= 8 => 20,  // complex: 20 rounds (~$1.00-1.50)
+                    _ => 25       // very complex: full 25 rounds
+                };
+            }
+        }
+
+        // Default: moderate rounds if no complexity info available
+        return 15;
     }
 }
