@@ -249,14 +249,7 @@
         body.dark-mode .header { color: #e0e0e0; }
         body.dark-mode .header .subtitle { opacity: 0.7; }
 
-        body.dark-mode .stat-card {
-            background: #252540;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-        }
-        body.dark-mode .stat-card:hover {
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-        body.dark-mode .stat-label { color: #999; }
+        /* Sidebar stats inherit dark sidebar colors */
 
         body.dark-mode .agent-card {
             background: #252540;
@@ -500,42 +493,56 @@
             background: rgba(76, 175, 80, 0.15);
         }
 
-        /* Stat Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 16px;
-            margin-bottom: 28px;
+        /* Sidebar Stats */
+        .sidebar-stats {
+            border-top: 1px solid #333;
+            padding: 0;
         }
 
-        .stat-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 20px 18px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-            text-align: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        .sidebar-stats .sidebar-header {
+            border-bottom: 1px solid #333;
         }
 
-        .stat-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+        .sidebar-stat-list {
+            padding: 4px 0;
         }
 
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #0078d4;
-            margin-bottom: 4px;
+        .sidebar-stat-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            border-bottom: 1px solid #2a2a2a;
+            transition: background 0.15s ease;
         }
 
-        .stat-label {
-            font-size: 0.85rem;
-            color: #888;
+        .sidebar-stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-stat-item:hover {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .sidebar-stat-label {
+            font-size: 0.76rem;
+            color: #999;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-weight: 600;
         }
+
+        .sidebar-stat-value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0098ff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .sidebar-stat-value.tokens { color: #e67e22; }
+        .sidebar-stat-value.cost { color: #4caf50; }
+        .sidebar-stat-value.success { color: #81c784; }
+        .sidebar-stat-value.time { color: #ccc; }
 
         /* Main Layout */
         .section-title {
@@ -766,9 +773,6 @@
             .app-layout {
                 grid-template-columns: 220px 1fr 280px;
             }
-            .stats-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
         }
 
         @media (max-width: 900px) {
@@ -778,24 +782,14 @@
             .sidebar-left, .sidebar-right {
                 display: none;
             }
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
         }
 
         @media (max-width: 500px) {
             .container {
                 padding: 14px;
             }
-            .stats-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-            }
             .header h1 {
                 font-size: 1.6rem;
-            }
-            .stat-value {
-                font-size: 1.5rem;
             }
         }
 
@@ -962,6 +956,37 @@
             <div class="queue-list" id="queue-container">
                 <div class="queue-empty">No stories in queue</div>
             </div>
+
+            <!-- Totals -->
+            <div class="sidebar-stats">
+                <div class="sidebar-header">📊 Totals</div>
+                <div class="sidebar-stat-list">
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">Stories</span>
+                        <span class="sidebar-stat-value" id="stat-stories">0</span>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">Avg Time</span>
+                        <span class="sidebar-stat-value time" id="stat-time">0s</span>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">Success</span>
+                        <span class="sidebar-stat-value success" id="stat-success">0%</span>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">Time Saved</span>
+                        <span class="sidebar-stat-value time" id="stat-saved">0h</span>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">Tokens</span>
+                        <span class="sidebar-stat-value tokens" id="stat-tokens">0</span>
+                    </div>
+                    <div class="sidebar-stat-item">
+                        <span class="sidebar-stat-label">AI Cost</span>
+                        <span class="sidebar-stat-value cost" id="stat-cost">$0.00</span>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- Center: Main Content -->
@@ -971,34 +996,6 @@
                 <div class="header">
                     <h1>⚡ AI Agent Monitor</h1>
                     <div class="subtitle">Real-time monitoring of AI agents processing Azure DevOps work items</div>
-                </div>
-
-                <!-- Stat Cards -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-stories">0</div>
-                        <div class="stat-label">Stories Processed</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-time">0s</div>
-                        <div class="stat-label">Avg Completion Time</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-success">0%</div>
-                        <div class="stat-label">Success Rate</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-saved">0h</div>
-                        <div class="stat-label">Time Saved</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-tokens" style="color: #e67e22;">0</div>
-                        <div class="stat-label">Total Tokens</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-cost" style="color: #27ae60;">$0.00</div>
-                        <div class="stat-label">AI Cost</div>
-                    </div>
                 </div>
 
                 <!-- Current Work Item -->
