@@ -76,7 +76,15 @@ public sealed class AIClient : IAIClient
             "application/json");
 
         var response = await client.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "AI API request failed ({StatusCode}): URL={Url}, Provider={Provider}, Model={Model}, Body={Body}",
+                response.StatusCode, url, _options.Provider, _options.Model, errorBody);
+            response.EnsureSuccessStatusCode(); // throws HttpRequestException with status code
+        }
 
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
 

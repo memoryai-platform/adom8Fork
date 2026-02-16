@@ -230,7 +230,7 @@ Perform a comprehensive code review.";
                 PositiveFindings = GetStringArray(root, "positiveFindings")
             };
         }
-        catch (JsonException)
+        catch (Exception)
         {
             return new CodeReviewResult
             {
@@ -251,13 +251,21 @@ Perform a comprehensive code review.";
         if (!root.TryGetProperty(propertyName, out var arr) || arr.ValueKind != JsonValueKind.Array)
             return [];
 
-        return arr.EnumerateArray().Select(e => new ReviewIssue
+        return arr.EnumerateArray().Select(e =>
         {
-            Line = e.TryGetProperty("line", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetInt32() : null,
-            Issue = e.TryGetProperty("issue", out var i) ? i.GetString() ?? "" : "",
-            Fix = e.TryGetProperty("fix", out var f) ? f.GetString() : null,
-            Code = e.TryGetProperty("code", out var c) ? c.GetString() : null
-        }).ToList();
+            // Handle AI returning plain strings instead of objects
+            if (e.ValueKind == JsonValueKind.String)
+                return new ReviewIssue { Issue = e.GetString() ?? "" };
+            if (e.ValueKind != JsonValueKind.Object)
+                return null;
+            return new ReviewIssue
+            {
+                Line = e.TryGetProperty("line", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetInt32() : null,
+                Issue = e.TryGetProperty("issue", out var i) ? i.GetString() ?? "" : "",
+                Fix = e.TryGetProperty("fix", out var f) ? f.GetString() : null,
+                Code = e.TryGetProperty("code", out var c) ? c.GetString() : null
+            };
+        }).Where(r => r is not null).ToList()!;
     }
 
     private static List<string> GetStringArray(JsonElement root, string propertyName)
