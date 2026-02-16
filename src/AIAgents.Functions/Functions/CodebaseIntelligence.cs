@@ -50,7 +50,7 @@ public sealed class CodebaseIntelligence
     /// </summary>
     [Function("AnalyzeCodebase")]
     public async Task<IActionResult> AnalyzeCodebase(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "analyze-codebase")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "analyze-codebase")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Received analyze-codebase request");
