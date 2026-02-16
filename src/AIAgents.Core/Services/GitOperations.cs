@@ -141,24 +141,9 @@ public sealed class GitOperations : IGitOperations
 
         var currentBranch = repo.Head;
 
-        // Fetch latest from remote before pushing to avoid "remote contains commits not present locally"
-        var fetchOptions = new FetchOptions
-        {
-            CredentialsProvider = (_, _, _) => _credentials
-        };
-        Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(r => r.Specification), fetchOptions, null);
-
-        var remoteBranch = repo.Branches[$"origin/{currentBranch.FriendlyName}"];
-        if (remoteBranch is not null)
-        {
-            // Merge remote into local to ensure we have all remote commits
-            var mergeResult = repo.Merge(remoteBranch, new Signature(_options.Name, _options.Email, DateTimeOffset.UtcNow),
-                new MergeOptions { FastForwardStrategy = FastForwardStrategy.Default });
-            _logger.LogDebug("Pre-push merge status: {Status}", mergeResult.Status);
-        }
-
-        // Use explicit refspec to handle new branches without upstream tracking
-        var pushRefSpec = $"refs/heads/{currentBranch.FriendlyName}:refs/heads/{currentBranch.FriendlyName}";
+        // Force push — these are AI-agent-owned feature branches, force is safe
+        // This avoids all "non-fastforwardable" and "remote contains commits" errors
+        var pushRefSpec = $"+refs/heads/{currentBranch.FriendlyName}:refs/heads/{currentBranch.FriendlyName}";
         repo.Network.Push(remote, pushRefSpec, pushOptions);
 
         _logger.LogInformation("Pushed branch '{BranchName}' to origin", currentBranch.FriendlyName);
