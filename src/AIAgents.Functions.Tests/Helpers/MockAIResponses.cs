@@ -119,20 +119,54 @@ public static class MockAIResponses
 
     #region Coding Agent Responses
 
-    public static string ValidCodingResponse => JsonSerializer.Serialize(new[]
+    public static string ValidCodingResponse => JsonSerializer.Serialize(new
     {
-        new
+        complexity = 2,
+        reason = "Simple new files with no cross-cutting concerns",
+        confidence = 90,
+        edits = Array.Empty<object>(),
+        newFiles = new[]
         {
-            relativePath = "src/Services/RegistrationService.cs",
-            content = "namespace MyApp.Services;\n\npublic class RegistrationService\n{\n    public Task<bool> RegisterAsync(string email) => Task.FromResult(true);\n}",
-            isNew = true
-        },
-        new
-        {
-            relativePath = "src/Models/User.cs",
-            content = "namespace MyApp.Models;\n\npublic record User(int Id, string Email, bool IsVerified);",
-            isNew = true
+            new
+            {
+                relativePath = "src/Services/RegistrationService.cs",
+                content = "namespace MyApp.Services;\n\npublic class RegistrationService\n{\n    public Task<bool> RegisterAsync(string email) => Task.FromResult(true);\n}",
+                isNew = true
+            },
+            new
+            {
+                relativePath = "src/Models/User.cs",
+                content = "namespace MyApp.Models;\n\npublic record User(int Id, string Email, bool IsVerified);",
+                isNew = true
+            }
         }
+    });
+
+    public static string ValidCodingResponseWithEdits => JsonSerializer.Serialize(new
+    {
+        complexity = 1,
+        reason = "Simple one-line change",
+        confidence = 95,
+        edits = new[]
+        {
+            new
+            {
+                file = "src/Program.cs",
+                operation = "edit",
+                search = "Console.WriteLine(\"Hello\");",
+                replace = "Console.WriteLine(\"Hello World\");"
+            }
+        },
+        newFiles = Array.Empty<object>()
+    });
+
+    public static string ComplexCodingResponse => JsonSerializer.Serialize(new
+    {
+        complexity = 4,
+        reason = "Large-scale refactoring across multiple subsystems with architectural changes",
+        confidence = 40,
+        edits = Array.Empty<object>(),
+        newFiles = Array.Empty<object>()
     });
 
     public static string MalformedCodingResponse => "Here is some code:\npublic class Foo { }";

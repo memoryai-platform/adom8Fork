@@ -159,6 +159,12 @@ public sealed class GetCurrentStatus
                         DurationSeconds = duration
                     };
                 }
+                else if (activity.Message.Contains("Awaiting human", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Coding agent handoff — mark as awaiting_code
+                    agents[agent] = "awaiting_code";
+                    if (currentAgent == agent) currentAgent = null;
+                }
             }
 
             // Add timings for in-progress agents (no completedAt yet)
