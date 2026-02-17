@@ -150,6 +150,9 @@ public sealed class GetCurrentStatus
                     agents[agent] = "in_progress";
                     currentAgent = agent;
                     agentStartTimes[agent] = activity.Timestamp;
+                    // Clear any previous copilot-delegated details when the agent restarts
+                    // (e.g., after a Copilot timeout, the agent re-enqueues in agentic mode)
+                    agentDetails.Remove(agent);
                 }
                 else if (activity.Message.Contains("Delegated to @", StringComparison.OrdinalIgnoreCase))
                 {
