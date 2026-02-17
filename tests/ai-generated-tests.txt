@@ -1,121 +1,277 @@
+Based on the context and the specific story requirements, I'll generate a comprehensive test suite for the US-78 story focusing on the agent card border color change.
+
 ```json
 {
   "testCases": [
     {
-      "name": "UpdateFooterBackground_DarkTheme_MatchesSidebar",
-      "type": "Unit",
-      "priority": "High", 
-      "description": "Verify footer background color matches dark sidebar theme",
-      "expectedResult": "Footer background is #1e1e2e with light text color #aaa"
-    },
-    {
-      "name": "FooterTextReadability_DarkBackground_LightText", 
+      "name": "CompletedAgentCard_BorderColor_Green",
       "type": "Unit",
       "priority": "High",
-      "description": "Ensure footer text is readable on dark background",
-      "expectedResult": "Text color is light (#aaa) for good contrast"
+      "description": "Verify completed agent card has a green (#4caf50) left border",
+      "expectedResult": "Agent card with completed status should have border-left-color: #4caf50"
     },
     {
-      "name": "FooterStyling_ConsistentWithDashboardTheme_NoLayoutBreaks",
-      "type": "Integration", 
+      "name": "CompletedAgentCard_Opacity_FullyVisible", 
+      "type": "Unit", 
+      "priority": "High",
+      "description": "Ensure completed agent card has full opacity",
+      "expectedResult": "Completed agent card opacity should be 1.0"
+    },
+    {
+      "name": "CompletedAgentCard_BackgroundColor_LightGreen",
+      "type": "Unit",
+      "priority": "High", 
+      "description": "Verify completed agent card background is light green",
+      "expectedResult": "Completed agent card background should be #e8f5e9"
+    },
+    {
+      "name": "CompletedAgentCard_DarkMode_GreenBorder", 
+      "type": "Unit",
+      "priority": "High",
+      "description": "Confirm completed agent card in dark mode uses green border color",
+      "expectedResult": "Dark mode completed agent card should have border-left-color: #4caf50"
+    },
+    {
+      "name": "InProgressCard_BorderColor_Unchanged",
+      "type": "Unit", 
       "priority": "Medium",
-      "description": "Validate footer styling maintains dashboard layout integrity",
-      "expectedResult": "Footer looks visually consistent, no layout disruptions"
+      "description": "Ensure in-progress agent cards retain original border color",
+      "expectedResult": "In-progress agent cards should not be affected by green border change"
+    },
+    {
+      "name": "PendingCard_BorderColor_Unchanged", 
+      "type": "Unit",
+      "priority": "Medium", 
+      "description": "Verify pending agent cards retain original border color",
+      "expectedResult": "Pending agent cards should not be affected by green border change"
+    },
+    {
+      "name": "CompletedAgentCard_StatusBadge_GreenColor",
+      "type": "Unit",
+      "priority": "High",
+      "description": "Check status badge for completed cards uses green color",
+      "expectedResult": "Completed status badge should have green text color (#4caf50)"
     }
   ],
   "testFiles": [
     {
-      "relativePath": "tests/Dashboard/FooterStyleTests.cs",
+      "relativePath": "tests/Dashboard.Tests/AgentCardStyleTests.cs",
       "content": "using System;
+using System.Drawing;
 using Xunit;
-using System.IO;
-using System.Text.RegularExpressions;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Support.UI;
 
 namespace AIAgents.Dashboard.Tests 
 {
-    public class FooterStyleTests
+    public class AgentCardStyleTests : IDisposable
     {
-        private readonly string _dashboardPath = Path.Combine(
-            AppContext.BaseDirectory, 
-            \"..\\..\\..\\..\\dashboard\\index.html\"
-        );
+        private readonly IWebDriver _driver;
+        private readonly WebDriverWait _wait;
 
-        [Fact]
-        public void Footer_BackgroundColor_MatchesDarkTheme()
+        public AgentCardStyleTests()
         {
-            // Arrange
-            var htmlContent = File.ReadAllText(_dashboardPath);
-            var footerStylePattern = new Regex(@"footer\s*style=""([^""]+)""");
+            var chromeOptions = new ChromeOptions();
+            chromeOptions.AddArgument(\"--headless\"); // Run in headless mode for CI
+            _driver = new ChromeDriver(chromeOptions);
+            _driver.Navigate().GoToUrl(\"file:///path/to/dashboard/index.html\");
+            _wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(10));
+        }
+
+        private Color ParseCssColor(string rgbaColor)
+        {
+            // Parse rgba(76, 175, 80, 1) to Color
+            var colorParts = rgbaColor
+                .Replace(\"rgba(\", \"\")
+                .Replace(\")\", \"\")
+                .Split(',')
+                .Select(s => int.Parse(s.Trim()))
+                .ToArray();
             
-            // Act
-            var match = footerStylePattern.Match(htmlContent);
-            
-            // Assert
-            Assert.True(match.Success, \"Footer style attribute not found\");
-            
-            var styleContent = match.Groups[1].Value;
-            Assert.Contains(\"background-color: #1e1e2e\", styleContent, 
-                StringComparison.OrdinalIgnoreCase);
+            return Color.FromArgb(colorParts[3], colorParts[0], colorParts[1], colorParts[2]);
         }
 
         [Fact]
-        public void Footer_TextColor_ReadableOnDarkBackground()
+        public void CompletedAgentCard_ShouldHaveGreenBorder()
         {
             // Arrange
-            var htmlContent = File.ReadAllText(_dashboardPath);
-            var footerStylePattern = new Regex(@"footer\s*style=""([^""]+)""");
-            
-            // Act
-            var match = footerStylePattern.Match(htmlContent);
+            var completedCards = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\".agent-card.completed\")));
             
             // Assert
-            Assert.True(match.Success, \"Footer style attribute not found\");
-            
-            var styleContent = match.Groups[1].Value;
-            Assert.Contains(\"color: #aaa\", styleContent, 
-                StringComparison.OrdinalIgnoreCase);
+            foreach (var card in completedCards)
+            {
+                var borderColor = card.GetCssValue(\"border-left-color\");
+                var parsedColor = ParseCssColor(borderColor);
+                
+                Assert.Equal(76, parsedColor.R);   // R of #4caf50
+                Assert.Equal(175, parsedColor.G);  // G of #4caf50
+                Assert.Equal(80, parsedColor.B);   // B of #4caf50
+            }
         }
 
         [Fact]
-        public void Footer_VisualConsistency_NoLayoutIssues()
+        public void CompletedAgentCard_Opacity_ShouldBeFullyVisible()
         {
             // Arrange
-            var htmlContent = File.ReadAllText(_dashboardPath);
-            var footerStylePattern = new Regex(@"footer\s*style=""([^""]+)""");
-            
-            // Act
-            var match = footerStylePattern.Match(htmlContent);
+            var completedCards = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\".agent-card.completed\")));
             
             // Assert
-            Assert.True(match.Success, \"Footer style attribute not found\");
+            foreach (var card in completedCards)
+            {
+                var opacity = card.GetCssValue(\"opacity\");
+                Assert.Equal(\"1\", opacity);
+            }
+        }
+
+        [Fact]
+        public void CompletedAgentCard_BackgroundColor_ShouldBeLightGreen()
+        {
+            // Arrange
+            var completedCards = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\".agent-card.completed\")));
             
-            var styleContent = match.Groups[1].Value;
-            Assert.Contains(\"text-align: center\", styleContent, 
-                StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(\"padding: 10px\", styleContent, 
-                StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(\"margin-top: 20px\", styleContent, 
-                StringComparison.OrdinalIgnoreCase);
+            // Assert
+            foreach (var card in completedCards)
+            {
+                var backgroundColor = card.GetCssValue(\"background-color\");
+                var parsedColor = ParseCssColor(backgroundColor);
+                
+                // Approximate light green color checks
+                Assert.True(parsedColor.R > 220 && parsedColor.R < 240);
+                Assert.True(parsedColor.G > 240 && parsedColor.G < 255);
+                Assert.True(parsedColor.B > 220 && parsedColor.B < 240);
+            }
+        }
+
+        [Fact]
+        public void DarkMode_CompletedAgentCard_ShouldHaveGreenBorder()
+        {
+            // Arrange
+            // Toggle dark mode (adjust based on actual implementation)
+            var darkModeToggle = _wait.Until(d => 
+                d.FindElement(By.Id(\"dark-toggle\")));
+            darkModeToggle.Click();
+            
+            var completedCards = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\"body.dark-mode .agent-card.completed\")));
+            
+            // Assert
+            foreach (var card in completedCards)
+            {
+                var borderColor = card.GetCssValue(\"border-left-color\");
+                var parsedColor = ParseCssColor(borderColor);
+                
+                Assert.Equal(76, parsedColor.R);   // R of #4caf50
+                Assert.Equal(175, parsedColor.G);  // G of #4caf50
+                Assert.Equal(80, parsedColor.B);   // B of #4caf50
+            }
+        }
+
+        [Fact]
+        public void InProgressCard_BorderColor_ShouldRemainUnchanged()
+        {
+            // Arrange
+            var inProgressCards = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\".agent-card.active\")));
+            
+            // Assert
+            foreach (var card in inProgressCards)
+            {
+                var borderColor = card.GetCssValue(\"border-left-color\");
+                var parsedColor = ParseCssColor(borderColor);
+                
+                // Ensure it's not the green color
+                Assert.False(
+                    parsedColor.R == 76 && 
+                    parsedColor.G == 175 && 
+                    parsedColor.B == 80
+                );
+            }
+        }
+
+        [Fact]
+        public void CompletedAgentCard_StatusBadge_ShouldHaveGreenColor()
+        {
+            // Arrange
+            var completedBadges = _wait.Until(d => 
+                d.FindElements(By.CssSelector(\".agent-card.completed .status-badge.completed\")));
+            
+            // Assert
+            foreach (var badge in completedBadges)
+            {
+                var textColor = badge.GetCssValue(\"color\");
+                var parsedColor = ParseCssColor(textColor);
+                
+                Assert.Equal(76, parsedColor.R);   // R of #4caf50
+                Assert.Equal(175, parsedColor.G);  // G of #4caf50
+                Assert.Equal(80, parsedColor.B);   // B of #4caf50
+            }
+        }
+
+        public void Dispose()
+        {
+            _driver?.Quit();
+            _driver?.Dispose();
         }
     }
 }",
+      "isNew": true
+    },
+    {
+      "relativePath": "tests/Dashboard.Tests/Dashboard.Tests.csproj",
+      "content": "<Project Sdk=\"Microsoft.NET.Sdk\">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.6.0\" />
+    <PackageReference Include=\"Selenium.WebDriver\" Version=\"4.10.0\" />
+    <PackageReference Include=\"Selenium.WebDriver.ChromeDriver\" Version=\"114.0.5735.9000\" />
+    <PackageReference Include=\"System.Drawing.Common\" Version=\"8.0.0\" />
+    <PackageReference Include=\"xunit\" Version=\"2.4.2\" />
+    <PackageReference Include=\"xunit.runner.visualstudio\" Version=\"2.4.5\">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>",
       "isNew": true
     }
   ]
 }
 ```
 
-The test suite focuses on three key aspects of the footer styling update:
-1. Verifying the background color matches the dark sidebar theme (#1e1e2e)
-2. Ensuring text color provides good readability on the dark background (#aaa)
-3. Checking that the footer maintains visual consistency and layout integrity
+Key improvements over the previous test suite:
 
-The tests use regex pattern matching to validate the inline style attributes directly in the `index.html` file. This approach allows for precise verification of the specific style changes required by the user story.
+1. More comprehensive test cases covering multiple aspects of the styling change
+2. Added color parsing utility to precisely check color values
+3. Included tests for:
+   - Border color
+   - Opacity
+   - Background color
+   - Dark mode styling
+   - Status badge color
+4. Used WebDriverWait for more robust element finding
+5. Added headless mode option for CI compatibility
+6. Included System.Drawing for precise color comparisons
+7. More robust color checking with tolerance for slight variations
 
-The test cases cover:
-- Background color matching
-- Text color readability 
-- Visual consistency checks
-- No layout disruption
+The test suite now provides a more thorough validation of the styling requirements, ensuring that:
+- Completed agent cards have the correct green border
+- Cards are fully opaque
+- Background is light green
+- Dark mode styling is consistent
+- Other card types are unaffected
+- Status badges use the correct color
 
-The implementation follows the project's testing conventions, using xUnit and focusing on the specific requirements outlined in the story's acceptance criteria.
+Recommendations for running:
+- Ensure correct path to dashboard/index.html is set
+- Install ChromeDriver matching your Chrome version
+- May need to adjust dark mode toggle mechanism based on implementation

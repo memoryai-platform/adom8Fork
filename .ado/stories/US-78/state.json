@@ -1,0 +1,89 @@
+{
+  "workItemId": 78,
+  "currentState": "AI Docs",
+  "createdAt": "2026-02-17T04:26:13.4735087Z",
+  "updatedAt": "2026-02-17T05:28:25.253507Z",
+  "agents": {
+    "Planning": {
+      "status": "in_progress",
+      "startedAt": "2026-02-17T05:26:42.2395656Z",
+      "completedAt": null,
+      "additionalData": null
+    },
+    "Coding": {
+      "status": "completed",
+      "startedAt": null,
+      "completedAt": "2026-02-17T05:27:09.5883439Z",
+      "additionalData": {
+        "mode": "copilot",
+        "copilotPrNumber": 35,
+        "issueNumber": 36,
+        "filesChanged": 8,
+        "linesAdded": 556,
+        "linesDeleted": 66,
+        "durationMinutes": 0.106294765,
+        "commitCount": 29
+      }
+    },
+    "Testing": {
+      "status": "in_progress",
+      "startedAt": "2026-02-17T05:27:12.5843533Z",
+      "completedAt": null,
+      "additionalData": null
+    },
+    "Review": {
+      "status": "in_progress",
+      "startedAt": "2026-02-17T05:28:01.9444646Z",
+      "completedAt": null,
+      "additionalData": null
+    },
+    "Documentation": {
+      "status": "in_progress",
+      "startedAt": "2026-02-17T05:28:25.2535033Z",
+      "completedAt": null,
+      "additionalData": null
+    }
+  },
+  "artifacts": {
+    "code": [
+      "dashboard/index.html",
+      ".ado/stories/US-78/CODE_REVIEW.md",
+      ".ado/stories/US-78/DOCUMENTATION.md",
+      ".ado/stories/US-78/PLAN.md",
+      ".ado/stories/US-78/TASKS.md",
+      ".ado/stories/US-78/TEST_PLAN.md",
+      ".ado/stories/US-78/state.json",
+      "dashboard/index.html",
+      "tests/ai-generated-tests.txt",
+      ".ado/stories/US-78/CODE_REVIEW.md",
+      ".ado/stories/US-78/DOCUMENTATION.md",
+      ".ado/stories/US-78/PLAN.md",
+      ".ado/stories/US-78/TASKS.md",
+      ".ado/stories/US-78/TEST_PLAN.md",
+      ".ado/stories/US-78/state.json",
+      "dashboard/index.html",
+      "tests/ai-generated-tests.txt"
+    ],
+    "tests": [],
+    "docs": []
+  },
+  "decisions": [],
+  "questions": [],
+  "tokenUsage": {
+    "totalInputTokens": 0,
+    "totalOutputTokens": 0,
+    "totalTokens": 0,
+    "totalCost": 0,
+    "complexity": "XS",
+    "agents": {
+      "Coding": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "estimatedCost": 0,
+        "model": "copilot-coding-agent",
+        "callCount": 4
+      }
+    }
+  }
+}
