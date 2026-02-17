@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using AIAgents.Core.Configuration;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
@@ -28,6 +29,7 @@ public sealed class CopilotTimeoutChecker
     private readonly ICopilotDelegationService _delegationService;
     private readonly IAgentTaskQueue _taskQueue;
     private readonly IActivityLogger _activityLogger;
+    private readonly IAzureDevOpsClient _adoClient;
     private readonly IGitOperations _gitOps;
     private readonly IStoryContextFactory _contextFactory;
     private readonly ILogger<CopilotTimeoutChecker> _logger;
@@ -38,6 +40,7 @@ public sealed class CopilotTimeoutChecker
         ICopilotDelegationService delegationService,
         IAgentTaskQueue taskQueue,
         IActivityLogger activityLogger,
+        IAzureDevOpsClient adoClient,
         IGitOperations gitOps,
         IStoryContextFactory contextFactory,
         ILogger<CopilotTimeoutChecker> logger)
@@ -47,6 +50,7 @@ public sealed class CopilotTimeoutChecker
         _delegationService = delegationService;
         _taskQueue = taskQueue;
         _activityLogger = activityLogger;
+        _adoClient = adoClient;
         _gitOps = gitOps;
         _contextFactory = contextFactory;
         _logger = logger;
@@ -188,21 +192,19 @@ public sealed class CopilotTimeoutChecker
             if (prCommits > 0)
             {
                 _logger.LogInformation(
-                    "Copilot completed! PR #{PrNumber} has {Commits} commits for WI-{WorkItemId} — auto-closing Issue #{IssueNumber}",
+                    "Copilot completed! PR #{PrNumber} has {Commits} commits for WI-{WorkItemId} (Issue #{IssueNumber}) — completing inline",
                     prNumber, prCommits, delegation.WorkItemId, delegation.IssueNumber);
 
-                await _activityLogger.LogAsync("Coding", delegation.WorkItemId,
-                    $"Detected Copilot completion (PR #{prNumber}, {prCommits} commits) — closing issue to trigger reconciliation",
-                    "info", cancellationToken);
-
-                // Close the issue — this fires the webhook which handles reconciliation
+                // Close the issue
                 var closeBody = JsonSerializer.Serialize(new { state = "closed" });
                 var closeContent = new StringContent(closeBody, Encoding.UTF8, "application/json");
                 await httpClient.PatchAsync(
                     $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{delegation.IssueNumber}",
                     closeContent, cancellationToken);
 
-                return; // Webhook will handle the rest
+                // Complete delegation and enqueue next agent — don't rely on any webhook
+                await CompleteDelegationAndResume(delegation, prNumber, prCommits, cancellationToken);
+                return;
             }
         }
 
@@ -211,8 +213,8 @@ public sealed class CopilotTimeoutChecker
     }
 
     /// <summary>
-    /// Searches for a matching PR and completes the delegation directly (bypassing the webhook).
-    /// Called when the issue is already closed but the delegation is still Pending — i.e. the webhook missed it.
+    /// Searches for a matching PR and completes the delegation directly.
+    /// Called when the issue is already closed but the delegation is still Pending.
     /// </summary>
     private async Task FindPrAndCompleteDelegation(HttpClient httpClient, CopilotDelegation delegation, CancellationToken cancellationToken)
     {
@@ -245,20 +247,25 @@ public sealed class CopilotTimeoutChecker
             }
 
             var prNumber = pr.GetProperty("number").GetInt32();
+            var prCommits = 0;
+
+            // Fetch PR detail for commit count
+            var prDetailResponse = await httpClient.GetAsync(
+                $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/pulls/{prNumber}",
+                cancellationToken);
+            if (prDetailResponse.IsSuccessStatusCode)
+            {
+                var prDetailJson = await prDetailResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var prDetailDoc = JsonDocument.Parse(prDetailJson);
+                prCommits = prDetailDoc.RootElement.GetProperty("commits").GetInt32();
+            }
 
             _logger.LogInformation(
-                "Found PR #{PrNumber} for WI-{WorkItemId} — completing delegation directly (webhook missed)",
+                "Found PR #{PrNumber} for WI-{WorkItemId} — completing delegation directly",
                 prNumber, delegation.WorkItemId);
 
-            delegation.Status = "Completed";
-            delegation.CopilotPrNumber = prNumber;
-            delegation.CompletedAt = DateTime.UtcNow;
-            await _delegationService.UpdateAsync(delegation, cancellationToken);
-
-            await _activityLogger.LogAsync("Coding", delegation.WorkItemId,
-                $"Copilot completed successfully (PR #{prNumber}) — detected by poller fallback (1 premium credit)",
-                "info", cancellationToken);
-
+            // Complete delegation and enqueue next agent — fully inline
+            await CompleteDelegationAndResume(delegation, prNumber, prCommits, cancellationToken);
             return;
         }
 
@@ -267,9 +274,58 @@ public sealed class CopilotTimeoutChecker
             delegation.IssueNumber, delegation.WorkItemId);
 
         // Even without a PR, the issue is closed so complete the delegation to prevent infinite stuck state
+        await CompleteDelegationAndResume(delegation, 0, 0, cancellationToken);
+    }
+
+    /// <summary>
+    /// Completes a Copilot delegation end-to-end: marks delegation done, updates ADO state,
+    /// adds completion comment, and enqueues the next agent. Does NOT rely on any webhook.
+    /// </summary>
+    private async Task CompleteDelegationAndResume(CopilotDelegation delegation, int prNumber, int prCommits, CancellationToken cancellationToken)
+    {
+        // 1. Mark delegation as completed
         delegation.Status = "Completed";
+        delegation.CopilotPrNumber = prNumber;
         delegation.CompletedAt = DateTime.UtcNow;
         await _delegationService.UpdateAsync(delegation, cancellationToken);
+
+        // 2. Update ADO work item state and fields
+        try
+        {
+            await _adoClient.UpdateWorkItemFieldAsync(
+                delegation.WorkItemId, CustomFieldNames.Paths.LastAgent, "Coding", cancellationToken);
+        }
+        catch { /* field may not exist yet */ }
+
+        await _adoClient.UpdateWorkItemStateAsync(
+            delegation.WorkItemId, "AI Test", cancellationToken);
+
+        // 3. Add completion comment to ADO
+        var elapsed = (DateTime.UtcNow - delegation.DelegatedAt).TotalMinutes;
+        var prInfo = prNumber > 0 ? $"PR #{prNumber}, {prCommits} commits" : "no PR found";
+        await _adoClient.AddWorkItemCommentAsync(delegation.WorkItemId,
+            $"<b>\U0001f916 AI Coding Agent Complete (GitHub Copilot)</b><br/>" +
+            $"Strategy: Copilot coding agent<br/>" +
+            $"{prInfo}<br/>" +
+            $"Duration: {elapsed:F1} minutes (1 premium credit)",
+            cancellationToken);
+
+        // 4. Enqueue Testing agent to resume pipeline (dispatcher handles autonomy level)
+        var nextTask = new AgentTask
+        {
+            WorkItemId = delegation.WorkItemId,
+            AgentType = AgentType.Testing,
+            CorrelationId = delegation.CorrelationId
+        };
+        await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
+
+        await _activityLogger.LogAsync("Coding", delegation.WorkItemId,
+            $"Copilot completed ({prInfo}, {elapsed:F1}m) — enqueued Testing agent (1 premium credit)",
+            "info", cancellationToken);
+
+        _logger.LogInformation(
+            "Copilot delegation completed for WI-{WorkItemId} — PR #{PrNumber}, pipeline resumed",
+            delegation.WorkItemId, prNumber);
     }
 
     private async Task HandleTimeoutAsync(CopilotDelegation delegation, CancellationToken cancellationToken)
