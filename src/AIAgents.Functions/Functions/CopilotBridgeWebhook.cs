@@ -107,6 +107,17 @@ public sealed class CopilotBridgeWebhook
         var prBody = pr.GetProperty("body").GetString() ?? "";
         var prBranch = pr.GetProperty("head").GetProperty("ref").GetString() ?? "";
 
+        // Skip draft / [WIP] PRs — Copilot opens a draft PR first as a placeholder,
+        // then marks it ready_for_review once coding is complete. Processing drafts
+        // would kill the issue before Copilot has a chance to write code.
+        var isDraft = pr.TryGetProperty("draft", out var draftProp) && draftProp.GetBoolean();
+        if (isDraft)
+        {
+            _logger.LogInformation(
+                "Ignoring draft PR #{PrNumber} — waiting for ready_for_review event", prNumber);
+            return req.CreateResponse(HttpStatusCode.OK);
+        }
+
         _logger.LogInformation("Processing Copilot PR #{PrNumber}: {Title}", prNumber, prTitle);
 
         // Try to match this PR to a pending delegation
