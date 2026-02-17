@@ -164,4 +164,51 @@ public sealed class CopilotCodingStrategyTests
         Assert.Contains("Match existing code style", body);
         Assert.Contains("Ensure correct syntax", body);
     }
+
+    // ========== AGENT NAME TESTS ==========
+
+    [Fact]
+    public void BuildIssueBody_IncludesAgentName_WhenProvided()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context, "claude");
+
+        Assert.Contains("**Assigned Agent:** @claude", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_OmitsAgentName_WhenNull()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context, null);
+
+        Assert.DoesNotContain("Assigned Agent", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_OmitsAgentName_WhenEmpty()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context, "");
+
+        Assert.DoesNotContain("Assigned Agent", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ShowsCopilotAgent()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context, "copilot");
+
+        Assert.Contains("**Assigned Agent:** @copilot", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ShowsCodexAgent()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context, "codex");
+
+        Assert.Contains("**Assigned Agent:** @codex", body);
+    }
 }

@@ -19,10 +19,12 @@ namespace AIAgents.Functions.Agents;
 ///   <item><see cref="CopilotCodingStrategy"/> — delegates to GitHub Copilot's coding agent</item>
 /// </list>
 /// 
-/// Strategy selection:
-/// 1. ADO field <c>Custom.AICodingProvider</c> forces a specific strategy ("agentic" or "copilot")
-/// 2. When "auto" (default), uses Copilot for stories ≥ <c>Copilot:ComplexityThreshold</c> story points
-/// 3. When Copilot is disabled in config, always uses the agentic strategy
+/// Strategy selection (in priority order):
+/// 1. Force-agentic flag (set by Copilot timeout fallback) → always agentic
+/// 2. ADO field <c>Custom.AICodingProvider</c> → "Agentic" or "Copilot" override per story
+/// 3. Global <c>Copilot:Mode</c> → "Always" sends everything to Copilot
+/// 4. Threshold: stories ≥ <c>Copilot:ComplexityThreshold</c> SP → Copilot, else agentic
+/// 5. When Copilot is disabled in config, always uses the agentic strategy
 /// 
 /// For the agentic path, this class handles the full lifecycle (commit, ADO update, enqueue Testing).
 /// For the Copilot path, the pipeline pauses — <see cref="Functions.CopilotBridgeWebhook"/> handles resumption.
@@ -115,7 +117,9 @@ public sealed class CodingAgentService : IAgentService
 
             // Resolve the coding strategy
             var strategy = ResolveStrategy(state, workItem);
-            var strategyName = strategy is CopilotCodingStrategy ? "Copilot" : "Agentic";
+            var strategyName = strategy is CopilotCodingStrategy copilotStrategy
+                ? $"GitHub @{copilotStrategy.AgentAssignee}"
+                : "Agentic";
 
             await _activityLogger.LogAsync("Coding", task.WorkItemId,
                 $"Starting coding ({strategyName} strategy)", "info", cancellationToken);
@@ -128,18 +132,20 @@ public sealed class CodingAgentService : IAgentService
                 // ── Copilot path: pipeline pauses, bridge will resume ──
                 await context.SaveStateAsync(state, cancellationToken);
 
+                var agentName = (strategy as CopilotCodingStrategy)?.AgentAssignee ?? "copilot";
+
                 // Commit state.json so it's visible on the branch
                 await _gitOps.CommitAndPushAsync(repoPath,
-                    $"[AI Coding] US-{workItem.Id}: Delegated to Copilot (Issue #{result.CopilotMetrics?.IssueNumber})",
+                    $"[AI Coding] US-{workItem.Id}: Delegated to @{agentName} (Issue #{result.CopilotMetrics?.IssueNumber})",
                     cancellationToken);
 
                 await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-                    $"<b>🤖 AI Coding Agent — Delegated to GitHub Copilot</b><br/>" +
-                    $"Strategy: Copilot coding agent<br/>" +
+                    $"<b>🤖 AI Coding Agent — Delegated to GitHub @{agentName}</b><br/>" +
+                    $"Strategy: GitHub {agentName} coding agent<br/>" +
                     (result.CopilotMetrics?.IssueNumber > 0
                         ? $"GitHub Issue: <a href=\"https://github.com/{_githubOptions.Value.Owner}/{_githubOptions.Value.Repo}/issues/{result.CopilotMetrics.IssueNumber}\">#{result.CopilotMetrics.IssueNumber}</a><br/>"
                         : "") +
-                    $"Pipeline is paused — waiting for Copilot to create a PR.<br/>" +
+                    $"Pipeline is paused — waiting for @{agentName} to create a PR.<br/>" +
                     $"Timeout: {_copilotOptions.TimeoutMinutes}m (auto-fallback to agentic loop)",
                     cancellationToken);
 
@@ -147,12 +153,12 @@ public sealed class CodingAgentService : IAgentService
                 catch { /* field may not exist yet */ }
 
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                    $"Delegated to Copilot (Issue #{result.CopilotMetrics?.IssueNumber}). Pipeline paused.",
+                    $"Delegated to @{agentName} (Issue #{result.CopilotMetrics?.IssueNumber}). Pipeline paused.",
                     "info", cancellationToken);
 
                 _logger.LogInformation(
-                    "Coding agent delegated WI-{WorkItemId} to Copilot. Pipeline paused until bridge webhook resumes.",
-                    task.WorkItemId);
+                    "Coding agent delegated WI-{WorkItemId} to @{Agent}. Pipeline paused until bridge webhook resumes.",
+                    task.WorkItemId, agentName);
 
                 return AgentResult.Ok(0, 0m);
             }
@@ -245,7 +251,7 @@ public sealed class CodingAgentService : IAgentService
 
     /// <summary>
     /// Resolves which coding strategy to use based on configuration, mode, complexity, and overrides.
-    /// Priority: force-agentic flag → Copilot disabled → Mode=Always → Mode=Auto (threshold) → agentic.
+    /// Priority: force-agentic flag → per-story AICodingProvider → Copilot disabled → Mode=Always → Mode=Auto (threshold) → agentic.
     /// </summary>
     internal ICodingStrategy ResolveStrategy(StoryState state, StoryWorkItem workItem)
     {
@@ -256,6 +262,47 @@ public sealed class CodingAgentService : IAgentService
         {
             _logger.LogInformation("Force-agentic flag set for WI-{WorkItemId} (timeout fallback)", workItem.Id);
             return CreateAgenticStrategy();
+        }
+
+        // Per-story ADO field override: "Agentic" or "Copilot" short-circuits all config
+        if (!string.IsNullOrWhiteSpace(workItem.AICodingProvider) &&
+            !string.Equals(workItem.AICodingProvider, "Auto", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(workItem.AICodingProvider, "Agentic", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation(
+                    "Routing WI-{WorkItemId} to agentic strategy (per-story AICodingProvider override)",
+                    workItem.Id);
+                return CreateAgenticStrategy();
+            }
+
+            // Copilot / Claude / Codex all delegate to a GitHub agent
+            var agentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Copilot"] = "copilot",
+                ["Claude"] = "claude",
+                ["Codex"] = "codex"
+            };
+
+            if (agentMap.TryGetValue(workItem.AICodingProvider!, out var agentName))
+            {
+                if (!_copilotOptions.Enabled)
+                {
+                    _logger.LogWarning(
+                        "WI-{WorkItemId} has AICodingProvider={Provider} but Copilot is disabled in config. Falling back to agentic.",
+                        workItem.Id, workItem.AICodingProvider);
+                    return CreateAgenticStrategy();
+                }
+
+                _logger.LogInformation(
+                    "Routing WI-{WorkItemId} to {Agent} strategy (per-story AICodingProvider override)",
+                    workItem.Id, agentName);
+                return CreateCopilotStrategy(agentName);
+            }
+
+            _logger.LogWarning(
+                "WI-{WorkItemId} has unknown AICodingProvider value '{Provider}'. Ignoring override.",
+                workItem.Id, workItem.AICodingProvider);
         }
 
         if (!_copilotOptions.Enabled)
@@ -294,8 +341,8 @@ public sealed class CodingAgentService : IAgentService
     private AgenticCodingStrategy CreateAgenticStrategy() =>
         new(_aiClientFactory, _gitOps, _codebaseContext, _logger);
 
-    private CopilotCodingStrategy CreateCopilotStrategy() =>
-        new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger);
+    private CopilotCodingStrategy CreateCopilotStrategy(string? agentOverride = null) =>
+        new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger, agentOverride);
 
     /// <summary>
     /// Extracts story points from the Planning agent's complexity decision.

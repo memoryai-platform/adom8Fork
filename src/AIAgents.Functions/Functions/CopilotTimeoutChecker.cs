@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using AIAgents.Core.Configuration;
+using AIAgents.Core.Interfaces;
+using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -26,6 +28,8 @@ public sealed class CopilotTimeoutChecker
     private readonly ICopilotDelegationService _delegationService;
     private readonly IAgentTaskQueue _taskQueue;
     private readonly IActivityLogger _activityLogger;
+    private readonly IGitOperations _gitOps;
+    private readonly IStoryContextFactory _contextFactory;
     private readonly ILogger<CopilotTimeoutChecker> _logger;
 
     public CopilotTimeoutChecker(
@@ -34,6 +38,8 @@ public sealed class CopilotTimeoutChecker
         ICopilotDelegationService delegationService,
         IAgentTaskQueue taskQueue,
         IActivityLogger activityLogger,
+        IGitOperations gitOps,
+        IStoryContextFactory contextFactory,
         ILogger<CopilotTimeoutChecker> logger)
     {
         _copilotOptions = copilotOptions.Value;
@@ -41,6 +47,8 @@ public sealed class CopilotTimeoutChecker
         _delegationService = delegationService;
         _taskQueue = taskQueue;
         _activityLogger = activityLogger;
+        _gitOps = gitOps;
+        _contextFactory = contextFactory;
         _logger = logger;
     }
 
@@ -109,7 +117,32 @@ public sealed class CopilotTimeoutChecker
             }
         }
 
-        // Re-enqueue for agentic coding with force flag
+        // Persist forceAgentic flag in state.json so ResolveStrategy picks the agentic loop
+        try
+        {
+            var repoPath = await _gitOps.EnsureBranchAsync(delegation.BranchName, cancellationToken);
+            await using var context = _contextFactory.Create(delegation.WorkItemId, repoPath);
+            var state = await context.LoadStateAsync(cancellationToken);
+
+            state.Agents["Coding"] = AgentStatus.InProgress();
+            state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+            {
+                ["forceAgentic"] = true,
+                ["copilotTimedOut"] = true,
+                ["copilotElapsedMinutes"] = elapsed
+            };
+            await context.SaveStateAsync(state, cancellationToken);
+
+            await _gitOps.CommitAndPushAsync(repoPath,
+                $"[AI Coding] US-{delegation.WorkItemId}: Copilot timed out — falling back to agentic loop",
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist forceAgentic flag for WI-{WorkItemId}", delegation.WorkItemId);
+        }
+
+        // Re-enqueue for agentic coding — forceAgentic flag is now in state.json
         var task = new AgentTask
         {
             WorkItemId = delegation.WorkItemId,

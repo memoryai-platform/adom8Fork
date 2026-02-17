@@ -27,16 +27,23 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     private readonly ILogger _logger;
     private readonly HttpClient _httpClient;
 
+    private readonly string _agentAssignee;
+
+    /// <summary>The GitHub agent username this strategy will assign issues to.</summary>
+    public string AgentAssignee => _agentAssignee;
+
     public CopilotCodingStrategy(
         IOptions<GitHubOptions> githubOptions,
         IOptions<CopilotOptions> copilotOptions,
         ICopilotDelegationService delegationService,
-        ILogger logger)
+        ILogger logger,
+        string? agentOverride = null)
     {
         _githubOptions = githubOptions.Value;
         _copilotOptions = copilotOptions.Value;
         _delegationService = delegationService;
         _logger = logger;
+        _agentAssignee = agentOverride ?? _copilotOptions.Model ?? "copilot";
 
         _httpClient = new HttpClient
         {
@@ -63,12 +70,12 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         {
             issueNumber = await CreateGitHubIssueAsync(context, cancellationToken);
 
-            // Assign to @copilot to trigger the coding agent
-            await AssignIssueToCopilotAsync(issueNumber, cancellationToken);
+            // Assign to the configured agent (@copilot, @claude, or @codex)
+            await AssignIssueToAgentAsync(issueNumber, cancellationToken);
 
             _logger.LogInformation(
-                "Created GitHub Issue #{IssueNumber} and assigned to @copilot for WI-{WorkItemId}",
-                issueNumber, context.WorkItemId);
+                "Created GitHub Issue #{IssueNumber} and assigned to @{Agent} for WI-{WorkItemId}",
+                issueNumber, _agentAssignee, context.WorkItemId);
         }
         else
         {
@@ -94,7 +101,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         {
             ["mode"] = "copilot-delegated",
             ["issueNumber"] = issueNumber,
-            ["delegatedAt"] = DateTime.UtcNow.ToString("O")
+            ["delegatedAt"] = DateTime.UtcNow.ToString("O"),
+            ["agent"] = _agentAssignee
         };
 
         var summary = _copilotOptions.CreateIssue
@@ -122,7 +130,7 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     /// </summary>
     private async Task<int> CreateGitHubIssueAsync(CodingContext context, CancellationToken cancellationToken)
     {
-        var issueBody = BuildIssueBody(context);
+        var issueBody = BuildIssueBody(context, _agentAssignee);
 
         var requestBody = new
         {
@@ -155,11 +163,12 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     }
 
     /// <summary>
-    /// Assigns the issue to @copilot, which triggers the Copilot coding agent.
+    /// Assigns the issue to the configured GitHub agent (@copilot, @claude, or @codex),
+    /// which triggers that agent to start coding.
     /// </summary>
-    private async Task AssignIssueToCopilotAsync(int issueNumber, CancellationToken cancellationToken)
+    private async Task AssignIssueToAgentAsync(int issueNumber, CancellationToken cancellationToken)
     {
-        var requestBody = new { assignees = new[] { "copilot" } };
+        var requestBody = new { assignees = new[] { _agentAssignee } };
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -171,9 +180,9 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         {
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning(
-                "Failed to assign Issue #{IssueNumber} to @copilot ({StatusCode}): {Body}. " +
-                "Issue was created but may need manual Copilot assignment.",
-                issueNumber, response.StatusCode, responseBody);
+                "Failed to assign Issue #{IssueNumber} to @{Agent} ({StatusCode}): {Body}. " +
+                "Issue was created but may need manual agent assignment.",
+                issueNumber, _agentAssignee, response.StatusCode, responseBody);
         }
     }
 
@@ -182,7 +191,7 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     /// Includes the plan, acceptance criteria, coding guidelines, and explicit
     /// instructions about which branch to work on.
     /// </summary>
-    internal static string BuildIssueBody(CodingContext context)
+    internal static string BuildIssueBody(CodingContext context, string? agentName = null)
     {
         var sb = new StringBuilder();
 
@@ -193,6 +202,10 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         sb.AppendLine();
         sb.AppendLine($"> **ADO Work Item:** US-{context.WorkItemId}");
         sb.AppendLine($"> **Title:** {context.WorkItem.Title}");
+        if (!string.IsNullOrWhiteSpace(agentName))
+        {
+            sb.AppendLine($"> **Assigned Agent:** @{agentName}");
+        }
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(context.WorkItem.Description))

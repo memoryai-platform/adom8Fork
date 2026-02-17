@@ -52,6 +52,12 @@ public sealed record StoryWorkItem
     public string? AIDocumentationModel { get; init; }
 
     /// <summary>
+    /// Per-story coding provider override: "Auto", "Agentic", or "Copilot".
+    /// When set, overrides the global Copilot:Mode for this story.
+    /// </summary>
+    public string? AICodingProvider { get; init; }
+
+    /// <summary>
     /// Builds a <see cref="StoryModelOverrides"/> from this work item's
     /// per-story model fields. Returns null if no overrides are set.
     /// </summary>

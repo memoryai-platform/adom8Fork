@@ -51,6 +51,13 @@ public static class CustomFieldNames
     /// <summary>Override model for the Documentation agent (e.g., "gemini-2.0-flash").</summary>
     public const string DocumentationModel = "Custom.AIDocumentationModel";
 
+    /// <summary>
+    /// Per-story coding provider override: "Auto", "Agentic", or "Copilot".
+    /// When set, overrides the global Copilot:Mode setting for this story.
+    /// "Auto" = use global config, "Agentic" = force built-in loop, "Copilot" = force Copilot agent.
+    /// </summary>
+    public const string CodingProvider = "Custom.AICodingProvider";
+
     // ── Output Fields (written by agents during processing) ─────────
 
     /// <summary>
@@ -141,5 +148,6 @@ public static class CustomFieldNames
         public const string TestingModel = "/fields/" + CustomFieldNames.TestingModel;
         public const string ReviewModel = "/fields/" + CustomFieldNames.ReviewModel;
         public const string DocumentationModel = "/fields/" + CustomFieldNames.DocumentationModel;
+        public const string CodingProvider = "/fields/" + CustomFieldNames.CodingProvider;
     }
 }

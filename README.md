@@ -165,6 +165,7 @@ See [SETUP.md](SETUP.md) for detailed instructions and [DEMO_GUIDE.md](DEMO_GUID
 | `Git__Name` | Git commit name | `AI Agent Bot` |
 | `Copilot__Enabled` | Enable GitHub Copilot hybrid coding (off by default) | `false` |
 | `Copilot__Mode` | `Auto` (threshold-based) or `Always` (all coding to Copilot) | `Auto` |
+| `Copilot__Model` | GitHub agent to assign issues to: `copilot`, `claude`, or `codex` | `copilot` |
 | `Copilot__ComplexityThreshold` | Story points ≥ this → delegate to Copilot (Mode=Auto only) | `8` |
 | `Copilot__WebhookSecret` | HMAC secret for Copilot PR webhook | |
 

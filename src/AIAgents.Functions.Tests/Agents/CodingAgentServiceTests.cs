@@ -544,6 +544,208 @@ public sealed class CodingAgentServiceTests
         Assert.IsType<AgenticCodingStrategy>(strategy);
     }
 
+    // ========== PER-STORY CODING PROVIDER OVERRIDE TESTS ==========
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderCopilot_ForcesCopilot()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        // Story points below threshold, but override forces Copilot
+        var wi = new StoryWorkItem
+        {
+            Id = 100, Title = "Test", State = "AI Code",
+            AICodingProvider = "Copilot"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderAgentic_ForcesAgentic()
+    {
+        // Even with Mode=Always, per-story "Agentic" override wins
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 101, Title = "Test", State = "AI Code",
+            AICodingProvider = "Agentic"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderAuto_UsesGlobalConfig()
+    {
+        // "Auto" means defer to Copilot config (Mode=Always in this case)
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 102, Title = "Test", State = "AI Code",
+            AICodingProvider = "Auto"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderCopilot_DisabledFallsBackToAgentic()
+    {
+        // Copilot override requested but Copilot is globally disabled
+        var service = CreateService(new CopilotOptions { Enabled = false });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 103, Title = "Test", State = "AI Code",
+            AICodingProvider = "Copilot"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderCaseInsensitive()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 104, Title = "Test", State = "AI Code",
+            AICodingProvider = "cOpIlOt"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderNull_UsesGlobalConfig()
+    {
+        // Null provider should fall through to normal routing
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ForceAgentic_OverridesCodingProvider()
+    {
+        // forceAgentic flag always wins, even over per-story override
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Agents["Coding"] = AgentStatus.InProgress();
+        state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+        {
+            ["forceAgentic"] = true
+        };
+        var wi = new StoryWorkItem
+        {
+            Id = 105, Title = "Test", State = "AI Code",
+            AICodingProvider = "Copilot"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderClaude_RoutesCopilotWithClaudeAgent()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 106, Title = "Test", State = "AI Code",
+            AICodingProvider = "Claude"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        var copilotStrategy = Assert.IsType<CopilotCodingStrategy>(strategy);
+        Assert.Equal("claude", copilotStrategy.AgentAssignee);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderCodex_RoutesCopilotWithCodexAgent()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 107, Title = "Test", State = "AI Code",
+            AICodingProvider = "Codex"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        var copilotStrategy = Assert.IsType<CopilotCodingStrategy>(strategy);
+        Assert.Equal("codex", copilotStrategy.AgentAssignee);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderClaude_DisabledFallsBackToAgentic()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = false });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = new StoryWorkItem
+        {
+            Id = 108, Title = "Test", State = "AI Code",
+            AICodingProvider = "Claude"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_DefaultModel_UsedAsAgentAssignee()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always", Model = "claude" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        var copilotStrategy = Assert.IsType<CopilotCodingStrategy>(strategy);
+        Assert.Equal("claude", copilotStrategy.AgentAssignee);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CodingProviderCopilot_AgentAssigneeIsCopilot()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Model = "claude" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        // Per-story override to "Copilot" should assign to @copilot even when default Model is claude
+        var wi = new StoryWorkItem
+        {
+            Id = 109, Title = "Test", State = "AI Code",
+            AICodingProvider = "Copilot"
+        };
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        var copilotStrategy = Assert.IsType<CopilotCodingStrategy>(strategy);
+        Assert.Equal("copilot", copilotStrategy.AgentAssignee);
+    }
+
     // ========== GET STORY POINTS FROM DECISIONS TESTS ==========
 
     [Fact]

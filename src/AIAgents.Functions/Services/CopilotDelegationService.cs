@@ -74,9 +74,9 @@ public sealed class TableStorageCopilotDelegationService : ICopilotDelegationSer
 
         try
         {
-            await _tableClient.AddEntityAsync(entity, cancellationToken);
+            await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, cancellationToken);
             _logger.LogInformation(
-                "Created Copilot delegation for WI-{WorkItemId} (Issue #{IssueNumber}, Branch: {Branch})",
+                "Created/updated Copilot delegation for WI-{WorkItemId} (Issue #{IssueNumber}, Branch: {Branch})",
                 delegation.WorkItemId, delegation.IssueNumber, delegation.BranchName);
         }
         catch (RequestFailedException ex)

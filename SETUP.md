@@ -178,7 +178,7 @@ Map each column to its matching state. This gives you a visual Kanban board show
 
 Still in **Organization Settings → Process → User Story**:
 
-The AI pipeline uses **20 custom fields** organized into three groups: **Input Fields** (you set per-story), **Model Override Fields** (optional per-story AI model control), and **AI Tracking** (written automatically by agents).
+The AI pipeline uses **21 custom fields** organized into three groups: **Input Fields** (you set per-story), **Model Override Fields** (optional per-story AI model control), and **AI Tracking** (written automatically by agents).
 
 #### Input Fields — "AI Agent Settings" Group
 
@@ -218,6 +218,7 @@ All fields in this group use **Picklist (string)** type with a **shared picklist
 | 4 | AI Testing Model | `Custom.AITestingModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
 | 5 | AI Review Model | `Custom.AIReviewModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
 | 6 | AI Documentation Model | `Custom.AIDocumentationModel` | Picklist (string) | Shared "AI Models" list | *(blank)* — uses system default |
+| 7 | AI Coding Provider | `Custom.AICodingProvider` | Picklist (string) | Auto, Agentic, Copilot, Claude, Codex | *(blank)* — uses global `Copilot__Model` |
 
 > **Reference names matter!** The backend code reads these exact `Custom.AI*` reference names. If you recreate a field manually instead of using the API, make sure the reference name matches exactly (ADO auto-generates it from the field name, e.g., "AI Planning Model" → `Custom.AIPlanningModel`).
 

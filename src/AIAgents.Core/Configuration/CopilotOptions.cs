@@ -73,4 +73,15 @@ public sealed class CopilotOptions
     /// a comment explaining that changes were incorporated into the pipeline.
     /// </summary>
     public bool AutoCloseCopilotPr { get; init; } = true;
+
+    /// <summary>
+    /// GitHub agent to assign issues to. Controls which coding agent processes the work.
+    /// <list type="bullet">
+    ///   <item><c>"copilot"</c> (default) — GitHub Copilot coding agent</item>
+    ///   <item><c>"claude"</c> — Anthropic Claude coding agent (partner agent)</item>
+    ///   <item><c>"codex"</c> — OpenAI Codex coding agent (partner agent)</item>
+    /// </list>
+    /// Can be overridden per-story via the <c>Custom.AICodingProvider</c> ADO field.
+    /// </summary>
+    public string Model { get; init; } = "copilot";
 }
