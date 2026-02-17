@@ -2448,7 +2448,7 @@
             }
 
             async refresh() {
-                if (this.isRefreshing) return;
+                if (this.isRefreshing || this.isPaused) return;
                 
                 if (this.fetchCallback) {
                     this.isRefreshing = true;
