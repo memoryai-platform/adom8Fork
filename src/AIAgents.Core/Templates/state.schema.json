@@ -11,7 +11,7 @@
     },
     "currentState": {
       "type": "string",
-      "enum": ["New", "Story Planning", "AI Code", "AI Test", "AI Review", "AI Docs", "Ready for QA", "Needs Revision"],
+      "enum": ["New", "Story Planning", "AI Code", "AI Test", "AI Review", "AI Docs", "AI Deployment", "Code Review", "Needs Revision", "Agent Failed", "Ready for QA", "Ready for Deployment", "Deployed"],
       "description": "Current state in the pipeline"
     },
     "createdAt": {

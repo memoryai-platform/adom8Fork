@@ -285,7 +285,7 @@ public sealed class PlanningAgentServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_RejectedStory_MovesToNew()
+    public async Task ExecuteAsync_RejectedStory_MovesToNeedsRevision()
     {
         SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
         var service = CreateService();
@@ -293,8 +293,8 @@ public sealed class PlanningAgentServiceTests
 
         await service.ExecuteAsync(task);
 
-        Assert.Equal("New", _capturedState.CurrentState);
-        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "New", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal("Needs Revision", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -396,5 +396,80 @@ public sealed class PlanningAgentServiceTests
         var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.PlanningResponseNoReadiness);
 
         Assert.Null(result.Readiness);
+    }
+
+    // ========== PLACEHOLDER DETECTION TESTS ==========
+
+    [Theory]
+    [InlineData("Fix the TBD feature", null, null, "Title")]
+    [InlineData("Good title", "This is TODO and needs work", null, "Description")]
+    [InlineData("Good title", "Good desc", "We need to decide on approach", "Acceptance Criteria")]
+    [InlineData("Good title", "The design is TBC", "Also ??? unclear", "Description")]
+    [InlineData("Good title", "Placeholder text here", null, "Description")]
+    [InlineData("Good title", "This is to be determined later", null, "Description")]
+    public void DetectPlaceholders_FindsPlaceholderText(string title, string? desc, string? ac, string expectedField)
+    {
+        var wi = new StoryWorkItem
+        {
+            Id = 99, Title = title, State = "New",
+            Description = desc, AcceptanceCriteria = ac,
+            Tags = new List<string>()
+        };
+
+        var result = PlanningAgentService.DetectPlaceholders(wi);
+
+        Assert.Contains("PLACEHOLDER TEXT DETECTED", result);
+        Assert.Contains(expectedField, result);
+    }
+
+    [Fact]
+    public void DetectPlaceholders_CleanStory_ReturnsEmpty()
+    {
+        var wi = new StoryWorkItem
+        {
+            Id = 99, Title = "Fix the footer color",
+            Description = "Change the footer background to dark",
+            AcceptanceCriteria = "Footer should have dark background",
+            State = "New", Tags = new List<string>()
+        };
+
+        var result = PlanningAgentService.DetectPlaceholders(wi);
+
+        Assert.Equal("", result);
+    }
+
+    [Fact]
+    public void DetectPlaceholders_HtmlTags_StrippedBeforeScanning()
+    {
+        var wi = new StoryWorkItem
+        {
+            Id = 99, Title = "Story",
+            Description = "<p>The approach is <b>TBD</b> pending review</p>",
+            AcceptanceCriteria = "<ul><li>Done</li></ul>",
+            State = "New", Tags = new List<string>()
+        };
+
+        var result = PlanningAgentService.DetectPlaceholders(wi);
+
+        Assert.Contains("PLACEHOLDER TEXT DETECTED", result);
+        Assert.Contains("Description", result);
+    }
+
+    [Fact]
+    public void DetectPlaceholders_MultipleFindings_ListsAll()
+    {
+        var wi = new StoryWorkItem
+        {
+            Id = 99, Title = "TBD Feature",
+            Description = "TODO: implement this. Also need to decide on DB.",
+            AcceptanceCriteria = null,
+            State = "New", Tags = new List<string>()
+        };
+
+        var result = PlanningAgentService.DetectPlaceholders(wi);
+
+        // Should find TBD in title, TODO and "need to decide" in description
+        Assert.Contains("Title", result);
+        Assert.Contains("Description", result);
     }
 }

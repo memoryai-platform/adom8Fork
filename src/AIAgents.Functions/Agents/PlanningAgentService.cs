@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
@@ -72,20 +73,25 @@ public sealed class PlanningAgentService : IAgentService
         state.Agents["Planning"] = AgentStatus.InProgress();
         await context.SaveStateAsync(state, cancellationToken);
 
-        // 5. Call AI for planning analysis with triage gate
+        // 5. Detect placeholder text before calling AI
+        var placeholderWarning = DetectPlaceholders(workItem);
+
+        // 6. Call AI for planning analysis with triage gate
         var systemPrompt = @"You are a senior software architect analyzing Azure DevOps user stories.
 You have TWO jobs:
 1. TRIAGE — Assess whether the story is ready for AI coding.
 2. PLAN — If ready, create a detailed implementation plan.
 
-TRIAGE CHECKS (evaluate all 5):
-- Completeness: Does the story have a clear title, description, and acceptance criteria?
+TRIAGE CHECKS (evaluate all 6):
+- Completeness: Does the story have a clear title, description, AND acceptance criteria? All three are REQUIRED. An empty or missing acceptance criteria is an automatic blocker.
 - Complexity: Is the estimated complexity ≤ 13 story points? Stories over 13 should be broken down.
-- Ambiguity: Are the requirements specific enough to implement without guessing? Are there vague terms like 'improve', 'optimize', 'make better' without measurable criteria?
+- Ambiguity: Are the requirements specific enough to implement without guessing? Flag vague terms like 'improve', 'optimize', 'make better', 'enhance' without measurable criteria.
 - Risk: Are there architectural risks that need human review first?
 - Feasibility: Can this be implemented with the existing codebase and tech stack?
+- Content Quality: Does the story contain placeholder or unresolved text? Look for: TBD, TODO, TBC, N/A (in required fields), 'need to decide', 'to be determined', 'not yet defined', 'undecided', 'placeholder', '[fill in]', '???', or any open questions/decision points that haven't been resolved. Each placeholder found is a blocker — list the exact text and which field it appears in.
 
 If ANY check fails, set readiness.proceed=false with clear blockers and questions.
+Be STRICT: do not allow stories with unresolved decisions or placeholder text to proceed.
 
 Respond ONLY with valid JSON matching this structure:
 {
@@ -117,7 +123,7 @@ ALWAYS include the full plan even when proceed=false — the analyst needs the a
 **Description:** {workItem.Description ?? "No description provided"}
 **Acceptance Criteria:** {workItem.AcceptanceCriteria ?? "No acceptance criteria"}
 **Tags:** {string.Join(", ", workItem.Tags)}
-
+{placeholderWarning}
 ## Existing Repository Files
 {fileListSummary}
 
@@ -175,7 +181,7 @@ Analyze this story and create a comprehensive implementation plan.";
         await _gitOps.CommitAndPushAsync(repoPath,
             $"[AI Planning] US-{workItem.Id}: {workItem.Title}", cancellationToken);
 
-        // 11. Triage gate — check readiness
+        // 12. Triage gate — check readiness
         var readiness = planResult.Readiness;
         if (readiness is not null && !readiness.Proceed)
         {
@@ -217,7 +223,7 @@ Analyze this story and create a comprehensive implementation plan.";
                 ["readinessScore"] = readiness.ReadinessScore,
                 ["blockerCount"] = readiness.Blockers.Count
             };
-            state.CurrentState = "New";
+            state.CurrentState = "Needs Revision";
             state.Decisions.Add(new Decision
             {
                 Agent = "Planning",
@@ -229,14 +235,14 @@ Analyze this story and create a comprehensive implementation plan.";
             try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
             catch { /* field may not exist yet */ }
 
-            // Move story back to New — do NOT enqueue Coding agent
-            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "New", cancellationToken);
+            // Move story to Needs Revision — do NOT enqueue Coding agent
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
 
-            _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to New", task.WorkItemId);
+            _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to Needs Revision", task.WorkItemId);
             return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
 
-        // Story IS ready — proceed to coding
+        // 13. Story IS ready — proceed to coding
         var readinessInfo = readiness is not null
             ? $"<br/>Readiness: {readiness.ReadinessScore}/100"
             : "";
@@ -370,5 +376,53 @@ Analyze this story and create a comprehensive implementation plan.";
             .Where(e => e.ValueKind == JsonValueKind.String)
             .Select(e => e.GetString()!)
             .ToList();
+    }
+
+    /// <summary>
+    /// Scans story fields for placeholder/unresolved text patterns.
+    /// Returns a warning string to inject into the AI prompt, or empty if clean.
+    /// </summary>
+    internal static string DetectPlaceholders(StoryWorkItem workItem)
+    {
+        var placeholderPattern = new Regex(
+            @"\bTBD\b|\bTODO\b|\bTBC\b|\bN/?A\b|\bplaceholder\b|\bundecided\b|\bneed\s+to\s+decide\b|to\s+be\s+determined|not\s+yet\s+defined|\[fill\s*in\]|\?\?\?",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        var findings = new List<string>();
+
+        ScanField("Title", workItem.Title, placeholderPattern, findings);
+        ScanField("Description", workItem.Description, placeholderPattern, findings);
+        ScanField("Acceptance Criteria", workItem.AcceptanceCriteria, placeholderPattern, findings);
+
+        if (findings.Count == 0)
+            return "";
+
+        var warning = "\n## ⚠️ PLACEHOLDER TEXT DETECTED\n" +
+            "The following placeholder/unresolved text was found in the story fields. " +
+            "These MUST be treated as blockers in your triage assessment (set proceed=false):\n" +
+            string.Join("\n", findings.Select(f => $"- {f}"));
+
+        return warning;
+    }
+
+    private static void ScanField(string fieldName, string? value, Regex pattern, List<string> findings)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        // Strip HTML tags for cleaner scanning
+        var plainText = Regex.Replace(value, @"<[^>]+>", " ");
+
+        foreach (Match match in pattern.Matches(plainText))
+        {
+            findings.Add($"{fieldName}: found \"{match.Value}\" near \"...{GetSurrounding(plainText, match.Index, 30)}...\"");
+        }
+    }
+
+    private static string GetSurrounding(string text, int index, int radius)
+    {
+        var start = Math.Max(0, index - radius);
+        var end = Math.Min(text.Length, index + radius);
+        return text[start..end].Trim();
     }
 }
