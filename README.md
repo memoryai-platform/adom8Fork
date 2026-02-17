@@ -97,6 +97,7 @@ flowchart TD
 - **Single dispatcher** — Azure Storage Queues have no message filtering; one function dispatches via keyed DI
 - **Thin AI client** — `IAIClient.CompleteAsync()` only; agents own their prompt engineering
 - **Multi-provider** — Claude, OpenAI, or Azure OpenAI via configuration
+- **Hybrid coding** — Coding agent uses a Strategy pattern: built-in agentic tool-use loop (default) or GitHub Copilot's coding agent for complex stories, configurable via `Copilot:Enabled`
 
 ## Quick Start
 
@@ -162,6 +163,10 @@ See [SETUP.md](SETUP.md) for detailed instructions and [DEMO_GUIDE.md](DEMO_GUID
 | `Git__Token` | Git PAT | |
 | `Git__Email` | Git commit email | `ai-agents@example.com` |
 | `Git__Name` | Git commit name | `AI Agent Bot` |
+| `Copilot__Enabled` | Enable GitHub Copilot hybrid coding (off by default) | `false` |
+| `Copilot__Mode` | `Auto` (threshold-based) or `Always` (all coding to Copilot) | `Auto` |
+| `Copilot__ComplexityThreshold` | Story points ≥ this → delegate to Copilot (Mode=Auto only) | `8` |
+| `Copilot__WebhookSecret` | HMAC secret for Copilot PR webhook | |
 
 ## Project Structure
 

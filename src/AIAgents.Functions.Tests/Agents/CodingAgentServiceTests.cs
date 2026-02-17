@@ -1,3 +1,4 @@
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Agents;
@@ -5,13 +6,14 @@ using AIAgents.Functions.Models;
 using AIAgents.Functions.Tests.Helpers;
 using AIAgents.Functions.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AIAgents.Functions.Tests.Agents;
 
 /// <summary>
 /// Tests for CodingAgentService covering agentic tool-use loop,
-/// state transitions, prompt building, and error handling.
+/// state transitions, prompt building, strategy routing, and error handling.
 /// </summary>
 public sealed class CodingAgentServiceTests
 {
@@ -24,6 +26,10 @@ public sealed class CodingAgentServiceTests
     private readonly Mock<ICodebaseContextProvider> _codebaseMock = new();
     private readonly Mock<IAgentTaskQueue> _taskQueueMock = new();
     private readonly Mock<IActivityLogger> _activityLoggerMock = new();
+    private readonly Mock<ICopilotDelegationService> _delegationServiceMock = new();
+
+    private CopilotOptions _copilotOptions = new() { Enabled = false };
+    private readonly GitHubOptions _githubOptions = new() { Owner = "testowner", Repo = "testrepo", Token = "test-token" };
 
     private StoryState _capturedState = null!;
 
@@ -33,13 +39,17 @@ public sealed class CodingAgentServiceTests
         _contextFactoryMock.Setup(f => f.Create(It.IsAny<int>(), It.IsAny<string>())).Returns(_contextMock.Object);
     }
 
-    private CodingAgentService CreateService()
+    private CodingAgentService CreateService(CopilotOptions? copilotOverride = null)
     {
+        var opts = copilotOverride ?? _copilotOptions;
         return new CodingAgentService(
             _aiFactoryMock.Object, _adoMock.Object, _gitMock.Object,
             _contextFactoryMock.Object, _codebaseMock.Object,
             NullLogger<CodingAgentService>.Instance, _taskQueueMock.Object,
-            _activityLoggerMock.Object);
+            _activityLoggerMock.Object,
+            Options.Create(opts),
+            _delegationServiceMock.Object,
+            Options.Create(_githubOptions));
     }
 
     private void SetupHappyPath(AgenticResult? agenticResult = null)
@@ -353,5 +363,236 @@ public sealed class CodingAgentServiceTests
         var result = CodingAgentService.GetMaxRoundsForComplexity(state);
 
         Assert.Equal(15, result);
+    }
+
+    // ========== STRATEGY ROUTING TESTS ==========
+
+    [Fact]
+    public void ResolveStrategy_CopilotDisabled_ReturnsAgentic()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = false });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CopilotEnabled_HighComplexity_ReturnsCopilot()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, ComplexityThreshold = 5 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 8 story points",
+            Rationale = "Complex"
+        });
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CopilotEnabled_LowComplexity_ReturnsAgentic()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, ComplexityThreshold = 8 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 3 story points",
+            Rationale = "Simple"
+        });
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ForceAgentic_OverridesCopilot()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, ComplexityThreshold = 1 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 13 story points",
+            Rationale = "Very complex"
+        });
+        // Simulate timeout fallback setting the forceAgentic flag
+        state.Agents["Coding"] = AgentStatus.InProgress();
+        state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+        {
+            ["forceAgentic"] = true
+        };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CopilotEnabled_NoDecisions_ReturnsAgentic()
+    {
+        // 0 story points < any threshold → agentic
+        var service = CreateService(new CopilotOptions { Enabled = true, ComplexityThreshold = 8 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_CopilotEnabled_ExactThreshold_ReturnsCopilot()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, ComplexityThreshold = 5 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 5 story points",
+            Rationale = "Exact threshold"
+        });
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ModeAlways_ReturnsCopilot_RegardlessOfComplexity()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        // No planning decisions — 0 story points — would normally be agentic
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ModeAlways_CaseInsensitive()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<CopilotCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ModeAlways_ForceAgentic_StillOverrides()
+    {
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Agents["Coding"] = AgentStatus.InProgress();
+        state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+        {
+            ["forceAgentic"] = true
+        };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ModeAlways_Disabled_ReturnsAgentic()
+    {
+        // Enabled=false takes priority over Mode=Always
+        var service = CreateService(new CopilotOptions { Enabled = false, Mode = "Always" });
+        var state = new StoryState { CurrentState = "AI Code" };
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    [Fact]
+    public void ResolveStrategy_ModeAuto_DefaultBehavior()
+    {
+        // Explicit Mode=Auto should behave like the threshold-based routing
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Auto", ComplexityThreshold = 8 });
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 3 story points",
+            Rationale = "Simple"
+        });
+        var wi = MockAIResponses.SampleWorkItem();
+
+        var strategy = service.ResolveStrategy(state, wi);
+
+        Assert.IsType<AgenticCodingStrategy>(strategy);
+    }
+
+    // ========== GET STORY POINTS FROM DECISIONS TESTS ==========
+
+    [Fact]
+    public void GetStoryPointsFromDecisions_ParsesComplexityDecision()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 8 story points",
+            Rationale = "Based on scope"
+        });
+
+        Assert.Equal(8, CodingAgentService.GetStoryPointsFromDecisions(state));
+    }
+
+    [Fact]
+    public void GetStoryPointsFromDecisions_NoDecisions_ReturnsZero()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+
+        Assert.Equal(0, CodingAgentService.GetStoryPointsFromDecisions(state));
+    }
+
+    [Fact]
+    public void GetStoryPointsFromDecisions_NonPlanningAgent_ReturnsZero()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Review",
+            DecisionText = "Estimated complexity: 13 story points",
+            Rationale = "Wrong agent"
+        });
+
+        Assert.Equal(0, CodingAgentService.GetStoryPointsFromDecisions(state));
+    }
+
+    [Fact]
+    public void GetStoryPointsFromDecisions_SingleStoryPoint()
+    {
+        var state = new StoryState { CurrentState = "AI Code" };
+        state.Decisions.Add(new Decision
+        {
+            Agent = "Planning",
+            DecisionText = "Estimated complexity: 1 story point",
+            Rationale = "Trivial"
+        });
+
+        Assert.Equal(1, CodingAgentService.GetStoryPointsFromDecisions(state));
     }
 }

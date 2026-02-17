@@ -22,6 +22,7 @@ var host = new HostBuilder()
         services.Configure<GitHubOptions>(configuration.GetSection(GitHubOptions.SectionName));
         services.Configure<CodebaseDocumentationOptions>(configuration.GetSection(CodebaseDocumentationOptions.SectionName));
         services.Configure<InputValidationOptions>(configuration.GetSection(InputValidationOptions.SectionName));
+        services.Configure<CopilotOptions>(configuration.GetSection(CopilotOptions.SectionName));
 
         // Application Insights — register BEFORE HTTP resilience handlers
         services.AddApplicationInsightsTelemetryWorkerService();
@@ -74,6 +75,9 @@ var host = new HostBuilder()
 
         // Input validation — security, length limits, prompt injection detection
         services.AddSingleton<IInputValidator, InputValidator>();
+
+        // Copilot delegation tracking (Azure Table Storage)
+        services.AddSingleton<ICopilotDelegationService, TableStorageCopilotDelegationService>();
 
         // Agent services — keyed DI for dispatcher routing
         services.AddKeyedScoped<IAgentService, PlanningAgentService>("Planning");

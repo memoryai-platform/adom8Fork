@@ -1,19 +1,31 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIAgents.Functions.Agents;
 
 /// <summary>
-/// Coding agent: uses a multi-turn agentic tool-use loop to read, understand,
-/// and modify the codebase. The AI iteratively calls tools (read_file, write_file,
-/// edit_file, list_files, search_code) until the implementation is complete.
-/// Always transitions to Testing agent when done.
+/// Coding agent orchestrator: routes coding work to the appropriate strategy based on
+/// story complexity and configuration. Supports two strategies:
+/// <list type="bullet">
+///   <item><see cref="AgenticCodingStrategy"/> — built-in multi-turn agentic tool-use loop (default)</item>
+///   <item><see cref="CopilotCodingStrategy"/> — delegates to GitHub Copilot's coding agent</item>
+/// </list>
+/// 
+/// Strategy selection:
+/// 1. ADO field <c>Custom.AICodingProvider</c> forces a specific strategy ("agentic" or "copilot")
+/// 2. When "auto" (default), uses Copilot for stories ≥ <c>Copilot:ComplexityThreshold</c> story points
+/// 3. When Copilot is disabled in config, always uses the agentic strategy
+/// 
+/// For the agentic path, this class handles the full lifecycle (commit, ADO update, enqueue Testing).
+/// For the Copilot path, the pipeline pauses — <see cref="Functions.CopilotBridgeWebhook"/> handles resumption.
 /// </summary>
 public sealed class CodingAgentService : IAgentService
 {
@@ -25,6 +37,10 @@ public sealed class CodingAgentService : IAgentService
     private readonly ILogger<CodingAgentService> _logger;
     private readonly IAgentTaskQueue _taskQueue;
     private readonly IActivityLogger _activityLogger;
+    private readonly CopilotOptions _copilotOptions;
+    private readonly ICopilotDelegationService _delegationService;
+    private readonly IOptions<GitHubOptions> _githubOptions;
+    private readonly IOptions<CopilotOptions> _copilotOptionsAccessor;
 
     public CodingAgentService(
         IAIClientFactory aiClientFactory,
@@ -34,7 +50,10 @@ public sealed class CodingAgentService : IAgentService
         ICodebaseContextProvider codebaseContext,
         ILogger<CodingAgentService> logger,
         IAgentTaskQueue taskQueue,
-        IActivityLogger activityLogger)
+        IActivityLogger activityLogger,
+        IOptions<CopilotOptions> copilotOptions,
+        ICopilotDelegationService delegationService,
+        IOptions<GitHubOptions> githubOptions)
     {
         _aiClientFactory = aiClientFactory;
         _adoClient = adoClient;
@@ -44,16 +63,19 @@ public sealed class CodingAgentService : IAgentService
         _logger = logger;
         _taskQueue = taskQueue;
         _activityLogger = activityLogger;
+        _copilotOptions = copilotOptions.Value;
+        _copilotOptionsAccessor = copilotOptions;
+        _delegationService = delegationService;
+        _githubOptions = githubOptions;
     }
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Coding agent (agentic loop) starting for WI-{WorkItemId}", task.WorkItemId);
+            _logger.LogInformation("Coding agent starting for WI-{WorkItemId}", task.WorkItemId);
 
             var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
-            var aiClient = _aiClientFactory.GetClientForAgent("Coding", workItem.GetModelOverrides());
             var branchName = $"feature/US-{task.WorkItemId}";
             var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
@@ -77,68 +99,76 @@ public sealed class CodingAgentService : IAgentService
             var codebaseCtx = await _codebaseContext.LoadRelevantContextAsync(
                 repoPath, workItem.Title, workItem.Description, cancellationToken);
 
-            // Set up the tool executor
-            var toolExecutor = new CodingToolExecutor(_gitOps, repoPath, _logger);
+            // Build the coding context shared by all strategies
+            var codingContext = new CodingContext
+            {
+                WorkItemId = task.WorkItemId,
+                RepositoryPath = repoPath,
+                State = state,
+                WorkItem = workItem,
+                PlanMarkdown = plan,
+                CodingGuidelines = codebaseCtx,
+                ExistingFilesSummary = fileListSummary,
+                BranchName = branchName,
+                CorrelationId = task.CorrelationId
+            };
 
-            // Build prompts for the agentic loop
-            var systemPrompt = BuildSystemPrompt();
-            var userPrompt = BuildUserPrompt(workItem, plan, fileListSummary, codebaseCtx);
-
-            // Scale MaxRounds by complexity from the planning decision
-            var maxRounds = GetMaxRoundsForComplexity(state);
+            // Resolve the coding strategy
+            var strategy = ResolveStrategy(state, workItem);
+            var strategyName = strategy is CopilotCodingStrategy ? "Copilot" : "Agentic";
 
             await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                $"Starting agentic coding loop (maxRounds={maxRounds})", "info", cancellationToken);
+                $"Starting coding ({strategyName} strategy)", "info", cancellationToken);
 
-            // Run the agentic tool-use loop
-            var agenticResult = await aiClient.CompleteWithToolsAsync(
-                systemPrompt,
-                userPrompt,
-                CodingToolExecutor.GetToolDefinitions(),
-                toolExecutor.ExecuteAsync,
-                new AgenticOptions { MaxRounds = maxRounds, MaxTokens = 8192, Temperature = 0.2 },
-                cancellationToken);
+            // Execute the coding strategy
+            var result = await strategy.ExecuteAsync(codingContext, cancellationToken);
 
-            // Record token usage
-            if (agenticResult.TotalUsage is not null)
-                state.TokenUsage.RecordUsage("Coding", agenticResult.TotalUsage);
+            if (result.Mode == "copilot-delegated")
+            {
+                // ── Copilot path: pipeline pauses, bridge will resume ──
+                await context.SaveStateAsync(state, cancellationToken);
 
-            var filesModified = toolExecutor.ModifiedFiles.Count;
-            _logger.LogInformation(
-                "Agentic loop completed for WI-{WorkItemId}: {Rounds} rounds, {ToolCalls} tool calls, {Files} files modified, completed={Completed}",
-                task.WorkItemId, agenticResult.RoundsExecuted, agenticResult.ToolCalls.Count,
-                filesModified, agenticResult.CompletedNaturally);
+                // Commit state.json so it's visible on the branch
+                await _gitOps.CommitAndPushAsync(repoPath,
+                    $"[AI Coding] US-{workItem.Id}: Delegated to Copilot (Issue #{result.CopilotMetrics?.IssueNumber})",
+                    cancellationToken);
 
-            // Track modified files as code artifacts
-            foreach (var file in toolExecutor.ModifiedFiles)
-                state.Artifacts.Code.Add(file);
+                await _adoClient.AddWorkItemCommentAsync(workItem.Id,
+                    $"<b>🤖 AI Coding Agent — Delegated to GitHub Copilot</b><br/>" +
+                    $"Strategy: Copilot coding agent<br/>" +
+                    (result.CopilotMetrics?.IssueNumber > 0
+                        ? $"GitHub Issue: <a href=\"https://github.com/{_githubOptions.Value.Owner}/{_githubOptions.Value.Repo}/issues/{result.CopilotMetrics.IssueNumber}\">#{result.CopilotMetrics.IssueNumber}</a><br/>"
+                        : "") +
+                    $"Pipeline is paused — waiting for Copilot to create a PR.<br/>" +
+                    $"Timeout: {_copilotOptions.TimeoutMinutes}m (auto-fallback to agentic loop)",
+                    cancellationToken);
 
-            // Save state BEFORE committing so the artifacts and token usage
-            // are included in the committed state.json. Without this, downstream
-            // agents (Review, Documentation) see empty Artifacts.Code.
+                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Coding", cancellationToken); }
+                catch { /* field may not exist yet */ }
+
+                await _activityLogger.LogAsync("Coding", task.WorkItemId,
+                    $"Delegated to Copilot (Issue #{result.CopilotMetrics?.IssueNumber}). Pipeline paused.",
+                    "info", cancellationToken);
+
+                _logger.LogInformation(
+                    "Coding agent delegated WI-{WorkItemId} to Copilot. Pipeline paused until bridge webhook resumes.",
+                    task.WorkItemId);
+
+                return AgentResult.Ok(0, 0m);
+            }
+
+            // ── Agentic path: full lifecycle ──
+            // Save state with artifacts BEFORE committing
             await context.SaveStateAsync(state, cancellationToken);
+
+            var filesModified = result.ModifiedFiles.Count;
 
             if (filesModified == 0)
             {
                 _logger.LogWarning("Agentic loop produced no file changes for WI-{WorkItemId}", task.WorkItemId);
 
-                // Log diagnostic details to ADO so we can investigate
-                var diagToolCalls = agenticResult.ToolCalls.Count > 0
-                    ? string.Join("<br/>", agenticResult.ToolCalls.Select(t => $"Round {t.Round}: {t.ToolName}({t.Input})"))
-                    : "None";
-                var diagResponse = agenticResult.FinalResponse is not null
-                    ? (agenticResult.FinalResponse.Length > 500 ? agenticResult.FinalResponse[..500] + "..." : agenticResult.FinalResponse)
-                    : "(null)";
-
-                await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-                    $"<b>⚠️ Coding Agent Diagnostic — No Files Modified</b><br/>" +
-                    $"Rounds: {agenticResult.RoundsExecuted} | CompletedNaturally: {agenticResult.CompletedNaturally}<br/>" +
-                    $"<b>Tool calls:</b><br/>{diagToolCalls}<br/>" +
-                    $"<b>Final response:</b><br/>{System.Net.WebUtility.HtmlEncode(diagResponse)}",
-                    cancellationToken);
-
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                    $"Warning: agentic loop produced no file changes ({agenticResult.RoundsExecuted} rounds, {agenticResult.ToolCalls.Count} tool calls) — proceeding to testing anyway",
+                    $"Warning: agentic loop produced no file changes ({result.AgenticMetrics?.Rounds} rounds, {result.AgenticMetrics?.ToolCalls} tool calls) — proceeding to testing anyway",
                     "warning", cancellationToken);
             }
 
@@ -146,25 +176,18 @@ public sealed class CodingAgentService : IAgentService
             if (filesModified > 0)
             {
                 await _gitOps.CommitAndPushAsync(repoPath,
-                    $"[AI Coding] US-{workItem.Id}: Implemented via agentic loop ({filesModified} file(s), {agenticResult.RoundsExecuted} rounds)",
+                    $"[AI Coding] US-{workItem.Id}: Implemented via agentic loop ({filesModified} file(s), {result.AgenticMetrics?.Rounds} rounds)",
                     cancellationToken);
             }
 
             // Post summary to ADO
-            var toolSummary = agenticResult.ToolCalls.Count > 0
-                ? string.Join("<br/>", agenticResult.ToolCalls
-                    .GroupBy(t => t.ToolName)
-                    .Select(g => $"• {g.Key}: {g.Count()} call(s)"))
-                : "No tool calls";
-
             var fileSummary = filesModified > 0
-                ? string.Join("<br/>", toolExecutor.ModifiedFiles.Select(f => $"• {f}"))
+                ? string.Join("<br/>", result.ModifiedFiles.Select(f => $"• {f}"))
                 : "No files modified";
 
             await _adoClient.AddWorkItemCommentAsync(workItem.Id,
                 $"<b>🤖 AI Coding Agent Complete (Agentic Loop)</b><br/>" +
-                $"Rounds: {agenticResult.RoundsExecuted} | Tool calls: {agenticResult.ToolCalls.Count} | Files: {filesModified}<br/>" +
-                $"<b>Tool usage:</b><br/>{toolSummary}<br/>" +
+                $"Rounds: {result.AgenticMetrics?.Rounds} | Tool calls: {result.AgenticMetrics?.ToolCalls} | Files: {filesModified}<br/>" +
                 $"<b>Files modified:</b><br/>{fileSummary}",
                 cancellationToken);
 
@@ -173,10 +196,10 @@ public sealed class CodingAgentService : IAgentService
             state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
             {
                 ["mode"] = "agentic",
-                ["rounds"] = agenticResult.RoundsExecuted,
-                ["toolCalls"] = agenticResult.ToolCalls.Count,
+                ["rounds"] = result.AgenticMetrics?.Rounds ?? 0,
+                ["toolCalls"] = result.AgenticMetrics?.ToolCalls ?? 0,
                 ["filesModified"] = filesModified,
-                ["completedNaturally"] = agenticResult.CompletedNaturally
+                ["completedNaturally"] = result.AgenticMetrics?.CompletedNaturally ?? false
             };
             state.CurrentState = "AI Test";
             await context.SaveStateAsync(state, cancellationToken);
@@ -195,14 +218,12 @@ public sealed class CodingAgentService : IAgentService
             await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
 
             await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                $"Agentic loop complete: {filesModified} files modified in {agenticResult.RoundsExecuted} rounds, enqueued Testing",
+                $"Agentic loop complete: {filesModified} files modified in {result.AgenticMetrics?.Rounds} rounds, enqueued Testing",
                 "info", cancellationToken);
 
             _logger.LogInformation("Coding agent completed for WI-{WorkItemId}, enqueued Testing agent", task.WorkItemId);
 
-            var codingTokens = agenticResult.TotalUsage?.TotalTokens ?? 0;
-            var codingCost = agenticResult.TotalUsage?.EstimatedCost ?? 0m;
-            return AgentResult.Ok(codingTokens, codingCost);
+            return AgentResult.Ok(result.Tokens, result.Cost);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -220,6 +241,80 @@ public sealed class CodingAgentService : IAgentService
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Coding agent for WI-{task.WorkItemId}: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Resolves which coding strategy to use based on configuration, mode, complexity, and overrides.
+    /// Priority: force-agentic flag → Copilot disabled → Mode=Always → Mode=Auto (threshold) → agentic.
+    /// </summary>
+    internal ICodingStrategy ResolveStrategy(StoryState state, StoryWorkItem workItem)
+    {
+        // Check for force-agentic flag (set by timeout fallback)
+        if (state.Agents.TryGetValue("Coding", out var codingStatus) &&
+            codingStatus.AdditionalData?.TryGetValue("forceAgentic", out var force) == true &&
+            force is true or "true")
+        {
+            _logger.LogInformation("Force-agentic flag set for WI-{WorkItemId} (timeout fallback)", workItem.Id);
+            return CreateAgenticStrategy();
+        }
+
+        if (!_copilotOptions.Enabled)
+        {
+            return CreateAgenticStrategy();
+        }
+
+        // Mode = Always → every story goes to Copilot, no threshold check
+        if (string.Equals(_copilotOptions.Mode, "Always", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation(
+                "Routing WI-{WorkItemId} to Copilot strategy (Mode=Always)", workItem.Id);
+
+            return CreateCopilotStrategy();
+        }
+
+        // Mode = Auto (default) → route based on complexity threshold
+        var storyPoints = GetStoryPointsFromDecisions(state);
+
+        if (storyPoints >= _copilotOptions.ComplexityThreshold)
+        {
+            _logger.LogInformation(
+                "Routing WI-{WorkItemId} to Copilot strategy ({StoryPoints} SP ≥ {Threshold} threshold)",
+                workItem.Id, storyPoints, _copilotOptions.ComplexityThreshold);
+
+            return CreateCopilotStrategy();
+        }
+
+        _logger.LogInformation(
+            "Routing WI-{WorkItemId} to agentic strategy ({StoryPoints} SP < {Threshold} threshold)",
+            workItem.Id, storyPoints, _copilotOptions.ComplexityThreshold);
+
+        return CreateAgenticStrategy();
+    }
+
+    private AgenticCodingStrategy CreateAgenticStrategy() =>
+        new(_aiClientFactory, _gitOps, _codebaseContext, _logger);
+
+    private CopilotCodingStrategy CreateCopilotStrategy() =>
+        new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger);
+
+    /// <summary>
+    /// Extracts story points from the Planning agent's complexity decision.
+    /// Returns 0 if no complexity info is available.
+    /// </summary>
+    internal static int GetStoryPointsFromDecisions(StoryState state)
+    {
+        var planningDecision = state.Decisions
+            .FirstOrDefault(d => d.Agent == "Planning" &&
+                                 d.DecisionText.Contains("complexity", StringComparison.OrdinalIgnoreCase));
+
+        if (planningDecision is not null)
+        {
+            var match = Regex.Match(planningDecision.DecisionText, @"(\d+)\s*story\s*points?", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var points))
+                return points;
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -318,25 +413,17 @@ public sealed class CodingAgentService : IAgentService
     /// </summary>
     internal static int GetMaxRoundsForComplexity(StoryState state)
     {
-        // Look for the Planning agent's complexity decision
-        var planningDecision = state.Decisions
-            .FirstOrDefault(d => d.Agent == "Planning" &&
-                                 d.DecisionText.Contains("complexity", StringComparison.OrdinalIgnoreCase));
+        var points = GetStoryPointsFromDecisions(state);
 
-        if (planningDecision is not null)
+        if (points > 0)
         {
-            // Parse "Estimated complexity: N story points"
-            var match = Regex.Match(planningDecision.DecisionText, @"(\d+)\s*story\s*points?", RegexOptions.IgnoreCase);
-            if (match.Success && int.TryParse(match.Groups[1].Value, out var points))
+            return points switch
             {
-                return points switch
-                {
-                    <= 2 => 10,  // trivial: 10 rounds max (~$0.40-0.70)
-                    <= 5 => 15,  // moderate: 15 rounds (~$0.70-1.00)
-                    <= 8 => 20,  // complex: 20 rounds (~$1.00-1.50)
-                    _ => 25       // very complex: full 25 rounds
-                };
-            }
+                <= 2 => 10,  // trivial: 10 rounds max (~$0.40-0.70)
+                <= 5 => 15,  // moderate: 15 rounds (~$0.70-1.00)
+                <= 8 => 20,  // complex: 20 rounds (~$1.00-1.50)
+                _ => 25       // very complex: full 25 rounds
+            };
         }
 
         // Default: moderate rounds if no complexity info available

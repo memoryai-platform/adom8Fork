@@ -268,6 +268,9 @@
         body.dark-mode .agent-card.awaiting_code {
             background: #3a2a10;
         }
+        body.dark-mode .agent-card.copilot_delegated {
+            background: #2a1a3a;
+        }
         body.dark-mode .agent-name { color: #e0e0e0; }
         body.dark-mode .agent-details { color: #888; }
         body.dark-mode .progress-bar { background: #333; }
@@ -605,9 +608,20 @@
             animation: awaitingPulse 3s ease-in-out infinite;
         }
 
+        .agent-card.copilot_delegated {
+            border-left-color: #9c27b0;
+            background: #f3e5f5;
+            animation: copilotPulse 3s ease-in-out infinite;
+        }
+
         @keyframes awaitingPulse {
             0%, 100% { box-shadow: 0 0 10px rgba(255, 152, 0, 0.2); }
             50% { box-shadow: 0 0 25px rgba(255, 152, 0, 0.5); }
+        }
+
+        @keyframes copilotPulse {
+            0%, 100% { box-shadow: 0 0 10px rgba(156, 39, 176, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(156, 39, 176, 0.5); }
         }
 
         .resume-btn {
@@ -1276,7 +1290,12 @@
                     const tokInfo = story.tokenUsage?.agents?.[name];
                     const timing = story.agentTimings?.[name];
                     const card = document.createElement('div');
-                    card.className = `agent-card ${status}`;
+                    // Detect copilot-delegated mode from additionalData
+                    const agentData = story.agentDetails?.[name];
+                    const isCopilotDelegated = agentData?.additionalData?.mode === 'copilot-delegated';
+                    const isCopilotCompleted = agentData?.additionalData?.mode === 'copilot';
+                    const cardStatus = isCopilotDelegated ? 'copilot_delegated' : status;
+                    card.className = `agent-card ${cardStatus}`;
 
                     // Compute duration display
                     let durationStr = '—';
@@ -1291,21 +1310,42 @@
                         }
                     }
 
+                    // Copilot-specific metrics display
+                    let metricsHtml = '';
+                    if (isCopilotCompleted && agentData?.additionalData) {
+                        const ad = agentData.additionalData;
+                        metricsHtml = `
+                            <span>Files: ${ad.filesChanged || '—'}</span>
+                            <span>+${ad.linesAdded || 0}/-${ad.linesDeleted || 0} lines</span>
+                            <span>Duration: ${ad.durationMinutes ? ad.durationMinutes.toFixed(1) + 'm' : '—'}</span>
+                            <span>Mode: 🤖 Copilot</span>
+                        `;
+                    } else {
+                        metricsHtml = `
+                            <span>Tokens: ${tokInfo ? tokInfo.totalTokens.toLocaleString() : '—'}</span>
+                            <span>Cost: ${tokInfo ? '$' + tokInfo.estimatedCost.toFixed(2) : '—'}</span>
+                        `;
+                    }
+
                     card.innerHTML = `
                         <div class="agent-header">
-                            <span class="agent-emoji">${emoji}</span>
-                            <span class="agent-name">${name} Agent</span>
-                            <span class="status-badge ${status}">${formatStatusText(status)}</span>
+                            <span class="agent-emoji">${isCopilotDelegated || isCopilotCompleted ? '🤖' : emoji}</span>
+                            <span class="agent-name">${name} Agent${isCopilotDelegated ? ' (Copilot)' : isCopilotCompleted ? ' (Copilot ✓)' : ''}</span>
+                            <span class="status-badge ${cardStatus}">${isCopilotDelegated ? 'Waiting for Copilot...' : formatStatusText(status)}</span>
                         </div>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${status === 'completed' ? 100 : status === 'in_progress' ? 50 : status === 'awaiting_code' ? 35 : 0}%"></div>
+                            <div class="progress-fill" style="width: ${status === 'completed' ? 100 : status === 'in_progress' ? 50 : isCopilotDelegated ? 25 : status === 'awaiting_code' ? 35 : 0}%"></div>
                         </div>
                         <div class="agent-details">
                             <span>WI: US-${story.workItemId}</span>
                             <span>Duration: ${durationStr}</span>
-                            <span>Tokens: ${tokInfo ? tokInfo.totalTokens.toLocaleString() : '—'}</span>
-                            <span>Cost: ${tokInfo ? '$' + tokInfo.estimatedCost.toFixed(2) : '—'}</span>
+                            ${metricsHtml}
                         </div>
+                        ${isCopilotDelegated && agentData?.additionalData?.issueNumber ? `
+                            <div style="margin-top: 8px; font-size: 0.75rem; color: #9c27b0;">
+                                ⏳ Waiting for Copilot PR — <a href="#" style="color: #7b1fa2;">Issue #${agentData.additionalData.issueNumber}</a>
+                            </div>
+                        ` : ''}
                         ${status === 'awaiting_code' ? `
                             <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px;">
                                 <button class="resume-btn" onclick="resumePipeline(${story.workItemId}, this)">▶ Resume Pipeline</button>

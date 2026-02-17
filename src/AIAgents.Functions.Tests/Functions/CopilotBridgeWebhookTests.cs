@@ -1,0 +1,71 @@
+using AIAgents.Functions.Functions;
+
+namespace AIAgents.Functions.Tests.Functions;
+
+/// <summary>
+/// Tests for CopilotBridgeWebhook — static/internal methods that don't require
+/// full DI or HTTP infrastructure.
+/// </summary>
+public sealed class CopilotBridgeWebhookTests
+{
+    // ========== EXTRACT WORK ITEM ID TESTS ==========
+
+    [Fact]
+    public void ExtractWorkItemId_FromTitle_ReturnsId()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("[US-12345] Implement feature", "");
+        Assert.Equal(12345, result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_FromBody_ReturnsId()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("Some PR title", "This implements US-67890 from ADO");
+        Assert.Equal(67890, result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_TitleTakesPrecedence()
+    {
+        // Should match the first occurrence (in title)
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("[US-111] Feature", "Related to US-222");
+        Assert.Equal(111, result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_NoMatch_ReturnsNull()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("Fix typo in readme", "No work item reference here");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_EmptyInputs_ReturnsNull()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("", "");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_CaseInsensitive()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("us-42 feature", "");
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_LargeId()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId("[US-999999] Big project", "");
+        Assert.Equal(999999, result);
+    }
+
+    [Fact]
+    public void ExtractWorkItemId_IdInMiddleOfBody()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemId(
+            "Copilot implementation",
+            "This PR implements the changes for US-54321 as described in the plan.");
+        Assert.Equal(54321, result);
+    }
+}

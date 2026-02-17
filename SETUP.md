@@ -16,6 +16,7 @@
 5. [Deploy Azure Infrastructure (Terraform)](#5-deploy-azure-infrastructure-terraform)
    - [5d. VS Enterprise / MSDN Subscription Notes](#5d-visual-studio-enterprise--msdn-subscription-notes)
 6. [Configure the Azure Function App](#6-configure-the-azure-function-app)
+   - [6e. (Optional) GitHub Copilot Hybrid Integration](#6e-optional-github-copilot-hybrid-integration)
 7. [Deploy the Functions Code](#7-deploy-the-functions-code)
 8. [Deploy the Dashboard](#8-deploy-the-dashboard)
 9. [Configure the ADO Service Hook (Webhook)](#9-configure-the-ado-service-hook-webhook)
@@ -637,6 +638,85 @@ az functionapp config appsettings set \
 > **How it works:** When a user sets `AI Model Tier = "Premium"` on a story, every agent checks the `AI:ModelTiers:Premium:{agentName}` config. Agents not defined in the tier fall back to the config-level per-agent defaults, then to the global default. Per-agent fields on the story (e.g., `AI Coding Model = "codex-mini-latest"`) always take highest priority.
 
 > **Note:** For Level 5 autonomy, GitHub dispatches a `workflow_dispatch` event to the configured GitHub Actions workflow. Azure DevOps triggers an ADO pipeline by ID.
+
+### 6e. (Optional) GitHub Copilot Hybrid Integration
+
+The Coding agent supports a **hybrid strategy**: for complex stories it can delegate coding to [GitHub Copilot's coding agent](https://docs.github.com/en/copilot/using-github-copilot/using-the-copilot-coding-agent) instead of the built-in agentic tool-use loop. This is **disabled by default** — zero impact until you explicitly enable it.
+
+**How it works:**
+
+1. The Coding agent checks story complexity (story points from the Planning agent)
+2. Stories at or above the threshold → creates an ephemeral GitHub Issue, assigns it to `@copilot`
+3. Copilot's coding agent picks up the issue and creates a PR
+4. A webhook bridge (`/api/copilot-webhook`) catches the PR, reconciles changes onto the pipeline branch, and resumes the sequential pipeline (Testing → Review → Documentation → Deployment)
+5. If Copilot doesn't respond within the timeout, the system falls back to the built-in agentic loop
+
+**Prerequisites:**
+
+- GitHub Copilot Business or Enterprise plan with the Copilot coding agent enabled
+- Repository must have Copilot coding agent enabled in **Settings → Copilot → Coding agent**
+- GitHub PAT must have `repo` scope (already required for basic setup)
+
+**Step 1: Add Copilot configuration settings:**
+
+```bash
+az functionapp config appsettings set \
+  --name <YOUR_FUNCTION_APP_NAME> \
+  --resource-group ai-agents-rg \
+  --settings \
+    "Copilot__Enabled=true" \
+    "Copilot__Mode=Auto" \
+    "Copilot__ComplexityThreshold=8" \
+    "Copilot__CreateIssue=true" \
+    "Copilot__WebhookSecret=<YOUR_WEBHOOK_SECRET>" \
+    "Copilot__TimeoutMinutes=30" \
+    "Copilot__AutoCloseCopilotPr=true"
+```
+
+Generate a webhook secret with: `openssl rand -hex 32` (or `python -c "import secrets; print(secrets.token_hex(32))"` on Windows).
+
+> **💡 Copilot-only setup (no AI API key needed for coding):**
+> Set `Copilot__Mode=Always` to send **all** coding work to Copilot, regardless of story complexity.
+> This is ideal if you only have a GitHub Copilot subscription and no Claude/OpenAI API key.
+> The other agents (Planning, Testing, Review, etc.) still require an AI API key.
+
+**Configuration reference:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Copilot__Enabled` | `false` | Master switch — enables Copilot as an alternative coding strategy |
+| `Copilot__Mode` | `Auto` | `Auto` = threshold-based (complex stories only), `Always` = every story goes to Copilot |
+| `Copilot__ComplexityThreshold` | `8` | Story points ≥ this value → delegate to Copilot. Only used when Mode=Auto |
+| `Copilot__CreateIssue` | `true` | Auto-create GitHub Issue and assign to `@copilot`. Set `false` for manual trigger |
+| `Copilot__WebhookSecret` | *(empty)* | HMAC-SHA256 secret for validating GitHub webhook payloads. **Required for production** |
+| `Copilot__TimeoutMinutes` | `30` | Max wait time before falling back to the agentic loop |
+| `Copilot__AutoCloseCopilotPr` | `true` | Auto-close Copilot's PR after reconciling changes onto the pipeline branch |
+
+**Step 2: Register the GitHub webhook:**
+
+1. Go to your GitHub repo → **Settings → Webhooks → Add webhook**
+2. **Payload URL:** `https://<YOUR_FUNCTION_APP>.azurewebsites.net/api/copilot-webhook?code=<YOUR_FUNCTION_KEY>`
+3. **Content type:** `application/json`
+4. **Secret:** The same value you used for `Copilot__WebhookSecret`
+5. **Which events?** Select **Pull requests** only
+6. Click **Add webhook**
+
+> **Tip:** Get your function key from the Azure Portal: Function App → Functions → CopilotBridgeWebhook → Function Keys, or via `az functionapp function keys list --name <APP> --resource-group ai-agents-rg --function-name CopilotBridgeWebhook`.
+
+**Step 3: Verify the integration:**
+
+1. Create a user story in ADO with high story points (≥ your threshold)
+2. Move it to "Story Planning" to trigger the pipeline
+3. After the Planning agent completes, watch the Coding agent — it should:
+   - Create a GitHub Issue titled `[US-{id}] {story title}`
+   - Assign the issue to `@copilot`
+   - The dashboard shows a purple "Copilot" card with a pulsing animation
+4. When Copilot creates a PR, the webhook bridge reconciles changes and resumes the pipeline
+
+**Dashboard indicators:**
+
+- **Purple card with pulsing border** — Copilot delegation in progress, waiting for PR
+- **Purple "Mode: 🤖 Copilot" badge** — Coding completed via Copilot (shows files/lines/duration instead of tokens/cost)
 
 ---
 
