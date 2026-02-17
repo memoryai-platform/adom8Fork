@@ -153,13 +153,23 @@ public sealed class AgentTaskDispatcher
 
         if (result.Success)
         {
-            await _activityLogger.LogAsync(
-                agentKey,
-                agentTask.WorkItemId,
-                $"{agentKey} agent completed successfully",
-                result.TokensUsed,
-                result.CostIncurred,
-                cancellationToken: cancellationToken);
+            // When the Coding agent delegates to Copilot it returns Ok(0, 0m)
+            // and logs its own "Delegated to @..." message. Skip the generic
+            // "completed successfully" message so the activity feed isn't misleading.
+            var isCopilotDelegation = agentTask.AgentType == AgentType.Coding
+                                     && result.TokensUsed == 0
+                                     && result.CostIncurred == 0m;
+
+            if (!isCopilotDelegation)
+            {
+                await _activityLogger.LogAsync(
+                    agentKey,
+                    agentTask.WorkItemId,
+                    $"{agentKey} agent completed successfully",
+                    result.TokensUsed,
+                    result.CostIncurred,
+                    cancellationToken: cancellationToken);
+            }
 
             _telemetry.TrackEvent(TelemetryEvents.AgentCompleted, new Dictionary<string, string>
             {
