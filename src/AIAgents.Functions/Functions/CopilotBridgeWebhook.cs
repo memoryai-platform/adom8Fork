@@ -277,14 +277,12 @@ public sealed class CopilotBridgeWebhook
 
             var prNumber = pr.GetProperty("number").GetInt32();
             var prBranch = pr.GetProperty("head").GetProperty("ref").GetString() ?? "";
-            var prFiles = pr.GetProperty("changed_files").GetInt32();
 
-            if (prFiles > 0)
-            {
-                _logger.LogInformation("Found Copilot PR #{PrNumber} with {Files} files for WI-{WorkItemId}",
-                    prNumber, prFiles, delegation.WorkItemId);
-                return (prNumber, prBranch);
-            }
+            // changed_files is NOT returned by the PR list endpoint, so skip that check.
+            // We already matched by work item ID + creation time — that's sufficient.
+            _logger.LogInformation("Found Copilot PR #{PrNumber} on branch {Branch} for WI-{WorkItemId}",
+                prNumber, prBranch, delegation.WorkItemId);
+            return (prNumber, prBranch);
         }
 
         return null;
@@ -383,10 +381,11 @@ public sealed class CopilotBridgeWebhook
                 cancellationToken);
         }
 
-        // Close the GitHub Issue if one was created
+        // Close the GitHub Issue if one was created (safe if already closed)
         if (delegation.IssueNumber > 0)
         {
-            await CloseIssueAsync(delegation.IssueNumber, cancellationToken);
+            try { await CloseIssueAsync(delegation.IssueNumber, cancellationToken); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to close issue #{IssueNumber} — may already be closed", delegation.IssueNumber); }
         }
 
         // Update delegation record
