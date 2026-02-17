@@ -2409,19 +2409,31 @@
                 
                 this.stop();
                 this.fetchCallback = fetchCallback;
-                this.timeRemaining = this.interval / 1000;
                 
-                // Update countdown every second (only when not paused)
+                // Start the countdown cycle
+                this.startCountdownCycle();
+            }
+
+            startCountdownCycle() {
+                // Reset to full interval
+                this.timeRemaining = this.interval / 1000;
+                this.updateCountdownDisplay();
+                
+                // Clear any existing countdown
+                if (this.countdownId) {
+                    clearInterval(this.countdownId);
+                }
+                
+                // Update countdown every second
                 this.countdownId = setInterval(() => {
                     this.timeRemaining--;
                     this.updateCountdownDisplay();
                     
                     if (this.timeRemaining <= 0) {
+                        // Trigger refresh and restart cycle
                         this.refresh();
                     }
                 }, 1000);
-
-                this.updateCountdownDisplay();
             }
 
             stop() {
@@ -2438,9 +2450,6 @@
             async refresh() {
                 if (this.isRefreshing) return;
                 
-                this.timeRemaining = this.interval / 1000;
-                this.updateCountdownDisplay();
-                
                 if (this.fetchCallback) {
                     this.isRefreshing = true;
                     try {
@@ -2449,6 +2458,9 @@
                         this.isRefreshing = false;
                     }
                 }
+                
+                // Restart the countdown cycle after refresh
+                this.startCountdownCycle();
             }
 
             async manualRefresh() {
@@ -2462,9 +2474,10 @@
                     if (this.fetchCallback) {
                         await this.fetchCallback();
                     }
-                    // Reset countdown timer after manual refresh
-                    this.timeRemaining = this.interval / 1000;
-                    this.updateCountdownDisplay();
+                    // Restart countdown cycle after manual refresh (only if not paused)
+                    if (!this.isPaused) {
+                        this.startCountdownCycle();
+                    }
                 } finally {
                     this.isRefreshing = false;
                     btn.classList.remove('refreshing');
