@@ -1064,6 +1064,142 @@
             background: rgba(255,255,255,0.08);
         }
 
+        /* Refresh Controls */
+        .refresh-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 12px;
+            border-left: 1px solid #3a3a3a;
+            border-right: 1px solid #3a3a3a;
+        }
+
+        .refresh-interval-select {
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .refresh-interval-select:hover {
+            border-color: #888;
+            background: #333;
+        }
+
+        .refresh-interval-select:focus {
+            border-color: #0078d4;
+            background: #333;
+        }
+
+        .refresh-toggle {
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            line-height: 1;
+            transition: all 0.2s ease;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        .refresh-toggle:hover {
+            border-color: #888;
+            background: #333;
+        }
+
+        .refresh-toggle.paused {
+            background: #ff9800;
+            border-color: #f57c00;
+            color: #fff;
+        }
+
+        .refresh-toggle.paused:hover {
+            background: #fb8c00;
+        }
+
+        .refresh-countdown {
+            font-size: 0.75rem;
+            color: #999;
+            font-weight: 600;
+            min-width: 35px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .refresh-countdown.paused {
+            color: #ff9800;
+        }
+
+        .refresh-manual {
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-manual:hover {
+            border-color: #888;
+            background: #333;
+        }
+
+        .refresh-manual:active {
+            background: #0078d4;
+            border-color: #0078d4;
+            color: #fff;
+        }
+
+        .refresh-manual.refreshing {
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        body.dark-mode .refresh-interval-select,
+        body.dark-mode .refresh-toggle,
+        body.dark-mode .refresh-manual {
+            background: #2a2a2a;
+            border-color: #555;
+            color: #ccc;
+        }
+
+        body.dark-mode .refresh-interval-select:hover,
+        body.dark-mode .refresh-toggle:hover,
+        body.dark-mode .refresh-manual:hover {
+            border-color: #888;
+            background: #333;
+        }
+
+        body.dark-mode .refresh-countdown {
+            color: #999;
+        }
+
+        body.dark-mode .refresh-countdown.paused {
+            color: #ff9800;
+        }
+
+        body.dark-mode .refresh-toggle.paused {
+            background: #ff9800;
+            border-color: #f57c00;
+            color: #fff;
+        }
+
         /* Toast Notifications */
         .toast-container {
             position: fixed;
@@ -1576,6 +1712,20 @@
         </div>
 
         <span class="nav-spacer"></span>
+        
+        <!-- Refresh Controls -->
+        <div class="refresh-controls">
+            <select class="refresh-interval-select" id="refresh-interval" onchange="handleIntervalChange()" title="Auto-refresh interval">
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+                <option value="30000">30s</option>
+                <option value="60000">60s</option>
+            </select>
+            <button class="refresh-toggle" id="refresh-toggle" onclick="handleRefreshToggle()" title="Pause/Resume auto-refresh">⏸️</button>
+            <span class="refresh-countdown" id="refresh-countdown">0s</span>
+            <button class="refresh-manual" id="refresh-manual" onclick="handleManualRefresh()" title="Manual refresh">🔄</button>
+        </div>
+        
         <button class="reset-btn" id="reset-btn" onclick="handleReset()" title="Clear all activity data and reset dashboard">
             🔄 <span id="reset-btn-text">RESET</span>
         </button>
@@ -2223,6 +2373,213 @@
             }
         }
 
+        // ========== Refresh Manager ==========
+        class RefreshManager {
+            constructor() {
+                this.interval = this.loadInterval();
+                this.isPaused = this.loadPausedState();
+                this.timeRemaining = this.interval / 1000; // in seconds
+                this.intervalId = null;
+                this.countdownId = null;
+                this.isRefreshing = false;
+            }
+
+            loadInterval() {
+                const stored = localStorage.getItem('refreshInterval');
+                return stored ? parseInt(stored, 10) : 10000; // default 10s
+            }
+
+            loadPausedState() {
+                const stored = localStorage.getItem('refreshPaused');
+                return stored === 'true';
+            }
+
+            saveInterval(interval) {
+                this.interval = interval;
+                localStorage.setItem('refreshInterval', interval.toString());
+            }
+
+            savePausedState(paused) {
+                this.isPaused = paused;
+                localStorage.setItem('refreshPaused', paused.toString());
+            }
+
+            start(fetchCallback) {
+                if (this.isPaused) return;
+                
+                this.stop();
+                this.fetchCallback = fetchCallback;
+                
+                // Start the countdown cycle
+                this.startCountdownCycle();
+            }
+
+            startCountdownCycle() {
+                // Reset to full interval
+                this.timeRemaining = this.interval / 1000;
+                this.updateCountdownDisplay();
+                
+                // Clear any existing countdown
+                if (this.countdownId) {
+                    clearInterval(this.countdownId);
+                }
+                
+                // Update countdown every second
+                this.countdownId = setInterval(() => {
+                    this.timeRemaining--;
+                    this.updateCountdownDisplay();
+                    
+                    if (this.timeRemaining <= 0) {
+                        // Trigger refresh and restart cycle
+                        this.refresh();
+                    }
+                }, 1000);
+            }
+
+            stop() {
+                if (this.intervalId) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+                if (this.countdownId) {
+                    clearInterval(this.countdownId);
+                    this.countdownId = null;
+                }
+            }
+
+            async refresh() {
+                if (this.isRefreshing || this.isPaused) return;
+                
+                if (this.fetchCallback) {
+                    this.isRefreshing = true;
+                    try {
+                        await this.fetchCallback();
+                    } finally {
+                        this.isRefreshing = false;
+                    }
+                }
+                
+                // Restart the countdown cycle after refresh
+                this.startCountdownCycle();
+            }
+
+            async manualRefresh() {
+                if (this.isRefreshing) return;
+                
+                this.isRefreshing = true;
+                const btn = document.getElementById('refresh-manual');
+                btn.classList.add('refreshing');
+                
+                try {
+                    if (this.fetchCallback) {
+                        await this.fetchCallback();
+                    }
+                    // Restart countdown cycle after manual refresh (only if not paused)
+                    if (!this.isPaused) {
+                        this.startCountdownCycle();
+                    }
+                } finally {
+                    this.isRefreshing = false;
+                    btn.classList.remove('refreshing');
+                }
+            }
+
+            pause() {
+                this.isPaused = true;
+                this.savePausedState(true);
+                // Stop the countdown timer when paused
+                if (this.countdownId) {
+                    clearInterval(this.countdownId);
+                    this.countdownId = null;
+                }
+                this.updateUI();
+            }
+
+            resume() {
+                this.isPaused = false;
+                this.savePausedState(false);
+                this.timeRemaining = this.interval / 1000;
+                // Restart the countdown when resumed
+                this.start(this.fetchCallback);
+                this.updateUI();
+            }
+
+            setInterval(newInterval) {
+                this.saveInterval(newInterval);
+                this.timeRemaining = newInterval / 1000;
+                this.start(this.fetchCallback);
+                this.updateUI();
+            }
+
+            updateCountdownDisplay() {
+                const countdownEl = document.getElementById('refresh-countdown');
+                if (countdownEl) {
+                    if (this.isPaused) {
+                        countdownEl.textContent = '⏸️';
+                        countdownEl.classList.add('paused');
+                    } else {
+                        countdownEl.textContent = this.timeRemaining + 's';
+                        countdownEl.classList.remove('paused');
+                    }
+                }
+            }
+
+            updateUI() {
+                const toggleBtn = document.getElementById('refresh-toggle');
+                const countdownEl = document.getElementById('refresh-countdown');
+                
+                if (toggleBtn) {
+                    if (this.isPaused) {
+                        toggleBtn.textContent = '▶️';
+                        toggleBtn.classList.add('paused');
+                        toggleBtn.title = 'Resume auto-refresh';
+                    } else {
+                        toggleBtn.textContent = '⏸️';
+                        toggleBtn.classList.remove('paused');
+                        toggleBtn.title = 'Pause auto-refresh';
+                    }
+                }
+
+                if (countdownEl) {
+                    if (this.isPaused) {
+                        countdownEl.classList.add('paused');
+                    } else {
+                        countdownEl.classList.remove('paused');
+                    }
+                }
+
+                this.updateCountdownDisplay();
+            }
+        }
+
+        // Global refresh manager instance
+        let refreshManager;
+
+        // Event handlers for refresh controls
+        function handleIntervalChange() {
+            const select = document.getElementById('refresh-interval');
+            const newInterval = parseInt(select.value, 10);
+            if (refreshManager) {
+                refreshManager.setInterval(newInterval);
+            }
+        }
+
+        function handleRefreshToggle() {
+            if (!refreshManager) return;
+            
+            if (refreshManager.isPaused) {
+                refreshManager.resume();
+            } else {
+                refreshManager.pause();
+            }
+        }
+
+        function handleManualRefresh() {
+            if (refreshManager) {
+                refreshManager.manualRefresh();
+            }
+        }
+
         // ========== Configuration ==========
         const API_URL = 'https://ai-agents-func-todd.azurewebsites.net/api/status';
         const EMERGENCY_STOP_URL = 'https://ai-agents-func-todd.azurewebsites.net/api/emergency-stop';
@@ -2821,15 +3178,25 @@
             // Initialize notification manager
             notificationManager = new NotificationManager();
 
+            // Initialize refresh manager
+            refreshManager = new RefreshManager();
+            
+            // Set initial UI state
+            const intervalSelect = document.getElementById('refresh-interval');
+            if (intervalSelect) {
+                intervalSelect.value = refreshManager.interval.toString();
+            }
+            refreshManager.updateUI();
+
             // Render default empty state
             updateAgents(DEFAULT_AGENTS);
             updateActivity([
                 { emoji: '⏳', message: 'Waiting for agent activity...', time: 'now' }
             ]);
 
-            // Start polling
+            // Start polling with refresh manager
             fetchStatus();
-            setInterval(fetchStatus, POLL_INTERVAL);
+            refreshManager.start(fetchStatus);
 
             // Fetch system health
             fetchHealth();

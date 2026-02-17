@@ -1,291 +1,219 @@
-Based on the provided context and implementation, here's a comprehensive test plan for the notification system:
-
-```json
 {
   "testCases": [
     {
-      "name": "SettingsManager_LoadDefaultSettings",
+      "name": "RefreshManager_InitialState",
       "type": "Unit",
       "priority": "High",
-      "description": "Verify default notification settings are loaded correctly",
-      "expectedResult": "Default settings match predefined values"
+      "description": "Verify RefreshManager initializes with correct default settings from localStorage",
+      "expectedResult": "Interval set to 10000ms, not paused, countdown initialized"
     },
     {
-      "name": "SettingsManager_SaveAndRetrieveSettings",
+      "name": "RefreshManager_IntervalChange",
       "type": "Unit", 
       "priority": "High",
-      "description": "Ensure settings can be saved and retrieved from localStorage",
-      "expectedResult": "Saved settings match retrieved settings"
+      "description": "Verify changing refresh interval updates localStorage and resets countdown",
+      "expectedResult": "New interval saved, countdown restarted with new duration"
     },
     {
-      "name": "SoundManager_PlaySound_Completed",
-      "type": "Unit",
-      "priority": "Medium", 
-      "description": "Verify sound generation for completed agent state",
-      "expectedResult": "Sound plays with correct frequency and volume"
-    },
-    {
-      "name": "SoundManager_PlaySound_Failed",
-      "type": "Unit", 
-      "priority": "Medium",
-      "description": "Verify sound generation for failed agent state",
-      "expectedResult": "Warning tone plays with correct characteristics"
-    },
-    {
-      "name": "BrowserNotificationManager_RequestPermission",
-      "type": "Unit",
-      "priority": "High",
-      "description": "Test browser notification permission request flow",
-      "expectedResult": "Permission status correctly tracked and handled"
-    },
-    {
-      "name": "ToastManager_ShowNotification",
+      "name": "RefreshManager_PauseResume",
       "type": "Unit",
       "priority": "High", 
-      "description": "Verify toast notification creation and auto-dismiss",
-      "expectedResult": "Toast appears with correct content and disappears after 5s"
+      "description": "Verify pause and resume functionality works correctly",
+      "expectedResult": "Pausing stops countdown, resuming restarts countdown"
     },
     {
-      "name": "NotificationHistory_AddAndTrackNotifications",
+      "name": "RefreshManager_ManualRefresh",
       "type": "Unit",
       "priority": "High",
-      "description": "Test adding notifications to history and tracking unread count",
-      "expectedResult": "History limited to 50 items, unread count updated correctly"
+      "description": "Verify manual refresh triggers immediate fetch and resets countdown",
+      "expectedResult": "Fetch callback called, countdown restarted"
     },
     {
-      "name": "NotificationManager_DetectAgentStateChanges",
+      "name": "NotificationManager_DetectChanges",
+      "type": "Unit",
+      "priority": "High", 
+      "description": "Verify notification detection for agent state changes",
+      "expectedResult": "Correct notifications triggered for state transitions"
+    },
+    {
+      "name": "NotificationManager_SoundSettings",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify sound notifications respect user settings",
+      "expectedResult": "Sounds play/mute based on user preferences"
+    },
+    {
+      "name": "BrowserNotification_Permissions",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify browser notification permission handling",
+      "expectedResult": "Notifications only shown when permission granted"
+    },
+    {
+      "name": "LocalStorage_SettingsPersistence",
       "type": "Integration",
-      "priority": "High", 
-      "description": "Verify notification system detects and responds to agent state changes",
-      "expectedResult": "Appropriate notifications triggered for each state transition"
-    },
-    {
-      "name": "NotificationSystem_DarkModeCompatibility",
-      "type": "Unit",
-      "priority": "Medium",
-      "description": "Ensure notification UI components work correctly in dark mode",
-      "expectedResult": "All notification elements styled correctly in dark mode"
-    },
-    {
-      "name": "SettingsModal_ToggleAndPersist",
-      "type": "Unit",
       "priority": "High",
-      "description": "Test settings modal toggles and persistence across page reloads",
-      "expectedResult": "Settings saved and restored correctly"
+      "description": "Verify settings persist across page reloads",
+      "expectedResult": "Settings restored from localStorage on page load"
+    },
+    {
+      "name": "DarkMode_Toggling",
+      "type": "Unit",
+      "priority": "Low",
+      "description": "Verify dark mode toggle functionality",
+      "expectedResult": "Body class and localStorage updated correctly"
+    },
+    {
+      "name": "Dashboard_InitialLoad",
+      "type": "Integration", 
+      "priority": "High",
+      "description": "Verify dashboard loads and renders initial state correctly",
+      "expectedResult": "Default agents rendered, empty activity feed shown"
     }
   ],
   "testFiles": [
     {
-      "relativePath": "tests/NotificationSystem.Tests/SettingsManagerTests.cs",
-      "content": `using Xunit;
-using System.Text.Json;
-
-public class SettingsManagerTests 
-{
-    [Fact]
-    public void LoadDefaultSettings_ShouldHaveCorrectDefaults()
-    {
-        var settingsManager = new SettingsManager();
-        
-        Assert.True(settingsManager.Get("toastEnabled"));
-        Assert.False(settingsManager.Get("browserEnabled"));
-        Assert.True(settingsManager.Get("soundEnabled"));
-        Assert.Equal(50, settingsManager.Get("volume"));
-    }
-
-    [Fact]
-    public void SaveAndRetrieveSettings_ShouldPersistCorrectly()
-    {
-        var settingsManager = new SettingsManager();
-        
-        settingsManager.SaveSettings(new {
-            toastEnabled = false,
-            browserEnabled = true,
-            soundEnabled = false,
-            volume = 75
-        });
-
-        var retrievedSettings = settingsManager.LoadSettings();
-        
-        Assert.False(retrievedSettings.toastEnabled);
-        Assert.True(retrievedSettings.browserEnabled);
-        Assert.False(retrievedSettings.soundEnabled);
-        Assert.Equal(75, retrievedSettings.volume);
-    }
-}`,
-      "isNew": true
-    },
-    {
-      "relativePath": "tests/NotificationSystem.Tests/SoundManagerTests.cs", 
-      "content": `using Xunit;
+      "relativePath": "tests/RefreshManagerTests.cs",
+      "content": `using System;
+using Xunit;
 using Moq;
 
-public class SoundManagerTests
+public class RefreshManagerTests
 {
-    [Fact]
-    public void PlaySound_Completed_ShouldGenerateCorrectFrequencies()
+    private RefreshManager CreateSut()
     {
-        var settingsMock = new Mock<SettingsManager>();
-        settingsMock.Setup(s => s.Get("soundEnabled")).Returns(true);
-        settingsMock.Setup(s => s.Get("volume")).Returns(50);
-
-        var soundManager = new SoundManager(settingsMock.Object);
-        soundManager.userInteracted = true;
-        soundManager.audioContext = new AudioContext();
-
-        // Verify sound generation logic
-        // This would require more complex mocking of Web Audio API
-        Assert.True(true); // Placeholder
+        // Clear localStorage before each test
+        localStorage.clear();
+        return new RefreshManager();
     }
 
     [Fact]
-    public void PlaySound_Failed_ShouldGenerateWarningTone()
+    public void InitialState_LoadsDefaultInterval()
     {
-        var settingsMock = new Mock<SettingsManager>();
-        settingsMock.Setup(s => s.Get("soundEnabled")).Returns(true);
-        settingsMock.Setup(s => s.Get("volume")).Returns(50);
+        var sut = CreateSut();
+        
+        Assert.Equal(10000, sut.interval);
+        Assert.False(sut.isPaused);
+        Assert.Equal(10, sut.timeRemaining);
+    }
 
-        var soundManager = new SoundManager(settingsMock.Object);
-        soundManager.userInteracted = true;
-        soundManager.audioContext = new AudioContext();
+    [Fact]
+    public void SetInterval_UpdatesLocalStorageAndRestartsCountdown()
+    {
+        var mockFetchCallback = new Mock<Func<Task>>();
+        var sut = CreateSut();
+        
+        sut.start(mockFetchCallback.Object);
+        sut.setInterval(30000);
 
-        // Verify warning tone generation
-        Assert.True(true); // Placeholder
+        Assert.Equal(30000, sut.interval);
+        Assert.Equal(30, sut.timeRemaining);
+        mockFetchCallback.Verify(f => f(), Times.Once);
+    }
+
+    [Fact]
+    public void Pause_StopsCountdown()
+    {
+        var sut = CreateSut();
+        sut.pause();
+
+        Assert.True(sut.isPaused);
+        Assert.Equal("⏸️", sut.updateCountdownDisplay());
+    }
+
+    [Fact]
+    public void Resume_RestartsCountdown()
+    {
+        var sut = CreateSut();
+        sut.pause();
+        sut.resume();
+
+        Assert.False(sut.isPaused);
+        Assert.Equal(10, sut.timeRemaining);
     }
 }`,
       "isNew": true
     },
     {
-      "relativePath": "tests/NotificationSystem.Tests/NotificationHistoryTests.cs",
-      "content": `using Xunit;
-
-public class NotificationHistoryTests
-{
-    [Fact]
-    public void AddNotification_ShouldLimitTo50Items()
-    {
-        var history = new NotificationHistory();
-        
-        // Add 60 notifications
-        for (int i = 0; i < 60; i++)
-        {
-            history.Add(new {
-                emoji = "🚀",
-                title = $"Test Notification {i}",
-                message = $"Details for notification {i}",
-                type = "started"
-            });
-        }
-
-        Assert.Equal(50, history.notifications.Count);
-        Assert.Equal("Test Notification 59", history.notifications[0].title);
-    }
-
-    [Fact]
-    public void GetUnreadCount_ShouldTrackUnreadNotifications()
-    {
-        var history = new NotificationHistory();
-        
-        history.Add(new {
-            emoji = "✅",
-            title = "Completed",
-            message = "Task completed",
-            type = "completed"
-        });
-
-        history.Add(new {
-            emoji = "❌",
-            title = "Failed",
-            message = "Task failed",
-            type = "failed"
-        });
-
-        Assert.Equal(2, history.GetUnreadCount());
-
-        history.markAllRead();
-
-        Assert.Equal(0, history.GetUnreadCount());
-    }
-}`,
-      "isNew": true
-    },
-    {
-      "relativePath": "tests/NotificationSystem.Tests/NotificationManagerTests.cs",
-      "content": `using Xunit;
+      "relativePath": "tests/NotificationManagerTests.cs", 
+      "content": `using System;
+using Xunit;
 using Moq;
 
 public class NotificationManagerTests
 {
-    [Fact]
-    public void DetectChanges_ShouldTriggerNotificationsOnStateChange()
+    private NotificationManager CreateSut()
     {
-        var settingsManager = new Mock<SettingsManager>().Object;
-        var soundManager = new Mock<SoundManager>().Object;
-        var browserNotificationManager = new Mock<BrowserNotificationManager>().Object;
-        var toastManager = new Mock<ToastManager>().Object;
-        var history = new Mock<NotificationHistory>().Object;
+        return new NotificationManager();
+    }
 
-        var notificationManager = new NotificationManager(
-            settingsManager, 
-            soundManager, 
-            browserNotificationManager, 
-            toastManager, 
-            history
+    [Fact]
+    public void DetectChanges_TriggersNotificationsForStateTransitions()
+    {
+        var sut = CreateSut();
+        var mockToastManager = new Mock<ToastManager>();
+        var mockSoundManager = new Mock<SoundManager>();
+
+        var initialData = new {
+            stories = new[] {
+                new { 
+                    workItemId = 123, 
+                    agents = new Dictionary<string, string> {
+                        { "Planning", "pending" },
+                        { "Coding", "pending" }
+                    }
+                }
+            }
+        };
+
+        var updatedData = new {
+            stories = new[] {
+                new { 
+                    workItemId = 123, 
+                    agents = new Dictionary<string, string> {
+                        { "Planning", "completed" },
+                        { "Coding", "active" }
+                    }
+                }
+            }
+        };
+
+        sut.detectChanges(initialData);
+        sut.detectChanges(updatedData);
+
+        mockToastManager.Verify(
+            t => t.show(
+                It.Is<string>(s => s == "completed"),
+                It.Is<string>(s => s.Contains("Planning")),
+                It.IsAny<string>()
+            ), 
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public void SoundSettings_RespectUserPreferences()
+    {
+        var mockSettingsManager = new Mock<SettingsManager>();
+        mockSettingsManager
+            .Setup(s => s.get("soundEnabled"))
+            .Returns(false);
+
+        var mockSoundManager = new Mock<SoundManager>();
+        var sut = new NotificationManager(
+            mockSettingsManager.Object, 
+            mockSoundManager.Object
         );
 
-        var previousData = new {
-            stories = new[] {
-                new { 
-                    workItemId = 123, 
-                    agents = new { 
-                        Planning = "pending", 
-                        Coding = "pending" 
-                    } 
-                }
-            }
-        };
+        sut.notify("Planning", 123, "completed");
 
-        var currentData = new {
-            stories = new[] {
-                new { 
-                    workItemId = 123, 
-                    agents = new { 
-                        Planning = "completed", 
-                        Coding = "active" 
-                    } 
-                }
-            }
-        };
-
-        // This would mock and verify notification triggers
-        notificationManager.DetectChanges(currentData);
-
-        // Add assertions to verify correct notifications were triggered
-        Assert.True(true); // Placeholder
+        mockSoundManager.Verify(
+            s => s.playSound(It.IsAny<string>()),
+            Times.Never
+        );
     }
 }`,
       "isNew": true
     }
   ]
 }
-```
-
-Key testing strategies:
-1. Unit tests for individual components (SettingsManager, SoundManager, etc.)
-2. Integration tests for notification detection and triggering
-3. Verify default settings and persistence
-4. Test notification history management
-5. Validate sound generation and browser notification flows
-
-Notes on implementation:
-- Uses xUnit for test framework
-- Moq for mocking dependencies
-- Focuses on behavior and state management
-- Placeholder assertions where Web Audio API mocking is complex
-- Covers core notification system functionality
-
-Recommendations for actual implementation:
-1. Use dependency injection for easier testing
-2. Consider abstracting Web Audio API for better testability
-3. Add more granular assertions in actual test implementations
-4. Mock localStorage for settings persistence tests
