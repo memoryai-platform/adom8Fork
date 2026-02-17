@@ -1836,63 +1836,11 @@
             overflow: hidden;
         }
 
-        /* Gradient Progress Bar Colors */
-        .story-progress-fill[data-progress="0"] { background: linear-gradient(90deg, #f44336, #e57373); width: 0%; }
-        .story-progress-fill[data-progress="1"], .story-progress-fill[data-progress="2"],
-        .story-progress-fill[data-progress="3"], .story-progress-fill[data-progress="4"],
-        .story-progress-fill[data-progress="5"], .story-progress-fill[data-progress="6"],
-        .story-progress-fill[data-progress="7"], .story-progress-fill[data-progress="8"],
-        .story-progress-fill[data-progress="9"], .story-progress-fill[data-progress="10"],
-        .story-progress-fill[data-progress="11"], .story-progress-fill[data-progress="12"],
-        .story-progress-fill[data-progress="13"], .story-progress-fill[data-progress="14"],
-        .story-progress-fill[data-progress="15"], .story-progress-fill[data-progress="16"],
-        .story-progress-fill[data-progress="17"], .story-progress-fill[data-progress="18"],
-        .story-progress-fill[data-progress="19"], .story-progress-fill[data-progress="20"],
-        .story-progress-fill[data-progress="21"], .story-progress-fill[data-progress="22"],
-        .story-progress-fill[data-progress="23"], .story-progress-fill[data-progress="24"],
-        .story-progress-fill[data-progress="25"] { background: linear-gradient(90deg, #f44336, #e57373); }
-        
-        .story-progress-fill[data-progress="26"], .story-progress-fill[data-progress="27"],
-        .story-progress-fill[data-progress="28"], .story-progress-fill[data-progress="29"],
-        .story-progress-fill[data-progress="30"], .story-progress-fill[data-progress="31"],
-        .story-progress-fill[data-progress="32"], .story-progress-fill[data-progress="33"],
-        .story-progress-fill[data-progress="34"], .story-progress-fill[data-progress="35"],
-        .story-progress-fill[data-progress="36"], .story-progress-fill[data-progress="37"],
-        .story-progress-fill[data-progress="38"], .story-progress-fill[data-progress="39"],
-        .story-progress-fill[data-progress="40"], .story-progress-fill[data-progress="41"],
-        .story-progress-fill[data-progress="42"], .story-progress-fill[data-progress="43"],
-        .story-progress-fill[data-progress="44"], .story-progress-fill[data-progress="45"],
-        .story-progress-fill[data-progress="46"], .story-progress-fill[data-progress="47"],
-        .story-progress-fill[data-progress="48"], .story-progress-fill[data-progress="49"],
-        .story-progress-fill[data-progress="50"] { background: linear-gradient(90deg, #ff9800, #ffb74d); }
-
-        .story-progress-fill[data-progress="51"], .story-progress-fill[data-progress="52"],
-        .story-progress-fill[data-progress="53"], .story-progress-fill[data-progress="54"],
-        .story-progress-fill[data-progress="55"], .story-progress-fill[data-progress="56"],
-        .story-progress-fill[data-progress="57"], .story-progress-fill[data-progress="58"],
-        .story-progress-fill[data-progress="59"], .story-progress-fill[data-progress="60"],
-        .story-progress-fill[data-progress="61"], .story-progress-fill[data-progress="62"],
-        .story-progress-fill[data-progress="63"], .story-progress-fill[data-progress="64"],
-        .story-progress-fill[data-progress="65"], .story-progress-fill[data-progress="66"],
-        .story-progress-fill[data-progress="67"], .story-progress-fill[data-progress="68"],
-        .story-progress-fill[data-progress="69"], .story-progress-fill[data-progress="70"],
-        .story-progress-fill[data-progress="71"], .story-progress-fill[data-progress="72"],
-        .story-progress-fill[data-progress="73"], .story-progress-fill[data-progress="74"],
-        .story-progress-fill[data-progress="75"] { background: linear-gradient(90deg, #2196f3, #64b5f6); }
-
-        .story-progress-fill[data-progress="76"], .story-progress-fill[data-progress="77"],
-        .story-progress-fill[data-progress="78"], .story-progress-fill[data-progress="79"],
-        .story-progress-fill[data-progress="80"], .story-progress-fill[data-progress="81"],
-        .story-progress-fill[data-progress="82"], .story-progress-fill[data-progress="83"],
-        .story-progress-fill[data-progress="84"], .story-progress-fill[data-progress="85"],
-        .story-progress-fill[data-progress="86"], .story-progress-fill[data-progress="87"],
-        .story-progress-fill[data-progress="88"], .story-progress-fill[data-progress="89"],
-        .story-progress-fill[data-progress="90"], .story-progress-fill[data-progress="91"],
-        .story-progress-fill[data-progress="92"], .story-progress-fill[data-progress="93"],
-        .story-progress-fill[data-progress="94"], .story-progress-fill[data-progress="95"],
-        .story-progress-fill[data-progress="96"], .story-progress-fill[data-progress="97"],
-        .story-progress-fill[data-progress="98"], .story-progress-fill[data-progress="99"],
-        .story-progress-fill[data-progress="100"] { background: linear-gradient(90deg, #4caf50, #81c784); }
+        /* Gradient Progress Bar Colors - dynamically set via JS */
+        .story-progress-fill.progress-red { background: linear-gradient(90deg, #f44336, #e57373); }
+        .story-progress-fill.progress-orange { background: linear-gradient(90deg, #ff9800, #ffb74d); }
+        .story-progress-fill.progress-blue { background: linear-gradient(90deg, #2196f3, #64b5f6); }
+        .story-progress-fill.progress-green { background: linear-gradient(90deg, #4caf50, #81c784); }
 
         /* Shimmer animation for in-progress bars */
         .story-progress-fill.in-progress::after {
@@ -3464,6 +3412,12 @@
         let currentSearchText = '';
         let currentStatusFilter = 'all';
 
+        /**
+         * Updates the story agents display with new story data.
+         * This function stores stories globally and triggers a filtered render.
+         * Called by updateDashboard() when story data is received from the API.
+         * @param {Array} stories - Array of story objects with agent status, timings, and token usage
+         */
         function updateStoryAgents(stories) {
             allStories = stories;
             renderFilteredStories();
@@ -3563,7 +3517,7 @@
                 </div>
                 <div class="story-header-progress">
                     <div class="story-progress-bar-wrapper">
-                        <div class="story-progress-fill ${storyStatus === 'in-progress' ? 'in-progress' : ''}" 
+                        <div class="story-progress-fill ${getProgressColorClass(progress)} ${storyStatus === 'in-progress' ? 'in-progress' : ''}" 
                              data-progress="${progress}" 
                              style="width: ${progress}%"></div>
                     </div>
@@ -3724,6 +3678,13 @@
             return Math.round((completed / agentNames.length) * 100);
         }
 
+        function getProgressColorClass(progress) {
+            if (progress <= 25) return 'progress-red';
+            if (progress <= 50) return 'progress-orange';
+            if (progress <= 75) return 'progress-blue';
+            return 'progress-green';
+        }
+
         function formatStoryStatusText(status) {
             const map = {
                 'completed': 'Completed',
@@ -3767,23 +3728,35 @@
             renderFilteredStories();
         }
 
-        // Restore filter state on load
+        /**
+         * Restores filter state from localStorage on page load.
+         * Checks for element existence before attempting to restore state.
+         * Should be called after DOM is fully loaded and initial data is fetched.
+         */
         function restoreFilterState() {
+            const searchInput = document.getElementById('story-search');
+            if (!searchInput) {
+                // DOM not ready yet, will be restored on next data update
+                return;
+            }
+            
             const savedSearch = localStorage.getItem('story-search-text');
             const savedStatus = localStorage.getItem('story-status-filter');
             
             if (savedSearch) {
                 currentSearchText = savedSearch;
-                document.getElementById('story-search').value = savedSearch;
+                searchInput.value = savedSearch;
             }
             
-            if (savedStatus) {
+            if (savedStatus && document.querySelector(`.filter-chip[data-filter="${savedStatus}"]`)) {
                 handleStatusFilter(savedStatus);
             }
         }
 
-        // Call restore on page load
-        window.addEventListener('DOMContentLoaded', restoreFilterState);
+        // Call restore after a short delay to ensure DOM is ready
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(restoreFilterState, 100);
+        });
 
         function updateAgents(agents) {
             const container = document.getElementById('agents-container');
