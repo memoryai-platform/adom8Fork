@@ -92,14 +92,25 @@ public sealed class AgentTaskDispatcherTests
     }
 
     [Fact]
-    public async Task Run_Level2_TestingRuns()
+    public async Task Run_Level2_CodingRuns()
+    {
+        var dispatcher = CreateDispatcher(autonomyLevel: 2);
+        var msg = Serialize(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Coding });
+
+        await dispatcher.Run(msg, CancellationToken.None);
+
+        _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Run_Level2_TestingSkipped()
     {
         var dispatcher = CreateDispatcher(autonomyLevel: 2);
         var msg = Serialize(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Testing });
 
         await dispatcher.Run(msg, CancellationToken.None);
 
-        _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Once);
+        _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

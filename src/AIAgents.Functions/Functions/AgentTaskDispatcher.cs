@@ -283,7 +283,7 @@ public sealed class AgentTaskDispatcher
     /// <summary>
     /// Determines if the given agent should be skipped based on the autonomy level.
     /// Level 1 (Plan Only): only Planning runs.
-    /// Level 2 (Code Only): Planning, Coding, Testing run.
+    /// Level 2 (Code Only): Planning + Coding run. Testing/Review/Docs/Deploy skipped.
     /// Levels 3-5: all agents run (Deployment agent handles the rest).
     /// CodebaseDocumentation always runs (it's triggered outside the normal pipeline).
     /// </summary>
@@ -293,7 +293,7 @@ public sealed class AgentTaskDispatcher
         _ => autonomyLevel switch
         {
             1 => agentType > AgentType.Planning,
-            2 => agentType > AgentType.Testing,
+            2 => agentType > AgentType.Coding,
             _ => false
         }
     };
