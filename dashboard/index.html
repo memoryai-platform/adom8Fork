@@ -624,6 +624,77 @@
             50% { box-shadow: 0 0 25px rgba(156, 39, 176, 0.5); }
         }
 
+        /* GitHub agent working indicator */
+        .github-working {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #f3e5f5 0%, #e8daef 100%);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #6a1b9a;
+        }
+        body.dark-mode .github-working {
+            background: linear-gradient(135deg, #2a1a3a 0%, #331a44 100%);
+            color: #ce93d8;
+        }
+        .github-spinner {
+            width: 20px;
+            height: 20px;
+            animation: spin 2s linear infinite;
+        }
+        .github-working-text {
+            font-weight: 600;
+        }
+        .github-working-dots::after {
+            content: '';
+            animation: dotPulse 1.5s steps(4, end) infinite;
+        }
+        @keyframes dotPulse {
+            0%   { content: ''; }
+            25%  { content: '.'; }
+            50%  { content: '..'; }
+            75%  { content: '...'; }
+            100% { content: ''; }
+        }
+        .copilot-progress-bar .progress-fill {
+            background: linear-gradient(90deg, #9c27b0, #ce93d8, #9c27b0);
+            background-size: 200% 100%;
+            animation: copilotProgressShimmer 2s linear infinite;
+            width: 100% !important;
+        }
+        @keyframes copilotProgressShimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .github-issue-link {
+            color: #7b1fa2;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        .github-issue-link:hover {
+            color: #4a148c;
+            text-decoration: underline;
+        }
+        body.dark-mode .github-issue-link {
+            color: #ce93d8;
+        }
+        body.dark-mode .github-issue-link:hover {
+            color: #f3e5f5;
+        }
+        .copilot-elapsed {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #9c27b0;
+            font-weight: 600;
+        }
+        body.dark-mode .copilot-elapsed {
+            color: #ce93d8;
+        }
+
         .resume-btn {
             background: #ff9800;
             color: white;
@@ -1327,23 +1398,43 @@
                         `;
                     }
 
+                    // Compute copilot elapsed time
+                    let copilotElapsed = '';
+                    if (isCopilotDelegated && agentData?.additionalData?.delegatedAt) {
+                        const delegatedMs = new Date(agentData.additionalData.delegatedAt).getTime();
+                        const elapsedSec = Math.floor((Date.now() - delegatedMs) / 1000);
+                        copilotElapsed = formatDuration(elapsedSec);
+                    }
+
+                    // Determine agent display name
+                    const agentAssignee = agentData?.additionalData?.agent || 'copilot';
+                    const agentDisplayName = agentAssignee.charAt(0).toUpperCase() + agentAssignee.slice(1);
+
+                    // Build GitHub issue link
+                    const issueNum = agentData?.additionalData?.issueNumber;
+                    const githubIssueUrl = issueNum ? `https://github.com/toddpick/ADO-Agent/issues/${issueNum}` : null;
+
                     card.innerHTML = `
                         <div class="agent-header">
                             <span class="agent-emoji">${isCopilotDelegated || isCopilotCompleted ? '🤖' : emoji}</span>
-                            <span class="agent-name">${name} Agent${isCopilotDelegated ? ' (Copilot)' : isCopilotCompleted ? ' (Copilot ✓)' : ''}</span>
-                            <span class="status-badge ${cardStatus}">${isCopilotDelegated ? 'Waiting for Copilot...' : formatStatusText(status)}</span>
+                            <span class="agent-name">${name} Agent${isCopilotDelegated ? ` (${agentDisplayName})` : isCopilotCompleted ? ` (${agentDisplayName} ✓)` : ''}</span>
+                            <span class="status-badge ${cardStatus}">${isCopilotDelegated ? `${agentDisplayName} Working` : formatStatusText(status)}</span>
                         </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${status === 'completed' ? 100 : status === 'in_progress' ? 50 : isCopilotDelegated ? 25 : status === 'awaiting_code' ? 35 : 0}%"></div>
+                        <div class="progress-bar${isCopilotDelegated ? ' copilot-progress-bar' : ''}">
+                            <div class="progress-fill" style="width: ${status === 'completed' ? 100 : status === 'in_progress' ? 50 : status === 'awaiting_code' ? 35 : 0}%"></div>
                         </div>
                         <div class="agent-details">
                             <span>WI: US-${story.workItemId}</span>
-                            <span>Duration: ${durationStr}</span>
+                            <span>Duration: ${isCopilotDelegated ? `<span class="copilot-elapsed" data-delegated="${agentData?.additionalData?.delegatedAt || ''}">${copilotElapsed} ⏱️</span>` : durationStr}</span>
                             ${metricsHtml}
                         </div>
-                        ${isCopilotDelegated && agentData?.additionalData?.issueNumber ? `
-                            <div style="margin-top: 8px; font-size: 0.75rem; color: #9c27b0;">
-                                ⏳ Waiting for Copilot PR — <a href="#" style="color: #7b1fa2;">Issue #${agentData.additionalData.issueNumber}</a>
+                        ${isCopilotDelegated ? `
+                            <div class="github-working">
+                                <svg class="github-spinner" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                                </svg>
+                                <span class="github-working-text">GitHub ${agentDisplayName} Agent Working<span class="github-working-dots"></span></span>
+                                ${githubIssueUrl ? `<a href="${githubIssueUrl}" target="_blank" class="github-issue-link">View Issue #${issueNum} ↗</a>` : ''}
                             </div>
                         ` : ''}
                         ${status === 'awaiting_code' ? `
@@ -1704,6 +1795,16 @@
             // Poll queue depth for abort button badge
             pollQueueDepth();
             setInterval(pollQueueDepth, 5000);
+
+            // Tick copilot elapsed timers every second
+            setInterval(() => {
+                document.querySelectorAll('.copilot-elapsed[data-delegated]').forEach(el => {
+                    const delegatedAt = el.getAttribute('data-delegated');
+                    if (!delegatedAt) return;
+                    const elapsedSec = Math.floor((Date.now() - new Date(delegatedAt).getTime()) / 1000);
+                    el.textContent = formatDuration(elapsedSec) + ' ⏱️';
+                });
+            }, 1000);
         }
 
         document.addEventListener('DOMContentLoaded', init);
