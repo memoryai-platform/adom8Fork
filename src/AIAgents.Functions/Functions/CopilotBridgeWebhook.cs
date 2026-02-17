@@ -416,10 +416,12 @@ public sealed class CopilotBridgeWebhook
         };
         await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
 
-        var tokensForLog = 0;
-        var costForLog = 0m;
+        // Log 1 token as a marker for "1 premium credit" — Copilot agent sessions
+        // cost 1 GitHub premium request regardless of output size.
+        var tokensForLog = 1;
+        var costForLog = 0m; // No direct API cost — included in GitHub subscription
         await _activityLogger.LogAsync("Coding", workItemId,
-            $"Copilot coding complete — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m. Pipeline resumed.",
+            $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. (1 premium credit)",
             tokensForLog, costForLog, "info", cancellationToken);
 
         _logger.LogInformation(

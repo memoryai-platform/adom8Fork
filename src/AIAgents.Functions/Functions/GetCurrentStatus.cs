@@ -200,6 +200,8 @@ public sealed class GetCurrentStatus
                     {
                         agents[agent] = "completed";
                         if (currentAgent == agent) currentAgent = null;
+                        // Clear copilot-delegated details on completion so spinner stops
+                        agentDetails.Remove(agent);
                     }
                     var startedAt = agentStartTimes.TryGetValue(agent, out var st) ? st : (DateTime?)null;
                     var duration = startedAt.HasValue ? (activity.Timestamp - startedAt.Value).TotalSeconds : (double?)null;
