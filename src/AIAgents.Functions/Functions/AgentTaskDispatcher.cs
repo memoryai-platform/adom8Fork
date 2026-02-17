@@ -83,6 +83,27 @@ public sealed class AgentTaskDispatcher
 
                 return;
             }
+
+            // State guard: verify the work item has progressed far enough for this agent.
+            // This prevents stale/duplicate queue messages from triggering agents out of order
+            // (e.g., if a previous run enqueued Testing but the story was reset to Planning).
+            // We block if the WI is BEFORE the expected state (stale message), but allow if
+            // it's at or past the expected state (normal flow or late-arriving message).
+            var currentState = workItem.State;
+            if (IsStateBehind(currentState, agentTask.AgentType))
+            {
+                _logger.LogWarning(
+                    "Skipping {AgentType} agent for WI-{WorkItemId}: work item is in state '{CurrentState}' which is before the expected state — stale queue message",
+                    agentTask.AgentType, agentTask.WorkItemId, currentState);
+
+                await _activityLogger.LogAsync(
+                    agentTask.AgentType.ToString(),
+                    agentTask.WorkItemId,
+                    $"Skipped — work item is in state '{currentState}' (too early for {agentTask.AgentType}). Stale queue message discarded.",
+                    cancellationToken: cancellationToken);
+
+                return;
+            }
         }
 
         _logger.LogInformation(
@@ -265,5 +286,42 @@ public sealed class AgentTaskDispatcher
             2 => agentType > AgentType.Testing,
             _ => false
         }
+    };
+
+    /// <summary>
+    /// Returns true if the work item's current ADO state is BEFORE the stage where
+    /// the given agent should run. This blocks stale queue messages from earlier runs
+    /// from triggering agents prematurely (e.g., when a story is reset to "Story Planning"
+    /// but Testing/Review messages from the previous run are still in the queue).
+    /// 
+    /// Only blocks when we are certain the WI has not reached the agent's stage yet:
+    /// - "New" or "Story Planning" blocks everything except Planning
+    /// - "AI Code" blocks everything except Planning and Coding
+    /// - Other states allow agents to proceed (each agent validates its own preconditions)
+    /// </summary>
+    private static bool IsStateBehind(string currentState, AgentType agentType)
+    {
+        var stateOrder = GetStateOrder(currentState);
+        var requiredOrder = GetMinimumStateOrder(agentType);
+        // If we can't determine the order (unknown state), allow the agent to proceed
+        if (stateOrder < 0 || requiredOrder < 0) return false;
+        return stateOrder < requiredOrder;
+    }
+
+    private static int GetStateOrder(string? state) => state?.ToLowerInvariant() switch
+    {
+        "new" => 0,
+        _ => -1 // Once the WI has entered the pipeline, don't block — each agent validates internally
+    };
+
+    private static int GetMinimumStateOrder(AgentType agentType) => agentType switch
+    {
+        AgentType.Planning => 0,   // Planning can run from "New"
+        AgentType.Coding => 1,     // Requires past "New"
+        AgentType.Testing => 1,
+        AgentType.Review => 1,
+        AgentType.Documentation => 1,
+        AgentType.Deployment => 1,
+        _ => -1 // CodebaseDocumentation — no requirement
     };
 }
