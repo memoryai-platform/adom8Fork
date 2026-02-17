@@ -2386,7 +2386,7 @@
 
             loadInterval() {
                 const stored = localStorage.getItem('refreshInterval');
-                return stored ? parseInt(stored) : 10000; // default 10s
+                return stored ? parseInt(stored, 10) : 10000; // default 10s
             }
 
             loadPausedState() {
@@ -2411,15 +2411,13 @@
                 this.fetchCallback = fetchCallback;
                 this.timeRemaining = this.interval / 1000;
                 
-                // Update countdown every second
+                // Update countdown every second (only when not paused)
                 this.countdownId = setInterval(() => {
-                    if (!this.isPaused) {
-                        this.timeRemaining--;
-                        this.updateCountdownDisplay();
-                        
-                        if (this.timeRemaining <= 0) {
-                            this.refresh();
-                        }
+                    this.timeRemaining--;
+                    this.updateCountdownDisplay();
+                    
+                    if (this.timeRemaining <= 0) {
+                        this.refresh();
                     }
                 }, 1000);
 
@@ -2438,11 +2436,18 @@
             }
 
             async refresh() {
+                if (this.isRefreshing) return;
+                
                 this.timeRemaining = this.interval / 1000;
                 this.updateCountdownDisplay();
                 
-                if (this.fetchCallback && !this.isRefreshing) {
-                    await this.fetchCallback();
+                if (this.fetchCallback) {
+                    this.isRefreshing = true;
+                    try {
+                        await this.fetchCallback();
+                    } finally {
+                        this.isRefreshing = false;
+                    }
                 }
             }
 
@@ -2469,6 +2474,11 @@
             pause() {
                 this.isPaused = true;
                 this.savePausedState(true);
+                // Stop the countdown timer when paused
+                if (this.countdownId) {
+                    clearInterval(this.countdownId);
+                    this.countdownId = null;
+                }
                 this.updateUI();
             }
 
@@ -2476,6 +2486,8 @@
                 this.isPaused = false;
                 this.savePausedState(false);
                 this.timeRemaining = this.interval / 1000;
+                // Restart the countdown when resumed
+                this.start(this.fetchCallback);
                 this.updateUI();
             }
 
@@ -2533,7 +2545,7 @@
         // Event handlers for refresh controls
         function handleIntervalChange() {
             const select = document.getElementById('refresh-interval');
-            const newInterval = parseInt(select.value);
+            const newInterval = parseInt(select.value, 10);
             if (refreshManager) {
                 refreshManager.setInterval(newInterval);
             }
