@@ -46,7 +46,7 @@ public sealed class CopilotCodingStrategyTests
         var body = CopilotCodingStrategy.BuildIssueBody(context);
 
         Assert.Contains("feature/US-12345", body);
-        Assert.Contains("do NOT create a new branch", body);
+        Assert.Contains("Create your working branch from this base", body);
     }
 
     [Fact]

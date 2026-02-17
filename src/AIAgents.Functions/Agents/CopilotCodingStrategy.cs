@@ -70,8 +70,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         {
             issueNumber = await CreateGitHubIssueAsync(context, cancellationToken);
 
-            // Assign to the configured agent (@copilot, @claude, or @codex)
-            await AssignIssueToAgentAsync(issueNumber, cancellationToken);
+            // Assign to Copilot coding agent via the proper GitHub API
+            await AssignIssueToAgentAsync(issueNumber, context.BranchName, cancellationToken);
 
             _logger.LogInformation(
                 "Created GitHub Issue #{IssueNumber} and assigned to @{Agent} for WI-{WorkItemId}",
@@ -163,12 +163,32 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     }
 
     /// <summary>
-    /// Assigns the issue to the configured GitHub agent (@copilot, @claude, or @codex),
-    /// which triggers that agent to start coding.
+    /// Assigns the issue to the Copilot coding agent via the GitHub REST API.
+    /// Uses <c>copilot-swe-agent[bot]</c> as the assignee and includes an
+    /// <c>agent_assignment</c> payload to configure the base branch, custom agent,
+    /// and additional instructions.
     /// </summary>
-    private async Task AssignIssueToAgentAsync(int issueNumber, CancellationToken cancellationToken)
+    private async Task AssignIssueToAgentAsync(int issueNumber, string baseBranch, CancellationToken cancellationToken)
     {
-        var requestBody = new { assignees = new[] { _agentAssignee } };
+        // Map our agent name to the custom_agent field.
+        // "copilot" (default) = no custom agent; "claude"/"codex" = partner agents.
+        var customAgent = string.Equals(_agentAssignee, "copilot", StringComparison.OrdinalIgnoreCase)
+            ? ""
+            : _agentAssignee;
+
+        var requestBody = new Dictionary<string, object>
+        {
+            ["assignees"] = new[] { "copilot-swe-agent[bot]" },
+            ["agent_assignment"] = new Dictionary<string, string>
+            {
+                ["target_repo"] = $"{_githubOptions.Owner}/{_githubOptions.Repo}",
+                ["base_branch"] = baseBranch,
+                ["custom_instructions"] = "",
+                ["custom_agent"] = customAgent,
+                ["model"] = ""
+            }
+        };
+
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -180,9 +200,15 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         {
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning(
-                "Failed to assign Issue #{IssueNumber} to @{Agent} ({StatusCode}): {Body}. " +
+                "Failed to assign Issue #{IssueNumber} to copilot-swe-agent[bot] (agent={Agent}, status={StatusCode}): {Body}. " +
                 "Issue was created but may need manual agent assignment.",
                 issueNumber, _agentAssignee, response.StatusCode, responseBody);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Successfully assigned Issue #{IssueNumber} to copilot-swe-agent[bot] (agent={Agent}, base={BaseBranch})",
+                issueNumber, _agentAssignee, baseBranch);
         }
     }
 
@@ -197,8 +223,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
 
         sb.AppendLine("## Instructions");
         sb.AppendLine();
-        sb.AppendLine($"Implement the following story on branch `{context.BranchName}`.");
-        sb.AppendLine("The branch already exists — do NOT create a new branch.");
+        sb.AppendLine($"Implement the changes for this story. The base branch is `{context.BranchName}`.");
+        sb.AppendLine("Create your working branch from this base and target your PR back to it.");
         sb.AppendLine();
         sb.AppendLine($"> **ADO Work Item:** US-{context.WorkItemId}");
         sb.AppendLine($"> **Title:** {context.WorkItem.Title}");
@@ -239,7 +265,6 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
 
         sb.AppendLine("## Important Notes");
         sb.AppendLine();
-        sb.AppendLine("- Work on the existing branch — do NOT create a new branch");
         sb.AppendLine("- Follow the implementation plan above");
         sb.AppendLine("- Match existing code style and conventions");
         sb.AppendLine("- Do NOT modify test files, CI/CD workflows, or infrastructure (Terraform)");
