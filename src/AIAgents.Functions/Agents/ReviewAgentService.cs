@@ -62,6 +62,9 @@ public sealed class ReviewAgentService : IAgentService
         state.Agents["Review"] = AgentStatus.InProgress();
         await context.SaveStateAsync(state, cancellationToken);
 
+        // Update ADO state so the board reflects the current agent
+        await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Review", cancellationToken);
+
         // Review ONLY coding artifacts — do NOT include test files or non-code artifacts.
         // This keeps the review focused and avoids sending excessive content to the AI.
         var allPaths = state.Artifacts.Code.ToList();

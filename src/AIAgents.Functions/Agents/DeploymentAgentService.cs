@@ -64,6 +64,9 @@ public sealed class DeploymentAgentService : IAgentService
         state.Agents["Deployment"] = AgentStatus.InProgress();
         await context.SaveStateAsync(state, cancellationToken);
 
+        // Update ADO state so the board reflects the current agent
+        await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Deployment", cancellationToken);
+
         var autonomyLevel = workItem.AutonomyLevel;
         var minimumScore = workItem.MinimumReviewScore;
 

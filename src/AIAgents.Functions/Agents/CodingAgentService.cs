@@ -87,6 +87,9 @@ public sealed class CodingAgentService : IAgentService
             state.Agents["Coding"] = AgentStatus.InProgress();
             await context.SaveStateAsync(state, cancellationToken);
 
+            // Update ADO state so the board reflects the current agent
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Code", cancellationToken);
+
             // Read the plan
             var plan = await context.ReadArtifactAsync("PLAN.md", cancellationToken)
                 ?? "No plan found. Generate code based on the story description.";

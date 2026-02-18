@@ -65,6 +65,9 @@ public sealed class DocumentationAgentService : IAgentService
         state.Agents["Documentation"] = AgentStatus.InProgress();
         await context.SaveStateAsync(state, cancellationToken);
 
+        // Update ADO state so the board reflects the current agent
+        await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "AI Docs", cancellationToken);
+
         // Gather all artifacts
         var plan = await context.ReadArtifactAsync("PLAN.md", cancellationToken) ?? "";
         var review = await context.ReadArtifactAsync("CODE_REVIEW.md", cancellationToken) ?? "";
