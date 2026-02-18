@@ -1,8 +1,8 @@
 {
   "workItemId": 95,
-  "currentState": "AI Code",
+  "currentState": "AI Review",
   "createdAt": "2026-02-18T05:10:11.6577562Z",
-  "updatedAt": "2026-02-18T05:10:37.9416113Z",
+  "updatedAt": "2026-02-18T05:22:45.8858382Z",
   "agents": {
     "Planning": {
       "status": "in_progress",
@@ -11,19 +11,36 @@
       "additionalData": null
     },
     "Coding": {
-      "status": "in_progress",
-      "startedAt": "2026-02-18T05:10:37.9412182Z",
-      "completedAt": null,
+      "status": "completed",
+      "startedAt": null,
+      "completedAt": "2026-02-18T05:22:45.8856969Z",
       "additionalData": {
-        "mode": "copilot-delegated",
+        "mode": "copilot",
+        "copilotPrNumber": 74,
         "issueNumber": 73,
-        "delegatedAt": "2026-02-18T05:10:37.9412235Z",
-        "agent": "copilot"
+        "filesChanged": 4,
+        "linesAdded": 99,
+        "linesDeleted": 6,
+        "durationMinutes": 12.095801828333334,
+        "commitCount": 3
+      }
+    },
+    "Testing": {
+      "status": "skipped",
+      "startedAt": null,
+      "completedAt": "2026-02-18T05:22:45.8858329Z",
+      "additionalData": {
+        "reason": "Copilot coding agent already runs tests"
       }
     }
   },
   "artifacts": {
-    "code": [],
+    "code": [
+      "src/AIAgents.Core/Models/PlanningResult.cs",
+      "src/AIAgents.Functions.Tests/Agents/PlanningAgentServiceTests.cs",
+      "src/AIAgents.Functions.Tests/Helpers/MockAIResponses.cs",
+      "src/AIAgents.Functions/Agents/PlanningAgentService.cs"
+    ],
     "tests": [],
     "docs": []
   },
@@ -35,6 +52,15 @@
     "totalTokens": 0,
     "totalCost": 0,
     "complexity": "XS",
-    "agents": {}
+    "agents": {
+      "Coding": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "estimatedCost": 0,
+        "model": "copilot-coding-agent",
+        "callCount": 1
+      }
+    }
   }
 }
