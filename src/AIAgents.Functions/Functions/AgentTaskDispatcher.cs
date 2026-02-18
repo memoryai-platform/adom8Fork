@@ -160,7 +160,29 @@ public sealed class AgentTaskDispatcher
                                      && result.TokensUsed == 0
                                      && result.CostIncurred == 0m;
 
-            if (!isCopilotDelegation)
+            var isPlanningNeedsRevision = false;
+            if (agentTask.AgentType == AgentType.Planning)
+            {
+                try
+                {
+                    var planningWorkItem = await _adoClient.GetWorkItemAsync(agentTask.WorkItemId, cancellationToken);
+                    if (string.Equals(planningWorkItem.State, "Needs Revision", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isPlanningNeedsRevision = true;
+                        await _activityLogger.LogAsync(
+                            agentKey,
+                            agentTask.WorkItemId,
+                            "Planning triage rejected story — moved to Needs Revision. More information required.",
+                            cancellationToken: cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to evaluate Needs Revision status for WI-{WorkItemId}", agentTask.WorkItemId);
+                }
+            }
+
+            if (!isCopilotDelegation && !isPlanningNeedsRevision)
             {
                 await _activityLogger.LogAsync(
                     agentKey,

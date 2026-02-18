@@ -1,4 +1,4 @@
-# Setup Guide — AI Development Agents for Azure DevOps
+# Setup Guide — ADOm8 for Azure DevOps
 
 > **End-to-end walkthrough:** from a blank Azure subscription + ADO org to a fully working AI agent pipeline.
 > Estimated time: **45–60 minutes** for first-time setup.
@@ -413,8 +413,8 @@ These fields are written automatically by the agents during processing. They sho
 ## 4. Clone the Repository
 
 ```bash
-git clone https://github.com/toddpick/ADO-Agent.git
-cd ADO-Agent
+git clone https://github.com/toddpick/adom8.git
+cd adom8
 ```
 
 ---

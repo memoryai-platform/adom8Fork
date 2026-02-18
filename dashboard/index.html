@@ -638,13 +638,17 @@
         .codebase-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
             font-size: 0.74rem;
             font-weight: 600;
-            padding: 5px 12px;
+            padding: 4px 8px 4px 12px;
             border-radius: 20px;
             cursor: default;
             max-width: 360px;
+            min-height: 30px;
+        }
+
+        #codebase-badge-label {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -660,39 +664,38 @@
             color: #ff9800;
             background: rgba(255, 152, 0, 0.1);
             border: 1px solid rgba(255, 152, 0, 0.3);
-            cursor: pointer;
-        }
-
-        .codebase-badge.not-initialized:hover {
-            background: rgba(255, 152, 0, 0.2);
         }
 
         .codebase-scan-btn {
-            background: #fff;
-            color: #333;
-            border: 1px solid #d0d7de;
+            background: rgba(255, 255, 255, 0.75);
+            color: inherit;
+            border: 1px solid currentColor;
             border-radius: 999px;
-            width: 30px;
-            height: 30px;
+            width: 22px;
+            height: 22px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-size: 0.75rem;
+            line-height: 1;
+            flex-shrink: 0;
             transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
 
         .codebase-scan-btn:hover {
-            background: #f5f8ff;
-            border-color: #0078d4;
-            color: #0078d4;
+            background: #fff;
+            transform: translateY(-1px);
         }
 
         .codebase-scan-btn.urgent {
             border-color: #ff9800;
             color: #b26a00;
             background: rgba(255, 152, 0, 0.08);
+        }
+
+        .codebase-badge.not-initialized .codebase-scan-btn:hover {
+            background: rgba(255, 152, 0, 0.2);
         }
 
         /* Onboarding Card */
@@ -1644,7 +1647,18 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-left: auto;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .activity-controls-bar {
+            padding: 10px 16px 8px;
+            border-bottom: 1px solid #eee;
+            background: #fff;
+        }
+
+        .activity-title {
+            justify-content: flex-start !important;
         }
 
         .activity-refresh-label {
@@ -1673,6 +1687,11 @@
         .sidebar-right .refresh-countdown {
             color: #777;
             min-width: 30px;
+        }
+
+        body.dark-mode .activity-controls-bar {
+            background: #1e1e2e;
+            border-bottom-color: #333;
         }
 
         @keyframes spin {
@@ -2314,6 +2333,7 @@
         .story-status-dot.completed { background: #4caf50; color: #4caf50; }
         .story-status-dot.in-progress { background: #0078d4; color: #0078d4; }
         .story-status-dot.failed { background: #f44336; color: #f44336; }
+        .story-status-dot.needs-revision { background: #ff9800; color: #ff9800; }
         .story-status-dot.copilot { background: #9c27b0; color: #9c27b0; }
         .story-status-dot.pending { background: #bbb; color: #bbb; }
 
@@ -2422,6 +2442,11 @@
             color: #f44336;
         }
 
+        .story-status-badge.needs-revision {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
         .story-status-badge.copilot {
             background: #f3e5f5;
             color: #9c27b0;
@@ -2520,6 +2545,12 @@
             color: #f44336;
         }
 
+        .agent-step.needs_revision .agent-step-icon {
+            background: #fff3e0;
+            border-color: #ff9800;
+            color: #ef6c00;
+        }
+
         .agent-step.skipped .agent-step-icon {
             background: #f5f5f5;
             border-color: #bdbdbd;
@@ -2553,6 +2584,10 @@
         .agent-step.skipped .agent-step-label {
             color: #9e9e9e;
             font-style: italic;
+        }
+
+        .agent-step.needs_revision .agent-step-label {
+            color: #ef6c00;
         }
 
         .agent-step.in_progress .agent-step-label,
@@ -2601,6 +2636,11 @@
             background: #fffafa;
         }
 
+        .agent-detail-item.needs_revision {
+            border-left-color: #ff9800;
+            background: #fffaf3;
+        }
+
         .agent-detail-item.skipped {
             border-left-color: #bdbdbd;
             background: #fafafa;
@@ -2642,6 +2682,11 @@
         .agent-detail-badge.pending {
             background: #f5f5f5;
             color: #999;
+        }
+
+        .agent-detail-badge.needs_revision {
+            background: #fff3e0;
+            color: #ef6c00;
         }
 
         .agent-detail-badge.skipped {
@@ -2750,6 +2795,11 @@
             color: #e57373;
         }
 
+        body.dark-mode .story-status-badge.needs-revision {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ffb74d;
+        }
+
         body.dark-mode .story-status-badge.copilot {
             background: rgba(156, 39, 176, 0.2);
             color: #ce93d8;
@@ -2773,6 +2823,11 @@
         body.dark-mode .agent-step.in_progress .agent-step-icon {
             background: rgba(0, 120, 212, 0.15);
             border-color: #0078d4;
+        }
+
+        body.dark-mode .agent-step.needs_revision .agent-step-icon {
+            background: rgba(255, 152, 0, 0.15);
+            border-color: #ff9800;
         }
 
         body.dark-mode .agent-step.copilot_delegated .agent-step-icon {
@@ -3034,10 +3089,10 @@
                         <div class="subtitle">Real-time monitoring of autonomous AI agents processing Azure DevOps work items</div>
                     </div>
                     <div class="header-tools">
-                        <span class="codebase-badge not-initialized" id="codebase-badge" onclick="openScanModal()" title="Click to initialize codebase documentation" role="button" tabindex="0" aria-label="Initialize codebase documentation">
-                            ⚠ Codebase Not Initialized
+                        <span class="codebase-badge not-initialized" id="codebase-badge" title="Codebase documentation status">
+                            <span id="codebase-badge-label">⚠ Codebase Not Initialized</span>
+                            <button class="codebase-scan-btn" id="btn-scan-codebase" onclick="openScanModal(); event.stopPropagation();" title="Initialize codebase documentation" aria-label="Initialize or re-analyze codebase">🔄</button>
                         </span>
-                        <button class="codebase-scan-btn" id="btn-scan-codebase" onclick="openScanModal()" title="Initialize codebase documentation" aria-label="Initialize or re-analyze codebase">🧠</button>
                     </div>
                 </div>
 
@@ -3110,6 +3165,7 @@
                     <div class="filter-chips">
                         <button class="filter-chip active" data-filter="all" onclick="handleStatusFilter('all')">All</button>
                         <button class="filter-chip" data-filter="in-progress" onclick="handleStatusFilter('in-progress')">In Progress</button>
+                        <button class="filter-chip" data-filter="needs-revision" onclick="handleStatusFilter('needs-revision')">Needs Revision</button>
                         <button class="filter-chip" data-filter="completed" onclick="handleStatusFilter('completed')">Completed</button>
                         <button class="filter-chip" data-filter="failed" onclick="handleStatusFilter('failed')">Failed</button>
                     </div>
@@ -3126,10 +3182,9 @@
 
         <!-- Right Sidebar: Activity Feed -->
         <aside class="sidebar-right">
-            <div class="sidebar-header">
-                <span>📡 Live Activity</span>
+            <div class="activity-controls-bar">
                 <div class="activity-header-controls">
-                    <span class="activity-refresh-label">Refresh</span>
+                    <span class="activity-refresh-label">Refresh every:</span>
                     <div class="refresh-controls">
                         <select class="refresh-interval-select" id="refresh-interval" onchange="handleIntervalChange()" title="Auto-refresh interval" aria-label="Auto refresh interval">
                             <option value="5000">5s</option>
@@ -3143,6 +3198,7 @@
                     </div>
                 </div>
             </div>
+            <div class="sidebar-header activity-title">📡 Live Activity</div>
             <div class="activity-list" id="activity-feed">
                 <!-- Activity items rendered by JS -->
             </div>
@@ -3253,9 +3309,76 @@
             return Number.isFinite(parsed) ? parsed : fallback;
         }
 
+        function normalizeAgentStatus(value) {
+            const normalized = String(value ?? 'pending').trim().toLowerCase().replace(/[\s-]+/g, '_');
+            const statusMap = {
+                active: 'in_progress',
+                running: 'in_progress',
+                inprogress: 'in_progress',
+                in_progress: 'in_progress',
+                complete: 'completed',
+                completed: 'completed',
+                done: 'completed',
+                succeeded: 'completed',
+                success: 'completed',
+                skip: 'skipped',
+                skipped: 'skipped',
+                not_applicable: 'skipped',
+                n_a: 'skipped',
+                needsrevision: 'needs_revision',
+                needs_revision: 'needs_revision',
+                awaiting: 'awaiting_code',
+                awaiting_code: 'awaiting_code',
+                failed: 'failed',
+                fail: 'failed',
+                error: 'failed',
+                pending: 'pending',
+                queued: 'pending',
+                not_started: 'pending',
+                waiting: 'pending',
+                copilot_delegated: 'copilot_delegated'
+            };
+            return statusMap[normalized] || 'pending';
+        }
+
+        function truncateText(value, maxLength = 100) {
+            const text = safeText(value, '');
+            if (!text || text.length <= maxLength) return text;
+            return text.slice(0, maxLength - 1).trimEnd() + '…';
+        }
+
+        function looksLikeWorkItemOnlyTitle(value, workItemId) {
+            const text = safeText(value, '');
+            if (!text) return true;
+            const id = safeInteger(workItemId, 0);
+            if (id <= 0) return false;
+            const compact = text.toLowerCase().replace(/\s+/g, '');
+            return compact === `us-${id}` || compact === `us${id}` || compact === `#${id}` || compact === `${id}`;
+        }
+
+        function getStoryTitle(storyLike, workItemId) {
+            if (!storyLike) return '';
+            const titleCandidates = [
+                storyLike.userStoryTitle,
+                storyLike.workItemTitle,
+                storyLike.storyTitle,
+                storyLike.name,
+                storyLike.title,
+                storyLike.fields?.['System.Title']
+            ];
+
+            for (const candidate of titleCandidates) {
+                if (!looksLikeWorkItemOnlyTitle(candidate, workItemId)) {
+                    return truncateText(candidate, 100);
+                }
+            }
+
+            return '';
+        }
+
         function safeStatus(value) {
-            const allowed = new Set(['pending', 'in_progress', 'completed', 'failed', 'awaiting_code', 'skipped', 'active', 'copilot_delegated']);
-            const normalized = String(value ?? 'pending').toLowerCase();
+            const allowed = new Set(['pending', 'in_progress', 'completed', 'failed', 'awaiting_code', 'skipped', 'needs_revision', 'active', 'copilot_delegated']);
+            const normalized = normalizeAgentStatus(value);
             return allowed.has(normalized) ? normalized : 'pending';
         }
 
@@ -3979,16 +4102,23 @@
         }
 
         function formatStatusText(status, agentName) {
-            if (status === 'active' || status === 'in_progress') return 'Running';
-            if (status === 'completed') return 'Done';
-            if (status === 'skipped') {
+            const normalizedStatus = normalizeAgentStatus(status);
+            if (normalizedStatus === 'in_progress') return 'Running';
+            if (normalizedStatus === 'completed') return 'Done';
+            if (normalizedStatus === 'needs_revision') {
+                if (agentName === 'Planning') {
+                    return 'Needs Revision — More Info Required';
+                }
+                return 'Needs Revision';
+            }
+            if (normalizedStatus === 'skipped') {
                 if (agentName === 'Testing') {
                     return 'Skipped – Testing done by GitHub Coding Agent';
                 }
                 return 'Skipped';
             }
-            if (status === 'failed') return 'Failed';
-            if (status === 'awaiting_code') return 'Awaiting Code';
+            if (normalizedStatus === 'failed') return 'Failed';
+            if (normalizedStatus === 'awaiting_code') return 'Awaiting Code';
             return 'Pending';
         }
 
@@ -4052,28 +4182,34 @@
             const autonomyEl = document.getElementById('wi-autonomy');
             const elapsedEl = document.getElementById('wi-elapsed');
             const progressEl = document.getElementById('wi-progress');
+            const agentNames = ['Planning', 'Coding', 'Testing', 'Review', 'Documentation', 'Deployment'];
 
             if (data.currentWorkItem) {
                 const wi = data.currentWorkItem;
-                titleEl.textContent = `US-${wi.id}: ${wi.title}`;
+                const safeId = safeInteger(wi.id, 0);
+                const matchingStory = (data.stories || []).find(story => safeInteger(story?.workItemId, 0) === safeId) || data.stories?.[0] || null;
+                const resolvedTitle = getStoryTitle({ ...matchingStory, ...wi }, safeId);
+                titleEl.textContent = resolvedTitle ? `US-${safeId}: ${resolvedTitle}` : `US-${safeId}`;
                 titleEl.classList.remove('empty');
-                stateEl.textContent = wi.state || '—';
+                const computedStoryStatus = matchingStory ? getStoryStatus(matchingStory) : '';
+                stateEl.textContent = computedStoryStatus ? formatStoryStatusText(computedStoryStatus) : (wi.state || '—');
                 autonomyEl.textContent = getAutonomyText(wi.autonomyLevel);
                 elapsedEl.textContent = wi.elapsedTime || '—';
-                // Calculate progress from agents
-                if (data.stories && data.stories.length > 0) {
-                    progressEl.textContent = data.stories[0].progress + '%';
+                if (matchingStory) {
+                    progressEl.textContent = calculateStoryProgress(matchingStory, agentNames) + '%';
                 } else {
                     progressEl.textContent = '—';
                 }
             } else if (data.stories && data.stories.length > 0) {
                 const story = data.stories[0];
-                titleEl.textContent = story.title || `US-${story.workItemId}`;
+                const safeWorkItemId = safeInteger(story.workItemId, 0);
+                const resolvedTitle = getStoryTitle(story, safeWorkItemId);
+                titleEl.textContent = resolvedTitle ? `US-${safeWorkItemId}: ${resolvedTitle}` : `US-${safeWorkItemId}`;
                 titleEl.classList.remove('empty');
-                stateEl.textContent = story.currentAgent ? `AI ${story.currentAgent}` : '—';
+                stateEl.textContent = formatStoryStatusText(getStoryStatus(story));
                 autonomyEl.textContent = '—';
                 elapsedEl.textContent = '—';
-                progressEl.textContent = story.progress + '%';
+                progressEl.textContent = calculateStoryProgress(story, agentNames) + '%';
             } else {
                 titleEl.textContent = 'No active work item';
                 titleEl.classList.add('empty');
@@ -4208,18 +4344,22 @@
                 return 'pending';
             }
 
+            if (normalizeAgentStatus(story.agents?.Planning) === 'needs_revision') {
+                return 'needs-revision';
+            }
+
             const agentNames = ['Planning', 'Coding', 'Testing', 'Review', 'Documentation', 'Deployment'];
             
             // Check for any failures
             for (const name of agentNames) {
-                if (story.agents?.[name] === 'failed') {
+                if (normalizeAgentStatus(story.agents?.[name]) === 'failed') {
                     return 'failed';
                 }
             }
             
             // Check for any in-progress or copilot-delegated
             for (const name of agentNames) {
-                const status = story.agents?.[name];
+                const status = normalizeAgentStatus(story.agents?.[name]);
                 const agentData = story.agentDetails?.[name];
                 const isCopilotDelegated = agentData?.additionalData?.mode === 'copilot-delegated';
                 if (status === 'in_progress' || status === 'awaiting_code' || isCopilotDelegated) {
@@ -4229,7 +4369,7 @@
             
             // Check if all completed (skipped counts as completed)
             const allCompleted = agentNames.every(name => {
-                const s = story.agents?.[name];
+                const s = normalizeAgentStatus(story.agents?.[name]);
                 return s === 'completed' || s === 'skipped';
             });
             if (allCompleted) {
@@ -4258,7 +4398,8 @@
             storyCard.dataset.status = storyStatus;
 
             const safeWorkItemId = safeInteger(story.workItemId, 0);
-            const safeTitle = escapeHtml(safeText(story.title, 'Untitled Story'));
+            const resolvedTitle = getStoryTitle(story, safeWorkItemId);
+            const safeTitle = escapeHtml(resolvedTitle || `US-${safeWorkItemId}`);
             const safeCurrentAgent = escapeHtml(safeText(story.currentAgent, 'Ready'));
             const safeProgress = Math.max(0, Math.min(100, safeInteger(progress, 0)));
             
@@ -4308,7 +4449,7 @@
             const stepper = document.createElement('div');
             stepper.className = 'agent-pipeline-stepper';
             agentNames.forEach(name => {
-                const status = story.agents[name] || 'pending';
+                const status = normalizeAgentStatus(story.agents[name]);
                 const agentData = story.agentDetails?.[name];
                 const isCopilotDelegated = agentData?.additionalData?.mode === 'copilot-delegated';
                 const cardStatus = isCopilotDelegated ? 'copilot_delegated' : status;
@@ -4329,7 +4470,7 @@
             detailsList.className = 'agent-details-list';
             
             agentNames.forEach(name => {
-                const status = story.agents[name] || 'pending';
+                const status = normalizeAgentStatus(story.agents[name]);
                 const emoji = getAgentEmoji(name);
                 const tokInfo = story.tokenUsage?.agents?.[name];
                 const timing = story.agentTimings?.[name];
@@ -4384,7 +4525,7 @@
                 const agentAssignee = agentData?.additionalData?.agent || 'copilot';
                 const agentDisplayName = escapeHtml(safeText(agentAssignee, 'copilot').replace(/^./, (char) => char.toUpperCase()));
                 const issueNum = safeInteger(agentData?.additionalData?.issueNumber, 0);
-                const githubIssueUrl = issueNum > 0 ? `https://github.com/toddpick/ADO-Agent/issues/${issueNum}` : null;
+                const githubIssueUrl = issueNum > 0 ? `https://github.com/toddpick/adom8/issues/${issueNum}` : null;
                 
                 const detailItem = document.createElement('div');
                 detailItem.className = `agent-detail-item ${cardStatus}`;
@@ -4455,7 +4596,7 @@
         function calculateStoryProgress(story, agentNames) {
             let completed = 0;
             agentNames.forEach(name => {
-                const status = story.agents[name];
+                const status = normalizeAgentStatus(story.agents[name]);
                 if (status === 'completed' || status === 'skipped') {
                     completed++;
                 }
@@ -4475,6 +4616,7 @@
                 'completed': 'Completed',
                 'in-progress': 'In Progress',
                 'failed': 'Failed',
+                'needs-revision': 'Needs Revision',
                 'pending': 'Pending',
                 'copilot': 'Copilot'
             };
@@ -4749,18 +4891,17 @@
                 const response = await fetch(CODEBASE_INTEL_URL);
                 const data = await response.json();
                 const badge = document.getElementById('codebase-badge');
+                const badgeLabel = document.getElementById('codebase-badge-label');
                 const scanBtn = document.getElementById('btn-scan-codebase');
 
                 if (data.status === 'up_to_date') {
                     codebaseInitialized = true;
                     const lastScanText = formatScanTimestamp(data.lastAnalysis);
-                    if (badge) {
+                    if (badge && badgeLabel) {
                         badge.className = 'codebase-badge initialized';
-                        badge.textContent = lastScanText
+                        badgeLabel.textContent = lastScanText
                             ? `✓ Codebase Initialized · Last scan ${lastScanText}`
                             : '✓ Codebase Initialized';
-                        badge.onclick = openScanModal;
-                        badge.style.cursor = 'pointer';
                         badge.title = data.stats
                             ? `Last scan: ${new Date(data.lastAnalysis).toLocaleDateString()} · ${data.stats.filesAnalyzed} files · ${data.stats.featuresDocumented} features`
                             : 'Codebase documentation is up to date';
@@ -4775,14 +4916,13 @@
                     }
                 } else {
                     codebaseInitialized = false;
-                    if (badge) {
+                    if (badge && badgeLabel) {
                         badge.className = 'codebase-badge not-initialized';
-                        badge.textContent = '⚠ Codebase Not Initialized';
-                        badge.onclick = openScanModal;
-                        badge.title = 'Click to initialize codebase documentation';
+                        badgeLabel.textContent = '⚠ Codebase Not Initialized';
+                        badge.title = 'Codebase documentation has not been initialized';
                     }
                     if (scanBtn) {
-                        scanBtn.textContent = '🧠';
+                        scanBtn.textContent = '🔄';
                         scanBtn.title = 'Initialize codebase documentation';
                         scanBtn.classList.add('urgent');
                     }
@@ -4877,11 +5017,10 @@
 
                 // Update badge
                 const badge = document.getElementById('codebase-badge');
-                if (badge) {
+                const badgeLabel = document.getElementById('codebase-badge-label');
+                if (badge && badgeLabel) {
                     badge.className = 'codebase-badge not-initialized';
-                    badge.textContent = '⏳ Scanning codebase…';
-                    badge.style.cursor = 'default';
-                    badge.onclick = openScanModal;
+                    badgeLabel.textContent = '⏳ Scanning codebase…';
                 }
 
                 if (btnScan) {
@@ -5113,15 +5252,6 @@
                 intervalSelect.value = refreshManager.interval.toString();
             }
 
-            const codebaseBadge = document.getElementById('codebase-badge');
-            if (codebaseBadge) {
-                codebaseBadge.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openScanModal();
-                    }
-                });
-            }
             refreshManager.updateUI();
 
             // Render default empty state
@@ -5161,7 +5291,7 @@
     <!-- Footer -->
     <footer class="dashboard-footer">
         <div class="footer-ctas">
-            <a href="https://github.com/toddpieck/adom8" target="_blank" rel="noopener" class="footer-cta-link">⭐ Star on GitHub</a>
+            <a href="https://github.com/toddpick/adom8" target="_blank" rel="noopener" class="footer-cta-link">⭐ Star on GitHub</a>
             <span class="footer-separator">·</span>
             <a href="https://adom8.dev" target="_blank" rel="noopener" class="footer-cta-link upgrade">🚀 Upgrade to Pro</a>
             <span class="footer-separator">·</span>

@@ -185,6 +185,13 @@ public sealed class GetCurrentStatus
                 }
                 else if (activity.Message.Contains("completed", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (agents.TryGetValue(agent, out var statusBeforeCompleted) &&
+                        string.Equals(statusBeforeCompleted, "needs_revision", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Keep explicit Needs Revision status; generic dispatcher "completed" should not overwrite it.
+                        continue;
+                    }
+
                     // Only mark completed if NOT currently delegated to Copilot
                     // (the "Coding agent completed successfully" fires after delegation returns,
                     //  but the agent is still waiting for Copilot's PR)
@@ -203,6 +210,31 @@ public sealed class GetCurrentStatus
                         // Clear copilot-delegated details on completion so spinner stops
                         agentDetails.Remove(agent);
                     }
+                    var startedAt = agentStartTimes.TryGetValue(agent, out var st) ? st : (DateTime?)null;
+                    var duration = startedAt.HasValue ? (activity.Timestamp - startedAt.Value).TotalSeconds : (double?)null;
+                    agentTimings[agent] = new AgentTimingDto
+                    {
+                        StartedAt = startedAt,
+                        CompletedAt = activity.Timestamp,
+                        DurationSeconds = duration
+                    };
+                }
+                else if (activity.Message.Contains("Needs Revision", StringComparison.OrdinalIgnoreCase) ||
+                         activity.Message.Contains("Story Not Ready for Coding", StringComparison.OrdinalIgnoreCase) ||
+                         activity.Message.Contains("rejected story", StringComparison.OrdinalIgnoreCase))
+                {
+                    agents[agent] = "needs_revision";
+                    if (currentAgent == agent) currentAgent = null;
+
+                    agentDetails[agent] = new AgentDetailDto
+                    {
+                        AdditionalData = new Dictionary<string, object>
+                        {
+                            ["triageResult"] = "rejected",
+                            ["note"] = activity.Message
+                        }
+                    };
+
                     var startedAt = agentStartTimes.TryGetValue(agent, out var st) ? st : (DateTime?)null;
                     var duration = startedAt.HasValue ? (activity.Timestamp - startedAt.Value).TotalSeconds : (double?)null;
                     agentTimings[agent] = new AgentTimingDto

@@ -1,4 +1,4 @@
-# ADO-Agent — Context Index
+# ADOm8 — Context Index
 
 > Master reference for AI agents working on this codebase. Start here.
 
@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| **Project** | AI Development Agents (ADO-Agent) |
+| **Project** | ADOm8 |
 | **Runtime** | .NET 8, Azure Functions v4 (isolated worker) |
 | **Language** | C# 12, nullable enabled |
 | **Solution** | `src/AIAgents.sln` (4 projects) |
@@ -19,7 +19,7 @@
 ## Project Structure
 
 ```
-ADO-Agent/
+adom8/
 ├── src/
 │   ├── AIAgents.sln                    # Solution file (4 projects)
 │   ├── AIAgents.Core/                  # Shared class library

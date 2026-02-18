@@ -1,4 +1,4 @@
-# Resume AI Development Agents Build
+# Resume ADOm8 Build
 
 **How to use this file:** Paste the contents of this file into a new AI coding session and say "Continue building from where we left off."
 
@@ -40,5 +40,5 @@ For architecture, decisions, and requirements, see:
 ## Workspace
 
 - **Path:** c:\ADO-Agent\ADO-Agent
-- **Remote:** https://github.com/toddpick/ADO-Agent.git
+- **Remote:** https://github.com/toddpick/adom8.git
 - **Branch:** main

@@ -1,6 +1,6 @@
-# AI Development Agents
+# ADOm8
 
-AI-powered development workflow automation for Azure DevOps. When a work item's state changes, autonomous AI agents analyze, code, test, review, and document the work — pushing changes to Git and advancing work items through the pipeline automatically.
+ADOm8 is AI-powered development workflow automation for Azure DevOps. When a work item's state changes, autonomous AI agents analyze, code, test, review, and document the work — pushing changes to Git and advancing work items through the pipeline automatically.
 
 ## Architecture
 
@@ -172,7 +172,7 @@ See [SETUP.md](SETUP.md) for detailed instructions and [DEMO_GUIDE.md](DEMO_GUID
 ## Project Structure
 
 ```
-ai-agents/
+adom8/
 ├── infrastructure/          # Terraform (Azure resources)
 ├── src/
 │   ├── AIAgents.Core/       # Shared library (AI clients, Git, ADO, templates)

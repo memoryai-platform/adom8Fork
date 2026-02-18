@@ -1,4 +1,4 @@
-# AI Development Agents — Project Context
+# ADOm8 — Project Context
 
 ## What This Is
 
@@ -83,6 +83,6 @@ Story Planning → AI Code → AI Test → AI Review → AI Docs (if score ≥90
 
 ## Repository
 
-- **Remote:** https://github.com/toddpick/ADO-Agent.git
+- **Remote:** https://github.com/toddpick/adom8.git
 - **Branch:** main
 - **Workspace:** c:\ADO-Agent\ADO-Agent

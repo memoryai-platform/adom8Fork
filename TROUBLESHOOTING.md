@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Comprehensive diagnostic and resolution guide for the AI Development Agents system. This guide covers common failure scenarios, diagnosis steps, and emergency procedures.
+Comprehensive diagnostic and resolution guide for the ADOm8 system. This guide covers common failure scenarios, diagnosis steps, and emergency procedures.
 
 ---
 
