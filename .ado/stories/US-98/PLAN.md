@@ -1,0 +1,115 @@
+# Planning Analysis for US-98
+
+## Story Overview
+
+**ID:** US-98  
+**Title:** Move the Live Activity Timer Controls and Other Dashboard Updates  
+**State:** Story Planning  
+**Created:** 2026-02-18
+
+### Description
+<div>Currently on the Adom8 Dashboard, the Live Activity Timer Controls that determine how frequently the page should refresh are in the header and its not clear that they are related to the Live Activity section.<br><br>Task1:&nbsp; Move these Controls over into the Live Activity Section.&nbsp; Make them look good and make sure they fit well&nbsp; </div><div><br> </div><div><img src="https://dev.azure.com/my-credit-plan/b36853d4-13ad-4a75-813f-1f4fd40508b6/_apis/wit/attachments/7a14590e-6417-454a-8a6a-cdc727a58e03?fileName=image.png" alt=Image><br> </div><div><br> </div><div>Task 2: Replace the Lightning Bold icon in the main header with the same logo in the Header next to ADOm8. </div><div><img src="https://dev.azure.com/my-credit-plan/b36853d4-13ad-4a75-813f-1f4fd40508b6/_apis/wit/attachments/306fed1d-4ff4-456a-8160-a75d25fe6d94?fileName=image.png" alt=Image><br> </div><div>&nbsp;Task 3: Lets move Codebase Initialized / Initialize Codebase Button and move it up into the header.<br>and the huge section showing the Re-Analyze codebase is way too big.&nbsp; Lets just Move the button up into the Header as well, make is small and make it look really good next to the codebase initialized.&nbsp; And lets put the Last Scan on the Code base Initialized Pill.&nbsp;&nbsp;<br><img src="https://dev.azure.com/my-credit-plan/b36853d4-13ad-4a75-813f-1f4fd40508b6/_apis/wit/attachments/282785cb-6b60-47fe-8888-b7d8c3809f01?fileName=image.png" alt=Image><br> </div><div><br> </div><div><br> </div>
+
+### Acceptance Criteria
+<div><ol><li>Task 1: Timer functions moved over to the Right side bar and still functioning and look great and natural next to the Live activity header </li><li>Task 2: Logo replacing the lightning bolt </li><li>Move codebase initialized and all things realted moved into the Header where the Timer used to be. </li> </ol> </div>
+
+---
+
+## Technical Analysis
+
+### Problem Analysis
+This is a UI/UX reorganization story for the ADOm8 Dashboard involving moving timer controls from header to Live Activity section, replacing an icon, and consolidating codebase status elements in the header. The story aims to improve information architecture by grouping related controls together and reducing visual clutter.
+
+### Recommended Approach
+Frontend-only changes to the dashboard SPA (dashboard/index.html). Will involve DOM manipulation, CSS styling updates, and ensuring JavaScript event handlers remain functional after element relocation. Need to identify current element selectors, move DOM elements, update CSS classes, and test timer functionality.
+
+### Affected Files
+
+- `dashboard/index.html`
+
+
+### Complexity Estimate
+**Story Points:** 8
+
+### Architecture Considerations
+Single-page application modification affecting layout and styling of existing dashboard components. No backend changes required as this is purely presentational reorganization.
+
+---
+
+## Implementation Plan
+
+### Sub-Tasks
+
+1. Identify current timer control elements and their JavaScript bindings
+
+2. Locate Live Activity section in the DOM structure
+
+3. Move timer controls from header to Live Activity section
+
+4. Update CSS styling for timer controls in new location
+
+5. Identify lightning bolt icon element and replacement logo asset
+
+6. Replace lightning bolt icon with specified logo
+
+7. Locate codebase initialization status elements
+
+8. Move codebase status elements to header area
+
+9. Resize and restyle Re-Analyze button for header placement
+
+10. Add Last Scan timestamp to codebase status display
+
+11. Test timer functionality after relocation
+
+12. Verify responsive design on different screen sizes
+
+
+### Dependencies
+
+
+- Access to logo asset file for Task 2
+
+- Understanding of current CSS class structure
+
+- Knowledge of JavaScript event binding for timer controls
+
+
+
+---
+
+## Risk Assessment
+
+### Identified Risks
+
+- Timer functionality may break if JavaScript selectors are not updated
+
+- Layout may break on mobile/responsive views
+
+- Existing CSS styles may conflict with new element positions
+
+- Logo asset may not be available or properly sized
+
+
+---
+
+## Assumptions Made
+
+- Dashboard is a single-file SPA as indicated in tech stack
+
+- Timer controls have existing JavaScript functionality that needs preservation
+
+- Logo asset exists and is accessible in the project
+
+- Current layout uses CSS Grid or Flexbox for positioning
+
+
+---
+
+## Testing Strategy
+Manual testing of dashboard functionality including: timer controls work in new location, logo displays correctly, codebase status elements appear properly in header, responsive design works across screen sizes, all existing functionality remains intact, visual design meets expectations
+
+---
+
+*Generated by Planning Agent*  
+*Timestamp: 2026-02-18T05:11:44.1607129Z*
