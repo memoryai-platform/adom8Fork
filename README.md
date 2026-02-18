@@ -101,14 +101,31 @@ flowchart TD
 
 ## Quick Start
 
+Estimated setup time: **20-35 minutes typical** (up to 60 minutes if manual ADO process/state steps are required).
+
 ### Prerequisites
 
 - Azure subscription
 - Azure DevOps organization with a project
 - Claude or OpenAI API key
+- GitHub Copilot (recommended for higher code quality and large codebase scans)
 - [Terraform](https://www.terraform.io/downloads) ≥ 1.0
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Azure Functions Core Tools](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local) v4
+
+### Fast Path (recommended)
+
+Use the one-command bootstrap for fastest onboarding:
+
+```powershell
+# Create editable config template
+.\scripts\bootstrap.ps1 -InitConfig
+
+# Fill scripts\bootstrap.config.json with your values, then run:
+.\scripts\bootstrap.ps1 -ConfigPath .\scripts\bootstrap.config.json
+```
+
+After deploy, open the dashboard, set your function key (`🔓`), then run `🧩 PROVISION ADO`.
 
 ### Deploy
 
@@ -144,7 +161,7 @@ func azure functionapp publish <function-app-name>
 # URL: https://<function-app>.azurewebsites.net/api/OrchestratorWebhook
 ```
 
-See [SETUP.md](SETUP.md) for detailed instructions and [DEMO_GUIDE.md](DEMO_GUIDE.md) for the live demo script.
+See [SETUP.md](SETUP.md) for detailed instructions, [SECURITY_HARDENING.md](SECURITY_HARDENING.md) for production hardening, and [DEMO_GUIDE.md](DEMO_GUIDE.md) for the live demo script.
 
 ## Configuration
 

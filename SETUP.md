@@ -1,9 +1,11 @@
 # Setup Guide — ADOm8 for Azure DevOps
 
 > **End-to-end walkthrough:** from a blank Azure subscription + ADO org to a fully working AI agent pipeline.
-> Estimated time: **45–60 minutes** for first-time setup.
+> Estimated time: **20–35 minutes typical** with bootstrap + provisioning (up to 60 minutes if manual ADO process/state steps are required).
 
 > **Fast path (recommended):** If you want maximum automation, use `scripts/bootstrap.ps1` after collecting PATs/API keys. It provisions Azure resources, configures app settings, deploys Functions, rewires dashboard API URL, and deploys dashboard in one run.
+
+> **Production security:** After initial setup, follow `SECURITY_HARDENING.md` to move secrets to Key Vault and apply least-privilege controls.
 
 ---
 
@@ -27,6 +29,7 @@
 12. [Optional: Terraform via Azure DevOps Pipeline](#12-optional-terraform-via-azure-devops-pipeline)
 13. [Local Development](#13-local-development)
 14. [Troubleshooting](#14-troubleshooting)
+15. [Production Hardening](#15-production-hardening)
 
 ---
 
@@ -1104,3 +1107,17 @@ ngrok http 7071
 - **"Dynamic VMs quota = 0"** — VS Enterprise subscription limitation. See [Step 5d](#5d-visual-studio-enterprise--msdn-subscription-notes) for the CLI workaround
 - **`workspace_id` cannot be removed** — App Insights was auto-created with a managed workspace. The Terraform config pins `workspace_id` to match; don't remove it
 - **`skip_provider_registration = true`** — required for azurerm provider v3.x to avoid timeout errors registering unused providers. Already set in `main.tf`
+
+---
+
+## 15. Production Hardening
+
+Default setup prioritizes speed. For production, apply this baseline:
+
+1. Move all sensitive values (`AI__ApiKey`, PATs, tokens, webhook secrets) to Key Vault.
+2. Use Function App managed identity + Key Vault references.
+3. Restrict PAT scopes and rotate secrets regularly.
+4. Restrict dashboard access with SWA auth / Entra ID.
+5. Add alerts for `reset`, `emergency-stop`, `provision-ado`, and poison queue depth.
+
+Full checklist and commands: `SECURITY_HARDENING.md`.
