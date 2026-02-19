@@ -8,20 +8,20 @@
 **Created:** 2026-02-19
 
 ### Description
-<div>As an operator, I want the Lock button and Codebase Initialized control next to Provision ADO on the Dashboard so controls are visible, grouped, and not blocking actions. </div><div><br> </div><div>Additional requirement: fix story card header to show US-99: Move Lock and Codebase Initialized controls next to Provision ADO (not US-99: US-99). </div><div><br> </div><div>Supporting visual references for implementation: </div><div>- Screenshot 2026-02-19 021100.jpg (AttachedFile) </div><div>- image.png (pasted image in description) </div>
+<div>As an operator, I want the Lock button and Codebase Initialized control next to Provision ADO on the Dashboard so controls are visible, grouped, and not blocking actions. </div><div><br> </div><div><b>Repository/UI implementation context (verified):</b> </div><div>- Frontend is a single-file SPA at <code>dashboard/index.html</code>. </div><div>- Provision ADO control is currently rendered in the top nav as button id <code>provision-btn</code>. </div><div>- Lock control is currently rendered in header tools as button id <code>function-key-btn</code>. </div><div>- Codebase status control is currently rendered in header tools as span id <code>codebase-badge</code> with scan button id <code>btn-scan-codebase</code>. </div><div>- Current behavior hooks: <code>handleProvisionAdo()</code>, <code>openFunctionKeyPrompt()</code>, <code>openScanModal()</code>/<code>confirmCodebaseScan()</code>. </div><div><br> </div><div><b>Current layout baseline:</b> </div><div>- <code>provision-btn</code> is in the <code>.top-nav</code> section. </div><div>- <code>function-key-btn</code> and <code>codebase-badge</code> are in <code>.header-tools</code> inside the main header container. </div><div>- This story moves Lock and Codebase controls to sit next to Provision ADO in the same top-nav controls group, preserving existing behavior and IDs. </div><div><br> </div><div>Supporting visual references for implementation: </div><div>- Screenshot 2026-02-19 021100.jpg (AttachedFile) </div><div>- image.png (pasted image in description) </div>
 
 ### Acceptance Criteria
-<div><b>Acceptance Criteria</b> </div><ul><li>In the top nav header controls area, place controls in this exact order: Provision ADO, then Lock, then Codebase Initialized. </li><li>Do not change control behavior: Provision ADO still calls provisioning, Lock still opens function key prompt, Codebase Initialized still opens initialize/re-analyze flow. </li><li>Keep existing visual styles for all three controls; this story changes position/grouping only. </li><li>Desktop breakpoint: at 1024px width and above, all three controls render on one row with no overlap; each control remains fully clickable. </li><li>Mobile/tablet breakpoint: below 1024px, controls may wrap, but order remains Provision ADO -&gt; Lock -&gt; Codebase Initialized and no click-target overlap occurs (minimum 8px horizontal gap when on same row). </li><li>Story header rendering rule: show US-99: Move Lock and Codebase Initialized controls next to Provision ADO when title is available; never show US-99: US-99. </li><li>Implementation and validation must reference supporting files: Screenshot 2026-02-19 021100.jpg and image.png. </li> </ul>
+<div><b>Acceptance Criteria</b> </div><ul><li>Frontend file to modify is <code>dashboard/index.html</code> (single-file SPA). </li><li>Move controls so top-nav order is exactly: Provision ADO (<code>provision-btn</code>) -&gt; Lock (<code>function-key-btn</code>) -&gt; Codebase Initialized (<code>codebase-badge</code>). </li><li>Preserve existing IDs and click handlers: <code>provision-btn</code>/<code>handleProvisionAdo()</code>, <code>function-key-btn</code>/<code>openFunctionKeyPrompt()</code>, <code>codebase-badge</code> + <code>btn-scan-codebase</code>/<code>openScanModal()</code>. </li><li>Desktop (&gt;=1024px): all three controls visible on one row, no overlap, all click targets fully usable. </li><li>Tablet/mobile ( Lock -&gt; Codebase Initialized, with no click-target overlap. </li><li>Story header render rule: show <code>US-99: Move Lock and Codebase Initialized controls next to Provision ADO</code> when title exists; never <code>US-99: US-99</code>. </li><li>Implementation and validation must use supporting files: Screenshot 2026-02-19 021100.jpg and image.png. </li> </ul>
 
 ---
 
 ## Technical Analysis
 
 ### Problem Analysis
-This is a UI/UX repositioning task for the Dashboard. The story requests moving three existing controls (Lock button, Codebase Initialized control) to be positioned next to the Provision ADO control in a specific order. Additionally, there's a bug fix needed for story card header rendering to prevent duplicate ID display (US-99: US-99 → US-99: Move Lock...). The story includes visual references and specific responsive design requirements for desktop (1024px+) and mobile breakpoints.
+This is a UI layout reorganization task for the dashboard SPA. Currently, the Provision ADO button is in the top navigation, while the Lock button and Codebase Initialized control are in the header tools section. The goal is to move all three controls to the same top navigation area for better visual grouping and accessibility. The story provides specific element IDs, current locations, and desired final layout order.
 
 ### Recommended Approach
-WARNING: This implementation plan assumes the Dashboard is implemented in the single-file SPA at `dashboard/index.html`. The approach would involve: 1) Locate the current header controls section in the HTML/JavaScript, 2) Identify the three controls (Provision ADO, Lock, Codebase Initialized) and their current positioning, 3) Restructure the DOM to place them in the specified order with proper CSS for responsive behavior, 4) Fix the story header rendering logic to prevent ID duplication, 5) Test responsive behavior at the 1024px breakpoint, 6) Validate against the provided screenshot references. Implementation requires CSS Grid or Flexbox for responsive layout with proper gap spacing and click target accessibility.
+This is a pure frontend HTML/CSS reorganization task within the single-file SPA at dashboard/index.html. The implementation involves: 1) Locating the existing controls by their IDs (provision-btn, function-key-btn, codebase-badge), 2) Moving the Lock and Codebase controls from .header-tools to .top-nav section, 3) Arranging them in the specified order, 4) Ensuring responsive behavior for desktop and mobile viewports, 5) Preserving all existing JavaScript event handlers and functionality. No backend changes or external API calls are required.
 
 ### Affected Files
 
@@ -32,7 +32,7 @@ WARNING: This implementation plan assumes the Dashboard is implemented in the si
 **Story Points:** 5
 
 ### Architecture Considerations
-Frontend-only change to the single-file SPA Dashboard. No backend API changes required. The implementation involves DOM restructuring, CSS responsive design updates, and JavaScript logic fixes for header rendering. Changes are isolated to the presentation layer with no impact on Azure Functions or core services.
+Frontend-only change within the existing single-file SPA architecture. The dashboard uses vanilla JavaScript with inline CSS and HTML structure. Controls will be relocated within the DOM while preserving their existing IDs, classes, and event handlers to maintain backward compatibility.
 
 ---
 
@@ -40,35 +40,29 @@ Frontend-only change to the single-file SPA Dashboard. No backend API changes re
 
 ### Sub-Tasks
 
-1. Analyze current Dashboard HTML structure to locate header controls area
+1. Locate current positions of provision-btn, function-key-btn, and codebase-badge elements in dashboard/index.html
 
-2. Identify existing Provision ADO, Lock, and Codebase Initialized control implementations
+2. Move function-key-btn from .header-tools to .top-nav section, positioned after provision-btn
 
-3. Restructure DOM to place controls in specified order (Provision ADO → Lock → Codebase Initialized)
+3. Move codebase-badge and btn-scan-codebase from .header-tools to .top-nav section, positioned after function-key-btn
 
-4. Implement responsive CSS for desktop (1024px+) single-row layout with no overlap
+4. Update CSS styling to ensure proper spacing and alignment in the new layout
 
-5. Implement mobile/tablet CSS for proper wrapping with 8px minimum gaps
+5. Implement responsive behavior for desktop (>=1024px) showing all controls in one row
 
-6. Fix story header rendering logic to show 'US-99: Move Lock...' instead of 'US-99: US-99'
+6. Implement responsive behavior for tablet/mobile (<1024px) with proper wrapping and no overlap
 
-7. Validate implementation against Screenshot 2026-02-19 021100.jpg and image.png
+7. Verify all existing click handlers remain functional after DOM restructuring
 
-8. Test responsive behavior across breakpoints
-
-9. Verify all controls maintain existing functionality (no behavior changes)
-
-10. Ensure click targets remain fully accessible with no overlap
+8. Test the story header render rule to display 'US-99: Move Lock and Codebase Initialized controls next to Provision ADO'
 
 
 ### Dependencies
 
 
-- Access to Dashboard source code in dashboard/index.html
+- Access to supporting visual references: Screenshot 2026-02-19 021100.jpg and image.png
 
-- Supporting visual reference files (.ado/stories/US-99/documents/)
-
-- Understanding of current control implementation and styling
+- Current dashboard/index.html file structure and existing CSS classes
 
 
 
@@ -78,36 +72,36 @@ Frontend-only change to the single-file SPA Dashboard. No backend API changes re
 
 ### Identified Risks
 
-- Single-file SPA may have complex interdependencies that make control repositioning difficult
+- Potential CSS layout conflicts when moving controls between different container sections
 
-- Responsive design changes could break existing mobile/tablet layouts
+- Risk of breaking existing JavaScript event handlers if DOM structure changes unexpectedly
 
-- Control repositioning might affect existing CSS selectors or JavaScript event handlers
+- Responsive design challenges ensuring no click-target overlap on smaller screens
 
-- Visual references may not provide sufficient detail for exact implementation requirements
+- Visual alignment issues if the controls have different styling contexts in their new location
 
 
 ---
 
 ## Assumptions Made
 
-- Dashboard is implemented as a single-file SPA in dashboard/index.html
+- The dashboard/index.html file contains the current layout structure as described
 
-- The three controls (Provision ADO, Lock, Codebase Initialized) already exist in the current implementation
+- Existing CSS classes (.top-nav, .header-tools) are properly defined and styled
 
-- Controls are currently positioned in a different order or location than specified
+- JavaScript event handlers are bound by element ID and will continue working after DOM reorganization
 
-- Supporting screenshot files contain clear visual guidance for the desired layout
+- Supporting visual references provide clear guidance for the desired final layout
 
-- Current control functionality and styling should remain unchanged (position-only change)
+- No backend functionality changes are required - this is purely a frontend layout adjustment
 
 
 ---
 
 ## Testing Strategy
-Manual testing approach: 1) Visual validation against provided screenshots at multiple screen sizes, 2) Responsive testing at 1024px breakpoint and below to verify wrapping behavior, 3) Click target testing to ensure no overlap and proper 8px gaps, 4) Functional testing to verify all three controls maintain existing behavior (Provision ADO calls provisioning, Lock opens function key prompt, Codebase Initialized opens initialize/re-analyze flow), 5) Story header rendering validation to confirm US-99 prefix displays correctly, 6) Cross-browser compatibility testing for layout consistency.
+Manual testing approach: 1) Visual verification that controls appear in correct order (Provision ADO → Lock → Codebase Initialized) in the top navigation, 2) Functional testing of all three controls to ensure click handlers work correctly, 3) Responsive testing on desktop (>=1024px) to verify single-row layout with no overlap, 4) Responsive testing on tablet/mobile (<1024px) to verify proper wrapping behavior, 5) Cross-browser compatibility testing, 6) Verification that story header displays correctly as 'US-99: Move Lock and Codebase Initialized controls next to Provision ADO', 7) Comparison against supporting visual references to ensure implementation matches expected design
 
 ---
 
 *Generated by Planning Agent*  
-*Timestamp: 2026-02-19T09:26:56.5233881Z*
+*Timestamp: 2026-02-19T09:28:31.4916508Z*
