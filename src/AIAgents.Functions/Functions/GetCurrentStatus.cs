@@ -54,6 +54,7 @@ public sealed class GetCurrentStatus
 
         // Build story statuses from activity log
         var storyStatuses = BuildStoryStatuses(recentActivity);
+        await PopulateStoryTitlesAsync(storyStatuses, cancellationToken);
 
         // Identify the currently active work item (most recent story with an in-progress agent)
         var activeStory = storyStatuses.FirstOrDefault(s =>
@@ -86,9 +87,9 @@ public sealed class GetCurrentStatus
             currentWorkItem = new CurrentWorkItemInfo
             {
                 Id = activeStory.WorkItemId,
-                Title = activeStory.Title.StartsWith("US-")
-                    ? activeStory.Title
-                    : $"US-{activeStory.WorkItemId}",
+                Title = string.IsNullOrWhiteSpace(activeStory.Title)
+                    ? $"US-{activeStory.WorkItemId}"
+                    : activeStory.Title,
                 State = activeStory.CurrentAgent != null
                     ? $"AI {activeStory.CurrentAgent}"
                     : null,
@@ -326,6 +327,68 @@ public sealed class GetCurrentStatus
         }
 
         return statuses;
+    }
+
+    private async Task PopulateStoryTitlesAsync(List<StoryStatus> stories, CancellationToken cancellationToken)
+    {
+        if (stories.Count == 0)
+        {
+            return;
+        }
+
+        var distinctIds = stories
+            .Select(s => s.WorkItemId)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        if (distinctIds.Count == 0)
+        {
+            return;
+        }
+
+        var titleById = new Dictionary<int, string>();
+
+        var fetchTasks = distinctIds.Select(async id =>
+        {
+            try
+            {
+                var workItem = await _adoClient.GetWorkItemAsync(id, cancellationToken);
+                var title = workItem.Title?.Trim();
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    lock (titleById)
+                    {
+                        titleById[id] = title;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not resolve title for work item {WorkItemId}", id);
+            }
+        });
+
+        await Task.WhenAll(fetchTasks);
+
+        for (var index = 0; index < stories.Count; index++)
+        {
+            var story = stories[index];
+            if (titleById.TryGetValue(story.WorkItemId, out var resolvedTitle))
+            {
+                stories[index] = new StoryStatus
+                {
+                    WorkItemId = story.WorkItemId,
+                    Title = resolvedTitle,
+                    CurrentAgent = story.CurrentAgent,
+                    Progress = story.Progress,
+                    Agents = story.Agents,
+                    AgentDetails = story.AgentDetails,
+                    TokenUsage = story.TokenUsage,
+                    AgentTimings = story.AgentTimings
+                };
+            }
+        }
     }
 
     private static double CalculateSuccessRate(List<StoryStatus> stories)
