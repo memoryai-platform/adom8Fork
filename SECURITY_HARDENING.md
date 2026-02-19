@@ -99,7 +99,9 @@ Use one token per integration where practical.
 ## Dashboard & endpoint hardening
 
 - Keep mutating endpoints at `AuthorizationLevel.Function` (already implemented).
+- Treat anonymous read endpoints as internet-exposed unless you place the app behind perimeter controls (SWA auth, reverse proxy, private networking, or trusted ingress).
 - Store Function key outside screenshots/docs and rotate periodically.
+- Require ADO Service Hook calls to include function key URL + `x-ado-agent-secret` header.
 - For production, gate Static Web App with Entra ID auth and restrict who can invoke controls.
 
 ## Monitoring and alerting checklist

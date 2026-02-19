@@ -2,6 +2,8 @@
 
 ADOm8 is AI-powered development workflow automation for Azure DevOps. When a work item's state changes, autonomous AI agents analyze, code, test, review, and document the work — pushing changes to Git and advancing work items through the pipeline automatically.
 
+Interactive onboarding guide: **https://adom8.dev/get-started**
+
 ## Architecture
 
 ```
@@ -158,7 +160,8 @@ func azure functionapp publish <function-app-name>
 # 5. Configure Azure DevOps Service Hook
 # Project Settings → Service Hooks → Web Hooks
 # Trigger: Work item updated (state field changes)
-# URL: https://<function-app>.azurewebsites.net/api/OrchestratorWebhook
+# URL: https://<function-app>.azurewebsites.net/api/webhook?code=<FUNCTION_KEY>
+# Header: x-ado-agent-secret: <WEBHOOK_SHARED_SECRET>
 ```
 
 See [SETUP.md](SETUP.md) for detailed instructions, [SECURITY_HARDENING.md](SECURITY_HARDENING.md) for production hardening, and [DEMO_GUIDE.md](DEMO_GUIDE.md) for the live demo script.

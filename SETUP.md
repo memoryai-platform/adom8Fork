@@ -9,6 +9,8 @@
 
 > **Production security:** After initial setup, follow `SECURITY_HARDENING.md` to move secrets to Key Vault and apply least-privilege controls.
 
+> **Interactive onboarding (recommended):** Use the public step-by-step guide at **https://adom8.dev/get-started** for a cleaner walkthrough with screenshots and quick-copy snippets. Keep this file as the technical source of truth.
+
 ---
 
 ## Table of Contents
@@ -805,15 +807,17 @@ This connects Azure DevOps to your Function App. When a work item's state change
    - **Field:** `State`
 6. Click **Next**
 7. Configure the action:
-   - **URL:** `https://<YOUR_FUNCTION_APP>.azurewebsites.net/api/OrchestratorWebhook`
-   - **HTTP headers:** *(leave empty)*
+  - **URL:** `https://<YOUR_FUNCTION_APP>.azurewebsites.net/api/webhook?code=<FUNCTION_KEY>`
+  - **HTTP headers:** add `x-ado-agent-secret: <WEBHOOK_SHARED_SECRET>`
    - **Resource details to send:** `All`
    - **Messages to send:** `All`
 8. Click **Test** → you should see a `200 OK` response with `{"status":"skipped",...}` (expected — the test payload isn't a real state change)
 9. Click **Finish**
 
-> **Security:** The webhook URL uses Function-level auth by default. To add extra security, append a function key: `https://...azurewebsites.net/api/OrchestratorWebhook?code=<FUNCTION_KEY>`  
-> Get it from: Azure Portal → Function App → Functions → OrchestratorWebhook → Function Keys
+> **Required security baseline:** Webhook calls must include a Function key and a shared secret header.
+> - Function key URL format: `https://...azurewebsites.net/api/webhook?code=<FUNCTION_KEY>`
+> - Shared secret header: `x-ado-agent-secret: <WEBHOOK_SHARED_SECRET>`
+> - Get function key from: Azure Portal → Function App → Functions → OrchestratorWebhook → Function Keys
 
 ---
 
@@ -1065,9 +1069,10 @@ ngrok http 7071
 ## 14. Troubleshooting
 
 ### Service hook not firing
-- Verify the webhook URL: `https://<func-app>.azurewebsites.net/api/OrchestratorWebhook`
+- Verify the webhook URL: `https://<func-app>.azurewebsites.net/api/webhook?code=<FUNCTION_KEY>`
+- Verify header includes: `x-ado-agent-secret: <WEBHOOK_SHARED_SECRET>`
 - ADO → **Project Settings → Service hooks** → check for ❌ errors
-- Test manually: `curl -X POST https://<func-app>.azurewebsites.net/api/OrchestratorWebhook -H "Content-Type: application/json" -d '{}'`
+- Test manually: `curl -X POST "https://<func-app>.azurewebsites.net/api/webhook?code=<FUNCTION_KEY>" -H "Content-Type: application/json" -H "x-ado-agent-secret: <WEBHOOK_SHARED_SECRET>" -d '{}'`
 
 ### Functions not processing queue messages
 - Azure Portal → Storage Account → **Queues** → check `agent-tasks` for waiting messages
@@ -1088,7 +1093,7 @@ ngrok http 7071
 ### Dashboard not updating
 - Verify the API URL in `dashboard/index.html` points to your Function App
 - Check CORS: Azure Portal → Function App → **API → CORS** → add your dashboard URL
-- Test the API directly: `curl https://<func-app>.azurewebsites.net/api/GetCurrentStatus`
+- Test the API directly: `curl https://<func-app>.azurewebsites.net/api/status`
 
 ### Git push failures
 - Verify `Git__Token` has write permissions to the repository
