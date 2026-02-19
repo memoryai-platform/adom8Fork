@@ -8,20 +8,20 @@
 **Created:** 2026-02-19
 
 ### Description
-<div>As an operator, I want the Lock button and Codebase Initialized control next to Provision ADO on the Dashboard so controls are visible, grouped, and not blocking actions.&nbsp; </div><div><br> </div><div>Additional requirement: fix story card header to show US-99: Move Lock and Codebase Initialized controls next to Provision ADO (not US-99: US-99). </div><div><br> </div><div><img src="https://dev.azure.com/my-credit-plan/b36853d4-13ad-4a75-813f-1f4fd40508b6/_apis/wit/attachments/00a2e10d-c5ab-41a6-9b42-3cd8b60ba512?fileName=image.png" alt=Image><br> </div>
+<div>As an operator, I want the Lock button and Codebase Initialized control next to Provision ADO on the Dashboard so controls are visible, grouped, and not blocking actions. </div><div><br> </div><div>Additional requirement: fix story card header to show US-99: Move Lock and Codebase Initialized controls next to Provision ADO (not US-99: US-99). </div><div><br> </div><div>Supporting visual references for implementation: </div><div>- Screenshot 2026-02-19 021100.jpg (AttachedFile) </div><div>- image.png (pasted image in description) </div>
 
 ### Acceptance Criteria
-<div>Lock and Codebase controls move next to Provision ADO. Keep behavior unchanged. No click overlap. Responsive layout. Header must render US-99 plus full title, not duplicate ID. </div><div><span>explicit acceptance criteria (3–5 testable bullets),<br></span><div>exact UI location references (which section/card/button),<br> </div><div>expected before/after behavior,<br> </div><span>any attached files called out by name and purpose.</span><br> </div><div><br> </div>
+<div><b>Acceptance Criteria</b> </div><ul><li>In the top nav header controls area, place controls in this exact order: Provision ADO, then Lock, then Codebase Initialized. </li><li>Do not change control behavior: Provision ADO still calls provisioning, Lock still opens function key prompt, Codebase Initialized still opens initialize/re-analyze flow. </li><li>Keep existing visual styles for all three controls; this story changes position/grouping only. </li><li>Desktop (&gt;=1024px): all three controls render on one row with no overlap; each control remains fully clickable. </li><li>Tablet/mobile ( Lock -&gt; Codebase Initialized and no click-target overlap occurs (minimum 8px horizontal gap when on same row). </li><li>Story header rendering rule: show US-99: Move Lock and Codebase Initialized controls next to Provision ADO when title is available; never show US-99: US-99. </li><li>Implementation and validation must reference supporting files: Screenshot 2026-02-19 021100.jpg and image.png. </li> </ul>
 
 ---
 
 ## Technical Analysis
 
 ### Problem Analysis
-This is a UI layout reorganization task for the Dashboard. The story requests moving two controls (Lock button and Codebase Initialized control) to be positioned next to the Provision ADO button, plus fixing a story card header display issue. The attached screenshots should provide visual context for the desired layout changes. However, the acceptance criteria contains template placeholder text that needs to be replaced with specific, testable requirements.
+This story requires repositioning three existing UI controls (Provision ADO, Lock, Codebase Initialized) in the dashboard's top navigation header area, plus fixing a story card header display issue. The story is well-defined with specific layout requirements for different screen sizes, but implementation is blocked by lack of access to the current dashboard code structure.
 
 ### Recommended Approach
-This would be a frontend-only change to the dashboard/index.html file (single-file SPA). The implementation would involve: 1) Locating the current positions of the Lock button, Codebase Initialized control, and Provision ADO button in the HTML/CSS, 2) Restructuring the HTML to group these three controls together, 3) Updating CSS classes and styles to ensure proper spacing and responsive behavior, 4) Fixing the story card header rendering logic to display the full title instead of duplicating the ID. The changes would be purely cosmetic layout adjustments without affecting the underlying JavaScript functionality of the controls.
+Based on the codebase structure showing a single-file SPA at dashboard/index.html (~1854 lines), this would involve: 1) Locating the current control implementations in the HTML/CSS/JS, 2) Moving them to the top nav header area in the specified order, 3) Updating CSS for responsive behavior with proper spacing, 4) Fixing the story header rendering logic to prevent 'US-99: US-99' display pattern. The implementation would be pure frontend work in vanilla JavaScript/HTML/CSS.
 
 ### Affected Files
 
@@ -29,10 +29,10 @@ This would be a frontend-only change to the dashboard/index.html file (single-fi
 
 
 ### Complexity Estimate
-**Story Points:** 3
+**Story Points:** 5
 
 ### Architecture Considerations
-Single-file SPA modification - HTML structure reorganization and CSS styling updates within the existing dashboard/index.html file. No backend changes required.
+Frontend-only change to the single-file SPA dashboard. No backend services, APIs, or infrastructure changes required. Pure DOM manipulation and CSS layout adjustments.
 
 ---
 
@@ -40,27 +40,33 @@ Single-file SPA modification - HTML structure reorganization and CSS styling upd
 
 ### Sub-Tasks
 
-1. Analyze current dashboard layout and identify target UI elements
+1. Analyze current dashboard structure and locate existing controls
 
-2. Restructure HTML to group Lock, Codebase Initialized, and Provision ADO controls
+2. Identify top nav header area and current CSS classes
 
-3. Update CSS classes and styles for proper spacing and alignment
+3. Move Provision ADO control to new position
 
-4. Implement responsive layout adjustments for different screen sizes
+4. Move Lock control next to Provision ADO
 
-5. Fix story card header rendering to show full title instead of duplicate ID
+5. Move Codebase Initialized control to third position
 
-6. Test layout on different screen sizes and browsers
+6. Update CSS for desktop layout (>=1024px) with proper spacing
 
-7. Verify all control functionality remains unchanged
+7. Update CSS for tablet/mobile layout (<1024px) with responsive wrapping
+
+8. Fix story header rendering logic to prevent duplicate ID display
+
+9. Test responsive behavior at different breakpoints
+
+10. Validate all controls remain fully functional after repositioning
 
 
 ### Dependencies
 
 
-- Access to supporting documents (.ado/stories/US-99/documents/) to understand desired layout
+- Access to dashboard/index.html source code
 
-- Understanding of current dashboard UI structure and CSS framework used
+- Supporting visual reference files (Screenshot 2026-02-19 021100.jpg is available, image.png needs to be located)
 
 
 
@@ -70,34 +76,34 @@ Single-file SPA modification - HTML structure reorganization and CSS styling upd
 
 ### Identified Risks
 
-- Breaking existing control functionality during layout changes
-
-- Responsive layout issues on mobile devices
+- Breaking existing control functionality during repositioning
 
 - CSS conflicts with existing styles
 
-- Accessibility issues if proper focus order is not maintained
+- Responsive layout issues on edge case screen sizes
+
+- Accessibility impact from layout changes
 
 
 ---
 
 ## Assumptions Made
 
-- The dashboard uses standard HTML/CSS without a complex framework
+- The three controls (Provision ADO, Lock, Codebase Initialized) already exist in the dashboard
 
-- The supporting screenshots show the desired end state
+- There is a top nav header area suitable for hosting these controls
 
-- Current control functionality should remain completely unchanged
+- Current control behavior and styling should remain unchanged
 
-- The story card header issue is in the same dashboard file
+- The story header rendering issue is in the same dashboard file
 
 
 ---
 
 ## Testing Strategy
-Manual testing approach: 1) Visual verification that controls are properly positioned next to each other, 2) Responsive testing across different screen sizes (mobile, tablet, desktop), 3) Functional testing to ensure Lock button and Codebase Initialized control behavior is unchanged, 4) Cross-browser compatibility testing, 5) Accessibility testing for proper tab order and screen reader support, 6) Verification that story card header displays correctly with full title.
+Manual testing across multiple screen sizes and devices: 1) Desktop (>=1024px) - verify all three controls on one row with no overlap, 2) Tablet/mobile (<1024px) - verify proper wrapping with minimum 8px gaps, 3) Functional testing - ensure all controls retain their original behavior (provisioning, lock prompt, initialize flow), 4) Visual regression testing against the provided screenshot reference, 5) Story header display testing to confirm US-99 prefix shows correctly.
 
 ---
 
 *Generated by Planning Agent*  
-*Timestamp: 2026-02-19T09:17:57.5013655Z*
+*Timestamp: 2026-02-19T09:21:48.9256899Z*
