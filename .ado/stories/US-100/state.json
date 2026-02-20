@@ -1,12 +1,12 @@
 {
   "workItemId": 100,
-  "currentState": "AI Review",
+  "currentState": "Story Planning",
   "createdAt": "2026-02-20T07:08:34.5898065Z",
-  "updatedAt": "2026-02-20T07:22:09.1676548Z",
+  "updatedAt": "2026-02-20T07:38:45.8380733Z",
   "agents": {
     "Planning": {
       "status": "in_progress",
-      "startedAt": "2026-02-20T07:12:58.9215088Z",
+      "startedAt": "2026-02-20T07:38:45.8380647Z",
       "completedAt": null,
       "additionalData": null
     },
