@@ -3064,11 +3064,147 @@
             color: #b0b0b0;
         }
 
+        .function-key-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 4000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 24px;
+        }
+
+        .function-key-gate-bg {
+            pointer-events: none;
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 20% 14%, rgba(0,120,212,0.18), transparent 34%),
+                radial-gradient(circle at 82% 8%, rgba(124,176,255,0.13), transparent 30%),
+                radial-gradient(circle at 55% 78%, rgba(0,95,184,0.11), transparent 38%);
+        }
+
+        .function-key-gate-glow {
+            pointer-events: none;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 620px;
+            height: 620px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(58,168,255,0.22) 0%, rgba(0,120,212,0.12) 44%, transparent 72%);
+        }
+
+        .function-key-gate-content {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        .function-key-gate-logo {
+            margin: 0 auto 14px;
+            display: flex;
+            width: 82px;
+            height: 82px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            border: 1px solid rgba(124,176,255,0.35);
+            background: rgba(15,23,42,0.7);
+            box-shadow: 0 0 0 1px rgba(124,176,255,0.22), 0 0 36px rgba(58,168,255,0.30);
+        }
+
+        .function-key-gate-title {
+            margin: 0;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(90deg, rgba(226,232,240,0.75), rgba(248,250,252,1), rgba(226,232,240,0.75));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .function-key-gate-tagline {
+            margin: 10px auto 18px;
+            max-width: 360px;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+
+        .function-key-gate-input {
+            width: 100%;
+            height: 44px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: rgba(30,41,59,0.75);
+            color: #e2e8f0;
+            padding: 0 12px;
+            font-size: 0.92rem;
+            outline: none;
+        }
+
+        .function-key-gate-input::placeholder {
+            color: #64748b;
+        }
+
+        .function-key-gate-input:focus {
+            border-color: #3aa8ff;
+            box-shadow: 0 0 0 3px rgba(58,168,255,0.2);
+        }
+
+        .function-key-gate-help {
+            margin-top: 9px;
+            color: #64748b;
+            font-size: 0.78rem;
+        }
+
     </style>
 </head>
 <body>
+    <div class="function-key-gate" id="function-key-gate">
+        <div class="function-key-gate-bg"></div>
+        <div class="function-key-gate-glow"></div>
+        <div class="function-key-gate-content">
+            <div class="function-key-gate-logo" aria-hidden="true">
+                <svg viewBox="0 0 44 44" width="36" height="36">
+                    <defs>
+                        <linearGradient id="gate-infinity" x1="0%" y1="50%" x2="100%" y2="50%">
+                            <stop offset="0%" stop-color="#7CB0FF" />
+                            <stop offset="55%" stop-color="#3AA8FF" />
+                            <stop offset="100%" stop-color="#0078D4" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="16" cy="22" r="7.2" fill="none" stroke="url(#gate-infinity)" stroke-width="4.1" stroke-linecap="round" />
+                    <circle cx="28" cy="22" r="7.2" fill="none" stroke="url(#gate-infinity)" stroke-width="4.1" stroke-linecap="round" />
+                    <circle cx="22" cy="22" r="1.9" fill="#9FD0FF" fill-opacity="0.9" />
+                </svg>
+            </div>
+            <h1 class="function-key-gate-title">ADOm8</h1>
+            <div class="function-key-gate-tagline">Real-time monitoring of autonomous AI agents processing Azure DevOps work items</div>
+            <form onsubmit="handleFunctionKeyGateSubmit(event)">
+                <input
+                    id="function-key-input"
+                    class="function-key-gate-input"
+                    type="password"
+                    placeholder="Enter Azure Function key"
+                    autocomplete="off"
+                    aria-label="Azure Function key"
+                />
+            </form>
+            <div class="function-key-gate-help">Press Enter to continue</div>
+        </div>
+    </div>
+
     <!-- ADO-style Top Navigation Bar -->
-    <div class="top-nav">
+    <div class="top-nav" id="dashboard-top-nav">
         <a class="nav-logo" href="/">
             <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
                 <rect x="1.5" y="1.5" width="29" height="29" rx="7.5" fill="none" stroke="#3b82f6" stroke-width="1.5"/>
@@ -3121,7 +3257,7 @@
         <button class="dark-toggle" id="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
     </div>
 
-    <div class="app-layout">
+    <div class="app-layout" id="dashboard-app-layout">
         <!-- Left Sidebar: Queue -->
         <aside class="sidebar-left">
             <div class="sidebar-header">
@@ -4221,9 +4357,67 @@
         function ensureFunctionKey(actionLabel) {
             if (getFunctionKey()) return true;
             if (typeof showToast === 'function') {
-                showToast(`Function key required to ${actionLabel}. Click the 🔓 key button in the header to set it.`, 'error');
+                showToast(`Function key required to ${actionLabel}. Enter a key to unlock the dashboard.`, 'error');
             }
             return false;
+        }
+
+        function setDashboardVisibility(visible) {
+            const regionIds = ['dashboard-top-nav', 'dashboard-app-layout', 'dashboard-footer'];
+            regionIds.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.style.display = visible ? '' : 'none';
+                }
+            });
+
+            const connecting = document.getElementById('connecting-overlay');
+            if (connecting && !visible) {
+                connecting.classList.remove('show');
+            }
+        }
+
+        function showFunctionKeyGate() {
+            const gate = document.getElementById('function-key-gate');
+            const input = document.getElementById('function-key-input');
+
+            setDashboardVisibility(false);
+            if (gate) {
+                gate.style.display = 'flex';
+            }
+
+            const current = getFunctionKey();
+            if (input) {
+                input.value = current || '';
+                setTimeout(() => input.focus(), 0);
+            }
+        }
+
+        function hideFunctionKeyGate() {
+            const gate = document.getElementById('function-key-gate');
+            if (gate) {
+                gate.style.display = 'none';
+            }
+            setDashboardVisibility(true);
+        }
+
+        function handleFunctionKeyGateSubmit(event) {
+            if (event) {
+                event.preventDefault();
+            }
+
+            const input = document.getElementById('function-key-input');
+            const value = String(input?.value || '').trim();
+
+            if (!value) {
+                if (input) {
+                    input.focus();
+                }
+                return;
+            }
+
+            localStorage.setItem(FUNCTION_KEY_STORAGE_KEY, value);
+            window.location.reload();
         }
 
         function updateFunctionKeyButton() {
@@ -4254,6 +4448,13 @@
             }
 
             updateFunctionKeyButton();
+
+            if (!value) {
+                showFunctionKeyGate();
+                return;
+            }
+
+            window.location.reload();
         }
 
         // ========== Default Agent Definitions ==========
@@ -4268,6 +4469,7 @@
 
         // ========== State ==========
         let isConnected = false;
+        let dashboardStarted = false;
 
         // ========== Progress Calculation ==========
         function getProgress(data) {
@@ -5540,7 +5742,10 @@
         }
 
         // ========== Init ==========
-        function init() {
+        function startDashboard() {
+            if (dashboardStarted) return;
+            dashboardStarted = true;
+
             updateFunctionKeyButton();
 
             // Initialize notification manager
@@ -5589,10 +5794,22 @@
             }, 1000);
         }
 
+        function init() {
+            updateFunctionKeyButton();
+
+            if (!getFunctionKey()) {
+                showFunctionKeyGate();
+                return;
+            }
+
+            hideFunctionKeyGate();
+            startDashboard();
+        }
+
         document.addEventListener('DOMContentLoaded', init);
     </script>
     <!-- Footer -->
-    <footer class="dashboard-footer">
+    <footer class="dashboard-footer" id="dashboard-footer">
         <div class="footer-ctas">
             <a href="https://github.com/toddpick/adom8" target="_blank" rel="noopener" class="footer-cta-link">⭐ Star on GitHub</a>
             <span class="footer-separator">·</span>
