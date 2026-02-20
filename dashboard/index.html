@@ -251,7 +251,11 @@
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            margin-left: 4px;
+            justify-content: center;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
         }
 
         .top-stat-pill {
@@ -1573,6 +1577,11 @@
                 margin-left: 0;
                 padding-top: 8px;
                 border-top: 1px solid #333;
+                position: static;
+                left: auto;
+                transform: none;
+                pointer-events: auto;
+                justify-content: center;
             }
             .top-nav.menu-open {
                 flex-wrap: wrap;
@@ -3419,7 +3428,7 @@
                     </div>
                     <div class="nav-health-item unknown" id="nh-ai" data-key="aiApi">
                         <span class="nav-health-dot unknown"></span>
-                        <span class="nav-health-label">🤖 AI</span>
+                        <span class="nav-health-label">✨ AI</span>
                         <div class="nav-health-tooltip">
                             <div class="tooltip-status">Checking...</div>
                             <div class="tooltip-detail"></div>
@@ -3448,7 +3457,7 @@
             </div>
 
             <div class="sidebar-provider-section">
-                <div class="sidebar-header">🤖 Models</div>
+                <div class="sidebar-header">🧠 Models</div>
                 <div class="sidebar-provider-body">
                     <div class="ai-status-bar" id="ai-status-bar">
                         <div class="ai-provider-card claude not-configured" id="provider-claude">
@@ -4610,12 +4619,12 @@
                 return;
             }
 
-            const proceed = confirm('Sign out of dashboard access on this browser? This will clear the stored function key.');
-            if (!proceed) return;
-
             localStorage.removeItem(FUNCTION_KEY_STORAGE_KEY);
             updateFunctionKeyButton();
             showFunctionKeyGate();
+            if (typeof showToast === 'function') {
+                showToast('Logged out. Enter a function key to continue.', 'info');
+            }
             const error = document.getElementById('function-key-error');
             if (error) {
                 error.textContent = 'Signed out. Enter a function key to continue.';
@@ -4681,7 +4690,26 @@
         }
 
         async function resumePipeline(workItemId, btnEl) {
-            if (!confirm(`Resume pipeline for US-${workItemId}? This will start the Testing agent.`)) return;
+            if (!btnEl) return;
+            if (btnEl.dataset.confirming !== '1') {
+                btnEl.dataset.confirming = '1';
+                btnEl.dataset.originalText = btnEl.textContent || 'Resume';
+                btnEl.textContent = 'Confirm Resume';
+                btnEl.style.background = '#e67e22';
+                if (typeof showToast === 'function') {
+                    showToast(`Click again to resume US-${workItemId}.`, 'info');
+                }
+                setTimeout(() => {
+                    if (btnEl.dataset.confirming === '1') {
+                        btnEl.dataset.confirming = '';
+                        btnEl.textContent = btnEl.dataset.originalText || 'Resume';
+                        btnEl.style.background = '';
+                    }
+                }, 3000);
+                return;
+            }
+
+            btnEl.dataset.confirming = '';
             if (!ensureFunctionKey('resume pipeline')) return;
             btnEl.disabled = true;
             btnEl.textContent = 'Resuming...';
@@ -5687,10 +5715,25 @@
         async function handleProvisionAdo() {
             const btn = document.getElementById('provision-btn');
             const btnText = document.getElementById('provision-btn-text');
+            if (!btn || !btnText) return;
             if (!ensureFunctionKey('provision Azure DevOps')) return;
 
-            const proceed = confirm('Provision required Azure DevOps artifacts now?\n\nThis is safe to run repeatedly.');
-            if (!proceed) return;
+            if (btn.dataset.confirming !== '1') {
+                btn.dataset.confirming = '1';
+                btnText.textContent = 'CONFIRM?';
+                if (typeof showToast === 'function') {
+                    showToast('Click PROVISION ADO again to confirm.', 'info');
+                }
+                setTimeout(() => {
+                    if (btn.dataset.confirming === '1') {
+                        btn.dataset.confirming = '';
+                        btnText.textContent = 'PROVISION ADO';
+                    }
+                }, 3000);
+                return;
+            }
+
+            btn.dataset.confirming = '';
 
             const originalLabel = btnText.textContent;
             btn.disabled = true;
