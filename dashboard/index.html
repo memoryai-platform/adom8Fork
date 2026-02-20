@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'">
     <title>ADOm8</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1.5' y='1.5' width='29' height='29' rx='7.5' fill='none' stroke='%233b82f6' stroke-width='1.5'/%3E%3Cg transform='translate(1,0)'%3E%3Ccircle cx='12.4' cy='16' r='5' fill='none' stroke='%233b82f6' stroke-width='2'/%3E%3Ccircle cx='18.8' cy='16' r='5' fill='none' stroke='%233b82f6' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E">
     <style>
         * {
             margin: 0;
@@ -223,6 +224,27 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }
 
+        .top-nav-menu-toggle {
+            display: none;
+            background: none;
+            border: 1px solid #555;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 4px 10px;
+            line-height: 1;
+            margin-left: auto;
+        }
+
+        .top-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         .top-nav .nav-logo {
             display: flex;
             align-items: center;
@@ -340,8 +362,8 @@
             margin-bottom: 24px;
             position: relative;
             display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
+            align-items: center;
+            justify-content: center;
             gap: 16px;
         }
 
@@ -378,8 +400,9 @@
             align-items: center;
             gap: 6px;
             flex-wrap: wrap;
-            justify-content: flex-end;
-            max-width: 65%;
+            justify-content: center;
+            width: 100%;
+            max-width: 100%;
         }
 
         /* Emergency Stop Button (in top-nav) */
@@ -579,10 +602,11 @@
         .ai-status-bar {
             display: flex;
             gap: 6px;
-            justify-content: flex-end;
+            justify-content: center;
             flex-wrap: wrap;
             margin-bottom: 0;
             padding: 0;
+            width: 100%;
         }
 
         .ai-provider-card {
@@ -1430,15 +1454,12 @@
             .container {
                 padding: 14px;
             }
-            .header h1 {
-                font-size: 1.6rem;
-            }
             .header {
-                flex-direction: column;
                 gap: 10px;
+                margin-bottom: 16px;
             }
             .header-tools {
-                justify-content: flex-start;
+                justify-content: center;
                 width: 100%;
                 max-width: 100%;
             }
@@ -1447,12 +1468,32 @@
         /* Responsive layout for top-nav controls */
         @media (max-width: 1023px) {
             .top-nav {
-                flex-wrap: wrap;
+                flex-wrap: nowrap;
                 padding: 8px 16px;
             }
+            .top-nav .nav-project,
+            .top-nav .nav-separator,
             .top-nav .nav-spacer {
-                flex-basis: 100%;
-                height: 0;
+                display: none;
+            }
+            .top-nav-menu-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .top-nav-actions {
+                display: none;
+                width: 100%;
+                margin-top: 8px;
+                padding-top: 8px;
+                border-top: 1px solid #333;
+                justify-content: flex-start;
+            }
+            .top-nav.menu-open {
+                flex-wrap: wrap;
+            }
+            .top-nav.menu-open .top-nav-actions {
+                display: flex;
             }
         }
 
@@ -3166,6 +3207,13 @@
             font-size: 0.78rem;
         }
 
+        .function-key-gate-error {
+            min-height: 18px;
+            margin-top: 8px;
+            color: #fca5a5;
+            font-size: 0.82rem;
+        }
+
     </style>
 </head>
 <body>
@@ -3200,6 +3248,7 @@
                 />
             </form>
             <div class="function-key-gate-help">Press Enter to continue</div>
+            <div class="function-key-gate-error" id="function-key-error"></div>
         </div>
     </div>
 
@@ -3219,6 +3268,10 @@
         <span class="nav-project">Ado - Ai Agents</span>
 
         <span class="nav-spacer"></span>
+
+        <button class="top-nav-menu-toggle" id="top-nav-menu-toggle" onclick="toggleTopNavMenu()" title="Toggle menu" aria-label="Toggle menu">☰</button>
+
+        <div class="top-nav-actions" id="top-nav-actions">
 
         <button class="provision-btn" id="provision-btn" onclick="handleProvisionAdo()" title="Provision Azure DevOps artifacts" aria-label="Provision Azure DevOps artifacts">
             🧩 <span id="provision-btn-text">PROVISION ADO</span>
@@ -3255,6 +3308,7 @@
         </div>
         <button class="settings-gear" id="settings-gear" onclick="openSettingsModal()" title="Notification Settings" aria-label="Open notification settings">⚙️</button>
         <button class="dark-toggle" id="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        </div>
     </div>
 
     <div class="app-layout" id="dashboard-app-layout">
@@ -3355,19 +3409,6 @@
             <div class="container">
                 <!-- Header -->
                 <div class="header">
-                    <div class="header-main">
-                        <h1>
-                            <svg class="header-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                                <rect x="1.5" y="1.5" width="29" height="29" rx="7.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                                <g transform="translate(1, 0)">
-                                    <circle cx="12.4" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2"/>
-                                    <circle cx="18.8" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2"/>
-                                </g>
-                            </svg>
-                            ADOm8
-                        </h1>
-                        <div class="subtitle">Real-time monitoring of autonomous AI agents processing Azure DevOps work items</div>
-                    </div>
                     <div class="header-tools">
                         <div class="ai-status-bar" id="ai-status-bar">
                             <div class="ai-provider-card claude not-configured" id="provider-claude">
@@ -3643,6 +3684,21 @@
             btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
             localStorage.setItem('darkMode', isDark ? '1' : '0');
         }
+
+        function toggleTopNavMenu() {
+            const topNav = document.getElementById('dashboard-top-nav');
+            if (!topNav) return;
+            topNav.classList.toggle('menu-open');
+        }
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1023) {
+                const topNav = document.getElementById('dashboard-top-nav');
+                if (topNav) {
+                    topNav.classList.remove('menu-open');
+                }
+            }
+        });
 
         // Apply saved preference on load
         (function() {
@@ -4354,6 +4410,26 @@
             return `${url}${separator}code=${encodeURIComponent(key)}`;
         }
 
+        function withFunctionKeyValue(url, key) {
+            if (!key) return url;
+            const separator = url.includes('?') ? '&' : '?';
+            return `${url}${separator}code=${encodeURIComponent(key)}`;
+        }
+
+        async function validateFunctionKey(candidateKey) {
+            const key = String(candidateKey || '').trim();
+            if (!key) return false;
+
+            try {
+                const response = await fetch(withFunctionKeyValue(EMERGENCY_STOP_URL, key), {
+                    method: 'GET'
+                });
+                return response.ok;
+            } catch {
+                return false;
+            }
+        }
+
         function ensureFunctionKey(actionLabel) {
             if (getFunctionKey()) return true;
             if (typeof showToast === 'function') {
@@ -4380,10 +4456,15 @@
         function showFunctionKeyGate() {
             const gate = document.getElementById('function-key-gate');
             const input = document.getElementById('function-key-input');
+            const error = document.getElementById('function-key-error');
 
             setDashboardVisibility(false);
             if (gate) {
                 gate.style.display = 'flex';
+            }
+
+            if (error) {
+                error.textContent = '';
             }
 
             const current = getFunctionKey();
@@ -4407,17 +4488,41 @@
             }
 
             const input = document.getElementById('function-key-input');
+            const error = document.getElementById('function-key-error');
             const value = String(input?.value || '').trim();
 
             if (!value) {
+                if (error) {
+                    error.textContent = 'Function key is required.';
+                }
                 if (input) {
                     input.focus();
                 }
                 return;
             }
 
+            if (error) {
+                error.textContent = 'Validating key...';
+            }
+
+            const isValid = await validateFunctionKey(value);
+            if (!isValid) {
+                if (error) {
+                    error.textContent = 'Invalid function key. Please try again.';
+                }
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+                return;
+            }
+
             localStorage.setItem(FUNCTION_KEY_STORAGE_KEY, value);
-            window.location.reload();
+            updateFunctionKeyButton();
+            hideFunctionKeyGate();
+            if (!dashboardStarted) {
+                startDashboard();
+            }
         }
 
         function updateFunctionKeyButton() {
@@ -4425,36 +4530,31 @@
             if (!btn) return;
 
             const hasKey = !!getFunctionKey();
-            btn.textContent = hasKey ? '🔐' : '🔓';
+            btn.textContent = hasKey ? '🚪' : '🔓';
             btn.classList.toggle('configured', hasKey);
             btn.title = hasKey
-                ? 'Function key configured. Click to update or clear key.'
-                : 'No function key set. Click to configure secured actions.';
-            btn.setAttribute('aria-label', hasKey ? 'Update or clear Function Key' : 'Set Function Key');
+                ? 'Sign out and clear stored function key.'
+                : 'No function key set. Click to unlock dashboard.';
+            btn.setAttribute('aria-label', hasKey ? 'Sign out and clear function key' : 'Set Function Key');
         }
 
         function openFunctionKeyPrompt() {
-            const current = getFunctionKey();
-            const entered = prompt('Enter Azure Function key for secured actions.\nLeave blank and click OK to clear it.', current || '');
-            if (entered === null) return;
-
-            const value = entered.trim();
-            if (!value) {
-                localStorage.removeItem(FUNCTION_KEY_STORAGE_KEY);
-                if (typeof showToast === 'function') showToast('Function key cleared.', 'info');
-            } else {
-                localStorage.setItem(FUNCTION_KEY_STORAGE_KEY, value);
-                if (typeof showToast === 'function') showToast('Function key saved locally for this browser.', 'success');
-            }
-
-            updateFunctionKeyButton();
-
-            if (!value) {
+            const hasKey = !!getFunctionKey();
+            if (!hasKey) {
                 showFunctionKeyGate();
                 return;
             }
 
-            window.location.reload();
+            const proceed = confirm('Sign out of dashboard access on this browser? This will clear the stored function key.');
+            if (!proceed) return;
+
+            localStorage.removeItem(FUNCTION_KEY_STORAGE_KEY);
+            updateFunctionKeyButton();
+            showFunctionKeyGate();
+            const error = document.getElementById('function-key-error');
+            if (error) {
+                error.textContent = 'Signed out. Enter a function key to continue.';
+            }
         }
 
         // ========== Default Agent Definitions ==========
@@ -5194,7 +5294,7 @@
 
         async function fetchHealth() {
             try {
-                const response = await fetch(HEALTH_URL);
+                const response = await fetch(withFunctionKey(HEALTH_URL));
                 const data = await response.json();
                 updateHealthPanel(data);
                 updateProviderStatusBar(data);
@@ -5546,7 +5646,7 @@
 
         async function fetchStatus() {
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch(withFunctionKey(API_URL));
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
@@ -5794,11 +5894,24 @@
             }, 1000);
         }
 
-        function init() {
+        async function init() {
             updateFunctionKeyButton();
 
             if (!getFunctionKey()) {
                 showFunctionKeyGate();
+                return;
+            }
+
+            const storedKey = getFunctionKey();
+            const isValid = await validateFunctionKey(storedKey);
+            if (!isValid) {
+                localStorage.removeItem(FUNCTION_KEY_STORAGE_KEY);
+                updateFunctionKeyButton();
+                showFunctionKeyGate();
+                const error = document.getElementById('function-key-error');
+                if (error) {
+                    error.textContent = 'Stored key is no longer valid. Enter a valid function key.';
+                }
                 return;
             }
 
