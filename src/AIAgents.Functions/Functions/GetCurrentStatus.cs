@@ -39,7 +39,12 @@ public sealed class GetCurrentStatus
     {
         _logger.LogDebug("Dashboard status request received");
 
-        var recentActivity = await _activityLogger.GetRecentAsync(50, cancellationToken);
+        var storyActivity = await _activityLogger.GetRecentForStoriesAsync(500, cancellationToken) ?? [];
+        var recentActivity = await _activityLogger.GetRecentAsync(50, cancellationToken) ?? [];
+        if (storyActivity.Count == 0 && recentActivity.Count > 0)
+        {
+            storyActivity = recentActivity;
+        }
 
         // Peek at queued tasks waiting to be processed
         IReadOnlyList<AgentTask> queuedTasks;
@@ -53,7 +58,7 @@ public sealed class GetCurrentStatus
         }
 
         // Build story statuses from activity log
-        var storyStatuses = BuildStoryStatuses(recentActivity);
+        var storyStatuses = BuildStoryStatuses(storyActivity);
         await PopulateStoryTitlesAsync(storyStatuses, cancellationToken);
 
         // Identify the currently active work item (most recent story with an in-progress agent)
@@ -111,7 +116,7 @@ public sealed class GetCurrentStatus
                 AgentsActive = storyStatuses.Count(s =>
                     s.Agents.Values.Any(a => a == "in_progress")),
                 SuccessRate = CalculateSuccessRate(storyStatuses),
-                AvgProcessingTime = "N/A",
+                AvgProcessingTime = CalculateAverageProcessingTime(storyStatuses),
                 TotalTokens = storyStatuses.Sum(s => s.TokenUsage?.TotalTokens ?? 0),
                 TotalCost = storyStatuses.Sum(s => s.TokenUsage?.TotalCost ?? 0m)
             },
@@ -445,6 +450,33 @@ public sealed class GetCurrentStatus
         if (ts.TotalMinutes >= 1)
             return $"{(int)ts.TotalMinutes}m {ts.Seconds}s";
         return $"{ts.Seconds}s";
+    }
+
+    private static string CalculateAverageProcessingTime(List<StoryStatus> stories)
+    {
+        var completedStories = stories
+            .Where(s => s.Agents.Values.Any() && s.Agents.Values.All(a => a is "completed" or "failed"))
+            .ToList();
+
+        if (completedStories.Count == 0)
+        {
+            return "N/A";
+        }
+
+        var storyDurations = completedStories
+            .Select(s => s.AgentTimings?.Values
+                .Where(t => t.DurationSeconds.HasValue && t.DurationSeconds.Value > 0)
+                .Sum(t => t.DurationSeconds ?? 0) ?? 0)
+            .Where(seconds => seconds > 0)
+            .ToList();
+
+        if (storyDurations.Count == 0)
+        {
+            return "N/A";
+        }
+
+        var averageSeconds = storyDurations.Average();
+        return FormatElapsed(TimeSpan.FromSeconds(averageSeconds));
     }
 
     private static string? MapCurrentAgentField(string? currentAIAgent)

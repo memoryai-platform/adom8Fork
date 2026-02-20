@@ -14,6 +14,9 @@ public sealed class TableStorageActivityLogger : IActivityLogger
 {
     private const string TableName = "AgentActivity";
     private const string PartitionKey = "activity";
+    private const string MetaPartitionKey = "meta";
+    private const string FeedMetaRowKey = "feed";
+    private const string FeedClearedAfterColumn = "FeedClearedAfterUtc";
 
     private readonly TableClient _tableClient;
     private readonly ILogger<TableStorageActivityLogger> _logger;
@@ -82,9 +85,52 @@ public sealed class TableStorageActivityLogger : IActivityLogger
         int count = 50,
         CancellationToken cancellationToken = default)
     {
+        var feedClearedAfterUtc = await GetFeedClearedAfterAsync(cancellationToken);
         var entries = new List<ActivityEntry>();
 
         // Query with partition key filter; rows are already in reverse-chronological order
+        var query = _tableClient.QueryAsync<TableEntity>(
+            filter: $"PartitionKey eq '{PartitionKey}'",
+            maxPerPage: count,
+            cancellationToken: cancellationToken);
+
+        var taken = 0;
+        await foreach (var entity in query)
+        {
+            if (taken >= count) break;
+
+            var timestamp = DateTime.TryParse(entity.GetString("Timestamp_Utc"), out var parsedTimestamp)
+                ? parsedTimestamp
+                : DateTime.UtcNow;
+
+            if (feedClearedAfterUtc.HasValue && timestamp <= feedClearedAfterUtc.Value)
+            {
+                continue;
+            }
+
+            entries.Add(new ActivityEntry
+            {
+                Timestamp = timestamp,
+                Agent = entity.GetString("Agent") ?? "Unknown",
+                WorkItemId = entity.GetInt32("WorkItemId") ?? 0,
+                Message = entity.GetString("Message") ?? string.Empty,
+                Level = entity.GetString("Level") ?? "info",
+                Tokens = entity.GetInt32("Tokens") ?? 0,
+                Cost = (decimal)(entity.GetDouble("Cost") ?? 0.0)
+            });
+
+            taken++;
+        }
+
+        return entries;
+    }
+
+    public async Task<IReadOnlyList<ActivityEntry>> GetRecentForStoriesAsync(
+        int count = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = new List<ActivityEntry>();
+
         var query = _tableClient.QueryAsync<TableEntity>(
             filter: $"PartitionKey eq '{PartitionKey}'",
             maxPerPage: count,
@@ -111,6 +157,17 @@ public sealed class TableStorageActivityLogger : IActivityLogger
         }
 
         return entries;
+    }
+
+    public async Task ClearFeedAsync(CancellationToken cancellationToken = default)
+    {
+        var entity = new TableEntity(MetaPartitionKey, FeedMetaRowKey)
+        {
+            [FeedClearedAfterColumn] = DateTime.UtcNow.ToString("O")
+        };
+
+        await _tableClient.UpsertEntityAsync(entity, TableUpdateMode.Replace, cancellationToken);
+        _logger.LogInformation("Set live activity feed cutoff to now");
     }
 
     public async Task<int> ClearAsync(CancellationToken cancellationToken = default)
@@ -164,5 +221,34 @@ public sealed class TableStorageActivityLogger : IActivityLogger
         }
 
         return count;
+    }
+
+    private async Task<DateTime?> GetFeedClearedAfterAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _tableClient.GetEntityIfExistsAsync<TableEntity>(
+                MetaPartitionKey,
+                FeedMetaRowKey,
+                cancellationToken: cancellationToken);
+
+            if (!response.HasValue)
+            {
+                return null;
+            }
+
+            var entity = response.Value;
+            if (entity is null)
+            {
+                return null;
+            }
+
+            var value = entity.GetString(FeedClearedAfterColumn);
+            return DateTime.TryParse(value, out var parsed) ? parsed : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

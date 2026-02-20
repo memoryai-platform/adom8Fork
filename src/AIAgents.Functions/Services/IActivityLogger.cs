@@ -25,6 +25,16 @@ public interface IActivityLogger
     Task<IReadOnlyList<ActivityEntry>> GetRecentAsync(int count = 50, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Retrieves activity entries for story status calculation, unaffected by feed-clear filtering.
+    /// </summary>
+    Task<IReadOnlyList<ActivityEntry>> GetRecentForStoriesAsync(int count = 500, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the live activity feed only by setting a server-side cutoff timestamp.
+    /// </summary>
+    Task ClearFeedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Clears all activity log entries (dashboard reset).
     /// </summary>
     Task<int> ClearAsync(CancellationToken cancellationToken = default);

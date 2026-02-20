@@ -64,7 +64,8 @@
         }
 
         .queue-list {
-            flex: 1;
+            flex: 0 0 auto;
+            max-height: 300px;
             overflow-y: auto;
             padding: 8px 0;
         }
@@ -243,6 +244,38 @@
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
+        }
+
+        .top-nav-stats {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-left: 4px;
+        }
+
+        .top-stat-pill {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 0.7rem;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .top-stat-pill .value {
+            color: #f0f0f0;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: none;
+            letter-spacing: 0;
+            font-variant-numeric: tabular-nums;
         }
 
         .top-nav .nav-logo {
@@ -602,7 +635,7 @@
         .ai-status-bar {
             display: flex;
             gap: 6px;
-            justify-content: center;
+            justify-content: flex-start;
             flex-wrap: wrap;
             margin-bottom: 0;
             padding: 0;
@@ -660,6 +693,19 @@
             max-width: 84px;
         }
 
+        .sidebar-provider-section {
+            border-top: 1px solid #333;
+            padding: 0;
+        }
+
+        .sidebar-provider-section .sidebar-header {
+            border-bottom: 1px solid #333;
+        }
+
+        .sidebar-provider-body {
+            padding: 10px 12px 12px;
+        }
+
         .ai-provider-status-dot {
             width: 7px;
             height: 7px;
@@ -699,6 +745,35 @@
             cursor: default;
             max-width: 300px;
             min-height: 24px;
+        }
+
+        .codebase-panel {
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
+        }
+
+        .codebase-panel .sidebar-header {
+            border-bottom: none;
+        }
+
+        .codebase-panel-body {
+            padding: 0 16px 14px;
+        }
+
+        .codebase-panel .codebase-badge {
+            width: 100%;
+            justify-content: space-between;
+            max-width: 100%;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.74rem;
+            min-height: 36px;
+        }
+
+        .codebase-meta {
+            margin-top: 8px;
+            font-size: 0.7rem;
+            color: #888;
         }
 
         #codebase-badge-label {
@@ -748,32 +823,35 @@
         }
 
         .function-key-btn {
-            background: #fff;
-            color: #666;
-            border: 1px solid #d8d8d8;
-            border-radius: 999px;
-            height: 24px;
-            min-width: 24px;
-            padding: 0 8px;
+            background: #2a2a2a;
+            color: #ddd;
+            border: 1px solid #555;
+            border-radius: 6px;
+            height: 28px;
+            min-width: 82px;
+            padding: 0 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             line-height: 1;
             transition: all 0.2s ease;
         }
 
         .function-key-btn:hover {
-            border-color: #0078d4;
-            color: #0078d4;
-            background: #f5f8ff;
+            border-color: #777;
+            color: #fff;
+            background: #3a3a3a;
         }
 
         .function-key-btn.configured {
-            border-color: #4caf50;
-            color: #2e7d32;
-            background: rgba(76, 175, 80, 0.1);
+            border-color: #f59e0b;
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.12);
         }
 
         .codebase-badge.not-initialized .codebase-scan-btn:hover {
@@ -1488,6 +1566,13 @@
                 padding-top: 8px;
                 border-top: 1px solid #333;
                 justify-content: flex-start;
+            }
+            .top-nav-stats {
+                width: 100%;
+                order: 3;
+                margin-left: 0;
+                padding-top: 8px;
+                border-top: 1px solid #333;
             }
             .top-nav.menu-open {
                 flex-wrap: wrap;
@@ -3267,25 +3352,22 @@
         <span class="nav-separator">/</span>
         <span class="nav-project">Ado - Ai Agents</span>
 
+        <div class="top-nav-stats" id="top-nav-stats">
+            <span class="top-stat-pill">Stories <span class="value" id="stat-stories">0</span></span>
+            <span class="top-stat-pill">Avg Time <span class="value" id="stat-time">N/A</span></span>
+            <span class="top-stat-pill">Success <span class="value" id="stat-success">0%</span></span>
+            <span class="top-stat-pill">Tokens <span class="value" id="stat-tokens">0</span></span>
+            <span class="top-stat-pill">AI Cost <span class="value" id="stat-cost">$0.00</span></span>
+        </div>
+
         <span class="nav-spacer"></span>
 
         <button class="top-nav-menu-toggle" id="top-nav-menu-toggle" onclick="toggleTopNavMenu()" title="Toggle menu" aria-label="Toggle menu">☰</button>
 
         <div class="top-nav-actions" id="top-nav-actions">
 
-        <button class="provision-btn" id="provision-btn" onclick="handleProvisionAdo()" title="Provision Azure DevOps artifacts" aria-label="Provision Azure DevOps artifacts">
-            🧩 <span id="provision-btn-text">PROVISION ADO</span>
-        </button>
-        
-        <button class="function-key-btn" id="function-key-btn" onclick="openFunctionKeyPrompt()" title="Set Function Key for secured actions" aria-label="Set Function Key">🔓</button>
-        
-        <span class="codebase-badge not-initialized" id="codebase-badge" title="Codebase documentation status">
-            <span id="codebase-badge-label">⚠ Codebase Not Initialized</span>
-            <button class="codebase-scan-btn" id="btn-scan-codebase" onclick="openScanModal(); event.stopPropagation();" title="Initialize codebase documentation" aria-label="Initialize or re-analyze codebase">🔄</button>
-        </span>
-        
-        <button class="reset-btn" id="reset-btn" onclick="handleReset()" title="Clear all activity data and reset dashboard" aria-label="Reset dashboard data">
-            🔄 <span id="reset-btn-text">RESET</span>
+        <button class="reset-btn" id="clear-stories-btn" onclick="handleClearStories()" title="Clear all stories and queue data" aria-label="Clear stories">
+            🧹 <span id="clear-stories-btn-text">CLEAR STORIES</span>
         </button>
         <button class="abort-btn" id="abort-btn" onclick="handleAbort()" title="Emergency stop — clears all pending agent tasks" aria-label="Emergency stop pipeline">
             🛑 <span id="abort-btn-text">ABORT</span>
@@ -3308,51 +3390,13 @@
         </div>
         <button class="settings-gear" id="settings-gear" onclick="openSettingsModal()" title="Notification Settings" aria-label="Open notification settings">⚙️</button>
         <button class="dark-toggle" id="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <button class="function-key-btn" id="function-key-btn" onclick="openFunctionKeyPrompt()" title="Logout and clear function key" aria-label="Logout">LOGOUT</button>
         </div>
     </div>
 
     <div class="app-layout" id="dashboard-app-layout">
         <!-- Left Sidebar: Queue -->
         <aside class="sidebar-left">
-            <div class="sidebar-header">
-                📦 Queue
-                <span class="queue-count" id="queue-count" style="display:none;">0</span>
-            </div>
-            <div class="queue-list" id="queue-container">
-                <div class="queue-empty">No stories in queue</div>
-            </div>
-
-            <!-- Totals -->
-            <div class="sidebar-stats">
-                <div class="sidebar-header">📊 Totals</div>
-                <div class="sidebar-stat-list">
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">Stories</span>
-                        <span class="sidebar-stat-value" id="stat-stories">0</span>
-                    </div>
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">Avg Time</span>
-                        <span class="sidebar-stat-value time" id="stat-time">0s</span>
-                    </div>
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">Success</span>
-                        <span class="sidebar-stat-value success" id="stat-success">0%</span>
-                    </div>
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">Time Saved</span>
-                        <span class="sidebar-stat-value time" id="stat-saved">0h</span>
-                    </div>
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">Tokens</span>
-                        <span class="sidebar-stat-value tokens" id="stat-tokens">0</span>
-                    </div>
-                    <div class="sidebar-stat-item">
-                        <span class="sidebar-stat-label">AI Cost</span>
-                        <span class="sidebar-stat-value cost" id="stat-cost">$0.00</span>
-                    </div>
-                </div>
-            </div>
-
             <!-- System Health -->
             <div class="sidebar-stats sidebar-health">
                 <div class="sidebar-header">🏥 System Health</div>
@@ -3402,47 +3446,66 @@
                     </div>
                 </div>
             </div>
+
+            <div class="sidebar-provider-section">
+                <div class="sidebar-header">🤖 Models</div>
+                <div class="sidebar-provider-body">
+                    <div class="ai-status-bar" id="ai-status-bar">
+                        <div class="ai-provider-card claude not-configured" id="provider-claude">
+                            <div>
+                                <div class="ai-provider-name">Claude</div>
+                                <div class="ai-provider-model" id="provider-claude-model">claude-sonnet-4</div>
+                            </div>
+                            <span class="ai-provider-status-dot not-configured" id="provider-claude-dot"></span>
+                        </div>
+                        <div class="ai-provider-card openai not-configured" id="provider-openai">
+                            <div>
+                                <div class="ai-provider-name">OpenAI</div>
+                                <div class="ai-provider-model" id="provider-openai-model">gpt-4o</div>
+                            </div>
+                            <span class="ai-provider-status-dot not-configured" id="provider-openai-dot"></span>
+                        </div>
+                        <div class="ai-provider-card gemini not-configured" id="provider-gemini">
+                            <div>
+                                <div class="ai-provider-name">Gemini</div>
+                                <div class="ai-provider-model" id="provider-gemini-model">gemini-2.5-pro</div>
+                            </div>
+                            <span class="ai-provider-status-dot not-configured" id="provider-gemini-dot"></span>
+                        </div>
+                        <div class="ai-provider-card copilot not-configured" id="provider-copilot">
+                            <div>
+                                <div class="ai-provider-name">GitHub Copilot</div>
+                                <div class="ai-provider-model" id="provider-copilot-model">Claude / Codex</div>
+                            </div>
+                            <span class="ai-provider-status-dot not-configured" id="provider-copilot-dot"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="codebase-panel">
+                <div class="sidebar-header">🧠 Codebase Intelligence</div>
+                <div class="codebase-panel-body">
+                    <span class="codebase-badge not-initialized" id="codebase-badge" title="Codebase documentation status">
+                        <span id="codebase-badge-label">⚠ Codebase Not Initialized</span>
+                        <button class="codebase-scan-btn" id="btn-scan-codebase" onclick="openScanModal(); event.stopPropagation();" title="Initialize codebase documentation" aria-label="Initialize or re-analyze codebase">🔄</button>
+                    </span>
+                    <div class="codebase-meta" id="codebase-last-scan">Last Codebase Scan: Never</div>
+                </div>
+            </div>
+
+            <div class="sidebar-header">
+                📦 Queue
+                <span class="queue-count" id="queue-count" style="display:none;">0</span>
+            </div>
+            <div class="queue-list" id="queue-container">
+                <div class="queue-empty">No stories in queue</div>
+            </div>
         </aside>
 
         <!-- Center: Main Content -->
         <main>
             <div class="container">
-                <!-- Header -->
-                <div class="header">
-                    <div class="header-tools">
-                        <div class="ai-status-bar" id="ai-status-bar">
-                            <div class="ai-provider-card claude not-configured" id="provider-claude">
-                                <div>
-                                    <div class="ai-provider-name">Claude</div>
-                                    <div class="ai-provider-model" id="provider-claude-model">Not Configured</div>
-                                </div>
-                                <span class="ai-provider-status-dot not-configured" id="provider-claude-dot"></span>
-                            </div>
-                            <div class="ai-provider-card openai not-configured" id="provider-openai">
-                                <div>
-                                    <div class="ai-provider-name">OpenAI</div>
-                                    <div class="ai-provider-model" id="provider-openai-model">Not Configured</div>
-                                </div>
-                                <span class="ai-provider-status-dot not-configured" id="provider-openai-dot"></span>
-                            </div>
-                            <div class="ai-provider-card gemini not-configured" id="provider-gemini">
-                                <div>
-                                    <div class="ai-provider-name">Gemini</div>
-                                    <div class="ai-provider-model" id="provider-gemini-model">Not Configured</div>
-                                </div>
-                                <span class="ai-provider-status-dot not-configured" id="provider-gemini-dot"></span>
-                            </div>
-                            <div class="ai-provider-card copilot not-configured" id="provider-copilot">
-                                <div>
-                                    <div class="ai-provider-name">GitHub Copilot</div>
-                                    <div class="ai-provider-model" id="provider-copilot-model">Not Configured</div>
-                                </div>
-                                <span class="ai-provider-status-dot not-configured" id="provider-copilot-dot"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Agent Pipeline -->
                 <div class="section-title">⚡ Agent Pipeline</div>
                 
@@ -3487,6 +3550,7 @@
                         <button class="refresh-toggle" id="refresh-toggle" onclick="handleRefreshToggle()" title="Pause/Resume auto-refresh" aria-label="Pause or resume auto refresh">⏸️</button>
                         <span class="refresh-countdown" id="refresh-countdown">0s</span>
                         <button class="refresh-manual" id="refresh-manual" onclick="handleManualRefresh()" title="Manual refresh" aria-label="Refresh now">🔄</button>
+                        <button class="refresh-manual" id="clear-activity-btn" onclick="handleClearActivity()" title="Clear live activity feed" aria-label="Clear live activity">CLEAR ACTIVITY</button>
                     </div>
                 </div>
             </div>
@@ -4378,7 +4442,8 @@
         const API_URL = 'https://ai-agents-func-todd.azurewebsites.net/api/status';
         const API_BASE = API_URL.replace('/status', '');
         const EMERGENCY_STOP_URL = 'https://ai-agents-func-todd.azurewebsites.net/api/emergency-stop';
-        const RESET_URL = 'https://ai-agents-func-todd.azurewebsites.net/api/reset';
+        const CLEAR_ACTIVITY_URL = API_URL.replace('/status', '/clear-activity');
+        const CLEAR_STORIES_URL = API_URL.replace('/status', '/clear-stories');
         const INITIALIZE_CODEBASE_URL = API_URL.replace('/status', '/initialize-codebase');
         const CODEBASE_INTEL_URL = API_URL.replace('/status', '/codebase-intelligence');
         const PROVISION_ADO_URL = API_URL.replace('/status', '/provision-ado');
@@ -4530,12 +4595,12 @@
             if (!btn) return;
 
             const hasKey = !!getFunctionKey();
-            btn.textContent = hasKey ? '🚪' : '🔓';
+            btn.textContent = 'LOGOUT';
             btn.classList.toggle('configured', hasKey);
             btn.title = hasKey
                 ? 'Sign out and clear stored function key.'
-                : 'No function key set. Click to unlock dashboard.';
-            btn.setAttribute('aria-label', hasKey ? 'Sign out and clear function key' : 'Set Function Key');
+                : 'Not logged in. Click to enter a function key.';
+            btn.setAttribute('aria-label', 'Logout');
         }
 
         function openFunctionKeyPrompt() {
@@ -4716,7 +4781,6 @@
                 document.getElementById('stat-stories').textContent = data.stats.storiesProcessed ?? 0;
                 document.getElementById('stat-time').textContent = data.stats.avgProcessingTime ?? '0s';
                 document.getElementById('stat-success').textContent = (data.stats.successRate ?? 0) + '%';
-                document.getElementById('stat-saved').textContent = data.stats.timeSaved ?? '0h';
                 document.getElementById('stat-tokens').textContent =
                     (data.stats.totalTokens ?? 0).toLocaleString();
                 document.getElementById('stat-cost').textContent =
@@ -5295,10 +5359,12 @@
         async function fetchHealth() {
             try {
                 const response = await fetch(withFunctionKey(HEALTH_URL), { cache: 'no-store' });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 updateHealthPanel(data);
                 updateProviderStatusBar(data);
+                if (!response.ok) {
+                    console.warn('Health endpoint returned non-OK:', response.status);
+                }
             } catch (err) {
                 updateHealthPanel(null);
                 console.warn('Health fetch failed:', err.message);
@@ -5385,7 +5451,7 @@
                     const isConfigured = providers.ai.configured;
                     card.className = `ai-provider-card ${normalizedName} ${isConfigured ? 'configured' : 'not-configured'}`;
                     const modelEl = document.getElementById(cardId + '-model');
-                    if (modelEl) modelEl.textContent = isConfigured ? (providers.ai.model || 'Configured') : 'Not Configured';
+                    if (modelEl) modelEl.textContent = providers.ai.model || getDefaultModelForProvider(normalizedName);
                     const dotEl = document.getElementById(cardId + '-dot');
                     if (dotEl) dotEl.className = `ai-provider-status-dot ${isConfigured ? aiStatus : 'not-configured'}`;
                 }
@@ -5401,7 +5467,7 @@
                     const isConfigured = p.configured;
                     card.className = `ai-provider-card ${normalizedName} ${isConfigured ? 'configured' : 'not-configured'}`;
                     const modelEl = document.getElementById(cardId + '-model');
-                    if (modelEl) modelEl.textContent = isConfigured ? (p.model || 'Configured') : 'Not Configured';
+                    if (modelEl) modelEl.textContent = p.model || getDefaultModelForProvider(normalizedName);
                     const dotEl = document.getElementById(cardId + '-dot');
                     if (dotEl) dotEl.className = `ai-provider-status-dot ${isConfigured ? 'configured' : 'not-configured'}`;
                 });
@@ -5415,14 +5481,20 @@
                     card.className = `ai-provider-card copilot ${isConfigured ? 'configured' : 'not-configured'}`;
                     const modelEl = document.getElementById('provider-copilot-model');
                     if (modelEl) {
-                        modelEl.textContent = isConfigured
-                            ? `${providers.copilot.mode || 'Auto'} · ${providers.copilot.model || 'copilot'}`
-                            : 'Not Configured';
+                        modelEl.textContent = 'Claude / Codex';
                     }
                     const dotEl = document.getElementById('provider-copilot-dot');
                     if (dotEl) dotEl.className = `ai-provider-status-dot ${isConfigured ? 'configured' : 'not-configured'}`;
                 }
             }
+        }
+
+        function getDefaultModelForProvider(providerName) {
+            if (providerName === 'claude') return 'claude-sonnet-4';
+            if (providerName === 'openai') return 'gpt-4o';
+            if (providerName === 'gemini') return 'gemini-2.5-pro';
+            if (providerName === 'copilot') return 'Claude / Codex';
+            return 'default';
         }
 
         function normalizeProviderName(name) {
@@ -5450,6 +5522,7 @@
                 const data = await response.json();
                 const badge = document.getElementById('codebase-badge');
                 const badgeLabel = document.getElementById('codebase-badge-label');
+                const lastScanMeta = document.getElementById('codebase-last-scan');
                 const scanBtn = document.getElementById('btn-scan-codebase');
 
                 if (data.status === 'up_to_date') {
@@ -5464,6 +5537,11 @@
                             ? `Last scan: ${new Date(data.lastAnalysis).toLocaleDateString()} · ${data.stats.filesAnalyzed} files · ${data.stats.featuresDocumented} features`
                             : 'Codebase documentation is up to date';
                     }
+                            if (lastScanMeta) {
+                            lastScanMeta.textContent = lastScanText
+                                ? `Last Codebase Scan: ${lastScanText}`
+                                : 'Last Codebase Scan: Unknown';
+                            }
 
                     if (scanBtn) {
                         scanBtn.textContent = '🔄';
@@ -5478,6 +5556,9 @@
                         badge.className = 'codebase-badge not-initialized';
                         badgeLabel.textContent = '⚠ Codebase Not Initialized';
                         badge.title = 'Codebase documentation has not been initialized';
+                    }
+                    if (lastScanMeta) {
+                        lastScanMeta.textContent = 'Last Codebase Scan: Never';
                     }
                     if (scanBtn) {
                         scanBtn.textContent = '🔄';
@@ -5788,40 +5869,78 @@
             return hours + 'h ' + (minutes % 60) + 'm';
         }
 
-        // ========== Reset Dashboard ==========
-        let resetConfirmPending = false;
-        let resetConfirmTimer = null;
+        // ========== Clear Activity / Stories ==========
+        let clearStoriesConfirmPending = false;
+        let clearStoriesConfirmTimer = null;
 
-        async function handleReset() {
-            const btn = document.getElementById('reset-btn');
-            const btnText = document.getElementById('reset-btn-text');
-            if (!ensureFunctionKey('reset dashboard')) return;
+        async function handleClearActivity() {
+            const btn = document.getElementById('clear-activity-btn');
+            if (!btn) return;
+            if (!ensureFunctionKey('clear activity')) return;
+
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'CLEARING...';
+
+            try {
+                const resp = await fetch(withFunctionKey(CLEAR_ACTIVITY_URL), { method: 'POST' });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+
+                updateActivity([]);
+                btn.textContent = 'CLEARED';
+                if (typeof showToast === 'function') {
+                    showToast('Live activity cleared.', 'success');
+                }
+
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 2500);
+            } catch (err) {
+                btn.textContent = 'ERROR';
+                if (typeof showToast === 'function') {
+                    showToast('Failed to clear live activity: ' + err.message, 'error');
+                }
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
+        }
+
+        async function handleClearStories() {
+            const btn = document.getElementById('clear-stories-btn');
+            const btnText = document.getElementById('clear-stories-btn-text');
+            if (!btn || !btnText) return;
+            if (!ensureFunctionKey('clear stories')) return;
 
             if (btn.classList.contains('done')) return;
 
             // Two-click confirm
-            if (!resetConfirmPending) {
-                resetConfirmPending = true;
+            if (!clearStoriesConfirmPending) {
+                clearStoriesConfirmPending = true;
                 btn.classList.add('confirming');
                 btnText.textContent = 'CONFIRM?';
 
-                resetConfirmTimer = setTimeout(() => {
-                    resetConfirmPending = false;
+                clearStoriesConfirmTimer = setTimeout(() => {
+                    clearStoriesConfirmPending = false;
                     btn.classList.remove('confirming');
-                    btnText.textContent = 'RESET';
+                    btnText.textContent = 'CLEAR STORIES';
                 }, 3000);
                 return;
             }
 
-            // Execute reset
-            clearTimeout(resetConfirmTimer);
-            resetConfirmPending = false;
+            // Execute clear stories
+            clearTimeout(clearStoriesConfirmTimer);
+            clearStoriesConfirmPending = false;
             btn.classList.remove('confirming');
-            btnText.textContent = 'RESETTING...';
+            btnText.textContent = 'CLEARING...';
             btn.disabled = true;
 
             try {
-                const resp = await fetch(withFunctionKey(RESET_URL), { method: 'POST' });
+                const resp = await fetch(withFunctionKey(CLEAR_STORIES_URL), { method: 'POST' });
                 const data = await resp.json();
 
                 btn.classList.add('done');
@@ -5833,12 +5952,12 @@
 
                 setTimeout(() => {
                     btn.classList.remove('done');
-                    btnText.textContent = 'RESET';
+                    btnText.textContent = 'CLEAR STORIES';
                 }, 5000);
             } catch (err) {
-                btnText.textContent = 'RESET (error)';
+                btnText.textContent = 'ERROR';
                 btn.disabled = false;
-                setTimeout(() => { btnText.textContent = 'RESET'; }, 3000);
+                setTimeout(() => { btnText.textContent = 'CLEAR STORIES'; }, 3000);
             }
         }
 

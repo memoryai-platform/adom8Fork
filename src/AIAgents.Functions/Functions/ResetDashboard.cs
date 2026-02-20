@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace AIAgents.Functions.Functions;
 
 /// <summary>
-/// Dashboard reset endpoint — clears all activity log entries and queues.
-/// POST /api/reset — wipes the AgentActivity table and clears queues.
-/// This gives users a clean slate on the dashboard without redeploying.
+/// Dashboard story reset endpoint — clears all story activity and queues.
+/// POST /api/clear-stories — wipes the AgentActivity table and clears queues.
+/// POST /api/reset — backward-compatible alias for clear-stories.
 /// </summary>
 public sealed class ResetDashboard
 {
@@ -34,12 +34,25 @@ public sealed class ResetDashboard
         _poisonQueue = new QueueClient(connectionString, "agent-tasks-poison");
     }
 
+    [Function("ClearStories")]
+    public Task<IActionResult> ClearStories(
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "clear-stories")] HttpRequest req,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteInternal(cancellationToken);
+    }
+
     [Function("ResetDashboard")]
-    public async Task<IActionResult> Execute(
+    public Task<IActionResult> ExecuteLegacyReset(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = "reset")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        _logger.LogWarning("Dashboard RESET triggered — clearing activity log and queues");
+        return ExecuteInternal(cancellationToken);
+    }
+
+    private async Task<IActionResult> ExecuteInternal(CancellationToken cancellationToken)
+    {
+        _logger.LogWarning("Dashboard clear-stories triggered — clearing activity log and queues");
 
         try
         {
@@ -64,7 +77,7 @@ public sealed class ResetDashboard
 
             return new OkObjectResult(new
             {
-                status = "reset",
+                status = "stories_cleared",
                 activitiesCleared = entriesCleared,
                 queueMessagesCleared = queueCleared,
                 poisonMessagesCleared = poisonCleared

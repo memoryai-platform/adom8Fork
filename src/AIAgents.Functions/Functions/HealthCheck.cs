@@ -197,7 +197,7 @@ public sealed class HealthCheck
         var sw = Stopwatch.StartNew();
         try
         {
-            var apiKey = _configuration["AI:ApiKey"] ?? _configuration["AI__ApiKey"];
+            var apiKey = ResolvePrimaryProviderApiKey();
             if (string.IsNullOrEmpty(apiKey))
             {
                 return new ComponentCheck { Status = "degraded", Message = "AI API key not configured" };
@@ -231,9 +231,13 @@ public sealed class HealthCheck
     {
         var missingVars = new List<string>();
 
+        if (!HasPrimaryProviderConfiguration())
+        {
+            missingVars.Add("AI__ApiKey");
+        }
+
         var requiredVars = new Dictionary<string, string[]>
         {
-            ["AI__ApiKey"] = ["AI:ApiKey", "AI__ApiKey"],
             ["AzureDevOps__Pat"] = ["AzureDevOps:Pat", "AzureDevOps__Pat"],
             ["Git__Token"] = ["Git:Token", "Git__Token"]
         };
@@ -285,13 +289,14 @@ public sealed class HealthCheck
     private ProviderInfo BuildProviderInfo(Dictionary<string, ComponentCheck> checks)
     {
         var aiStatus = checks.TryGetValue("aiApi", out var aiCheck) ? aiCheck.Status : "unknown";
+        var hasPrimaryProviderConfiguration = HasPrimaryProviderConfiguration();
 
         // Primary AI provider
         var primaryProvider = new ProviderDetail
         {
             Name = _aiOptions.Provider ?? "Unknown",
             Model = _aiOptions.Model,
-            Configured = !string.IsNullOrEmpty(_aiOptions.ApiKey),
+            Configured = hasPrimaryProviderConfiguration,
             Status = aiStatus
         };
 
@@ -355,6 +360,57 @@ public sealed class HealthCheck
             "google" or "gemini" => "Gemini",
             _ => provider
         };
+    }
+
+    private bool HasPrimaryProviderConfiguration()
+    {
+        return !string.IsNullOrWhiteSpace(ResolvePrimaryProviderApiKey());
+    }
+
+    private string? ResolvePrimaryProviderApiKey()
+    {
+        var configuredApiKey = _configuration["AI:ApiKey"] ?? _configuration["AI__ApiKey"];
+        if (!string.IsNullOrWhiteSpace(configuredApiKey))
+        {
+            return configuredApiKey;
+        }
+
+        var configuredProvider = _configuration["AI:Provider"] ?? _configuration["AI__Provider"] ?? _aiOptions.Provider;
+        var primaryProvider = NormalizeProviderName(configuredProvider);
+
+        var providerAliases = primaryProvider switch
+        {
+            "Claude" => new[] { "Claude", "Anthropic" },
+            "OpenAI" => new[] { "OpenAI", "AzureOpenAI" },
+            "Gemini" => new[] { "Gemini", "Google" },
+            _ => new[] { primaryProvider }
+        };
+
+        foreach (var alias in providerAliases)
+        {
+            var keyFromHierarchy = _configuration[$"AI:ProviderKeys:{alias}:ApiKey"];
+            var keyFromFlat = _configuration[$"AI__ProviderKeys__{alias}__ApiKey"];
+            var providerKey = keyFromHierarchy ?? keyFromFlat;
+            if (!string.IsNullOrWhiteSpace(providerKey))
+            {
+                return providerKey;
+            }
+        }
+
+        if (_aiOptions.ProviderKeys is null)
+        {
+            return null;
+        }
+
+        foreach (var providerEntry in _aiOptions.ProviderKeys)
+        {
+            if (string.Equals(NormalizeProviderName(providerEntry.Key), primaryProvider, StringComparison.OrdinalIgnoreCase))
+            {
+                return providerEntry.Value?.ApiKey;
+            }
+        }
+
+        return null;
     }
 
     private static IActionResult ToActionResult(HealthCheckResult result)
