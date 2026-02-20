@@ -1864,7 +1864,8 @@
         }
 
         .activity-title {
-            justify-content: flex-start !important;
+            justify-content: space-between !important;
+            align-items: center;
         }
 
         .activity-refresh-label {
@@ -3559,11 +3560,13 @@
                         <button class="refresh-toggle" id="refresh-toggle" onclick="handleRefreshToggle()" title="Pause/Resume auto-refresh" aria-label="Pause or resume auto refresh">⏸️</button>
                         <span class="refresh-countdown" id="refresh-countdown">0s</span>
                         <button class="refresh-manual" id="refresh-manual" onclick="handleManualRefresh()" title="Manual refresh" aria-label="Refresh now">🔄</button>
-                        <button class="refresh-manual" id="clear-activity-btn" onclick="handleClearActivity()" title="Clear live activity feed" aria-label="Clear live activity">CLEAR ACTIVITY</button>
                     </div>
                 </div>
             </div>
-            <div class="sidebar-header activity-title">📡 Live Activity</div>
+            <div class="sidebar-header activity-title">
+                <span>📡 Live Activity</span>
+                <button class="refresh-manual" id="clear-activity-btn" onclick="handleClearActivity()" title="Clear live activity feed" aria-label="Clear live activity">CLEAR ACTIVITY</button>
+            </div>
             <div class="activity-list" id="activity-feed">
                 <!-- Activity items rendered by JS -->
             </div>
