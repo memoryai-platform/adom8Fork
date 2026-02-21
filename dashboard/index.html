@@ -5519,6 +5519,9 @@
                 const agentDisplayName = escapeHtml(safeText(agentAssignee, 'copilot').replace(/^./, (char) => char.toUpperCase()));
                 const issueNum = safeInteger(agentData?.additionalData?.issueNumber, 0);
                 const githubIssueUrl = issueNum > 0 ? `https://github.com/toddpick/adom8/issues/${issueNum}` : null;
+                const githubAgentsUrl = name === 'Coding' && (isCopilotDelegated || isCopilotCompletedInferred)
+                    ? 'https://github.com/toddpick/adom8/agents'
+                    : null;
                 const badgeText = isCopilotDelegated
                     ? `${agentDisplayName} Working`
                     : isTestingSkippedByCopilot
@@ -5541,6 +5544,11 @@
                             <div class="agent-detail-description">${safeDescriptionText}</div>
                         </div>
                     </div>
+                    ${githubAgentsUrl ? `
+                        <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                            <a href="${githubAgentsUrl}" target="_blank" rel="noopener" class="github-issue-link">View GitHub Agents ↗</a>
+                        </div>
+                    ` : ''}
                     ${isCopilotDelegated ? `
                         <div class="github-working" style="margin-top: 10px;">
                             <svg class="github-spinner" viewBox="0 0 16 16" fill="currentColor">
