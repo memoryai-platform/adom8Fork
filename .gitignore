@@ -3,6 +3,8 @@
 [Oo]bj/
 [Dd]ebug/
 [Rr]elease/
+publish_output/
+publish_output.zip
 
 # Visual Studio
 .vs/
