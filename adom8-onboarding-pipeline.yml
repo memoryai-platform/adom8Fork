@@ -87,7 +87,7 @@ stages:
         publishWebProjects: false
         projects: 'src/AIAgents.Functions/AIAgents.Functions.csproj'
         arguments: '--configuration Release --output $(System.DefaultWorkingDirectory)/publish_output'
-        zipAfterPublish: false
+        zipAfterPublish: true
 
     - task: AzureFunctionApp@2
       displayName: 'Deploy Azure Function'
@@ -95,7 +95,7 @@ stages:
         azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
         appType: 'functionAppLinux'
         appName: '$(FUNCTION_APP_NAME)'
-        package: '$(System.DefaultWorkingDirectory)/publish_output'
+        package: '$(System.DefaultWorkingDirectory)/publish_output/**/*.zip'
 
 - stage: Configuration
   displayName: 'Stages 2-7: Configuration and Validation'
