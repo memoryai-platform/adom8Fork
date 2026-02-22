@@ -87,6 +87,7 @@ stages:
         publishWebProjects: false
         projects: 'src/AIAgents.Functions/AIAgents.Functions.csproj'
         arguments: '--configuration Release --output $(System.DefaultWorkingDirectory)/publish_output'
+        zipAfterPublish: false
 
     - task: AzureFunctionApp@2
       displayName: 'Deploy Azure Function'
