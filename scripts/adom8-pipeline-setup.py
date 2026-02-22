@@ -125,7 +125,7 @@ def main():
     
     app_settings = [
         f"AzureDevOps__Pat=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=ADOM8-ADO-PAT)",
-        f"AI__ApiKey=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=CLAUDE-API-KEY)",
+        f"AI__ApiKey=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=ADOM8-AI-KEY)",
         f"Git__Token=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=GITHUB-TOKEN)",
         # Bug fix: runtime reads Copilot__WebhookSecret, not WebhookSharedSecret
         f"Copilot__WebhookSecret=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=FUNCTION-KEY)",
