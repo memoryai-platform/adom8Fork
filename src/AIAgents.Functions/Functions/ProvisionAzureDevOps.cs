@@ -208,7 +208,8 @@ public sealed class ProvisionAzureDevOps
             var currentAgentFieldStatus = await GetCurrentAgentProcessFieldStatusAsync(
                 adoClient,
                 projectInfo.ProcessTemplateName,
-                cancellationToken);
+                cancellationToken,
+                knownProcessId: projectInfo.ProcessTemplateId);
 
             if (!currentAgentFieldStatus.Exists)
             {
@@ -218,7 +219,8 @@ public sealed class ProvisionAzureDevOps
                         adoClient,
                         projectInfo.ProcessTemplateName,
                         warnings,
-                        cancellationToken);
+                        cancellationToken,
+                        knownProcessId: projectInfo.ProcessTemplateId);
 
                     if (createdCurrentAgentPicklist)
                     {
@@ -244,7 +246,8 @@ public sealed class ProvisionAzureDevOps
                         adoClient,
                         projectInfo.ProcessTemplateName,
                         warnings,
-                        cancellationToken);
+                        cancellationToken,
+                        knownProcessId: projectInfo.ProcessTemplateId);
 
                     if (convertedCurrentAgentPicklist)
                     {
@@ -253,7 +256,8 @@ public sealed class ProvisionAzureDevOps
                         currentAgentFieldStatus = await GetCurrentAgentProcessFieldStatusAsync(
                             adoClient,
                             projectInfo.ProcessTemplateName,
-                            cancellationToken);
+                            cancellationToken,
+                            knownProcessId: projectInfo.ProcessTemplateId);
                     }
                 }
 
@@ -284,7 +288,8 @@ public sealed class ProvisionAzureDevOps
                     projectInfo.ProcessTemplateName,
                     initialMissingStates,
                     warnings,
-                    cancellationToken);
+                    cancellationToken,
+                    knownProcessId: projectInfo.ProcessTemplateId);
 
                 if (autoCreated.Count > 0)
                 {
@@ -393,8 +398,10 @@ public sealed class ProvisionAzureDevOps
             ?? throw new InvalidOperationException("Azure DevOps project id not found.");
         var name = json?["name"]?.GetValue<string>() ?? _options.Project;
         var processTemplateName = json?["capabilities"]?["processTemplate"]?["templateName"]?.GetValue<string>();
+        // templateTypeId is the process GUID — use it directly to avoid unreliable name-based lookups
+        var processTemplateId = json?["capabilities"]?["processTemplate"]?["templateTypeId"]?.GetValue<string>();
 
-        return new ProjectInfo(id, name, processTemplateName);
+        return new ProjectInfo(id, name, processTemplateName, processTemplateId);
     }
 
     private async Task<bool> EnsureServiceHookAsync(
@@ -485,11 +492,12 @@ public sealed class ProvisionAzureDevOps
         string processTemplateName,
         IReadOnlyCollection<string> missingStates,
         List<string> warnings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? knownProcessId = null)
     {
         var created = new List<string>();
 
-        var processId = await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
+        var processId = knownProcessId ?? await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
         if (string.IsNullOrWhiteSpace(processId))
         {
             warnings.Add($"Could not resolve process '{processTemplateName}' for automatic state creation.");
@@ -549,18 +557,25 @@ public sealed class ProvisionAzureDevOps
         var json = await ReadJsonAsync(response, cancellationToken);
         var values = json?["value"]?.AsArray() ?? new JsonArray();
 
+        // Try exact name match first, then case-insensitive contains as fallback
+        string? exactMatch = null;
+        string? containsMatch = null;
         foreach (var item in values)
         {
-            var name = item?["name"]?.GetValue<string>();
-            if (!string.Equals(name, processTemplateName, StringComparison.OrdinalIgnoreCase))
+            var name = item?["name"]?.GetValue<string>() ?? string.Empty;
+            var itemId = item?["typeId"]?.GetValue<string>() ?? item?["id"]?.GetValue<string>();
+            if (string.Equals(name, processTemplateName, StringComparison.OrdinalIgnoreCase))
             {
-                continue;
+                exactMatch = itemId;
+                break;
             }
-
-            return item?["typeId"]?.GetValue<string>() ?? item?["id"]?.GetValue<string>();
+            if (containsMatch is null && name.Contains(processTemplateName, StringComparison.OrdinalIgnoreCase))
+            {
+                containsMatch = itemId;
+            }
         }
 
-        return null;
+        return exactMatch ?? containsMatch;
     }
 
     private async Task<string?> TryGetProcessWorkItemTypeReferenceNameAsync(
@@ -592,14 +607,15 @@ public sealed class ProvisionAzureDevOps
     private async Task<FieldStatus> GetCurrentAgentProcessFieldStatusAsync(
         HttpClient client,
         string? processTemplateName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? knownProcessId = null)
     {
         if (string.IsNullOrWhiteSpace(processTemplateName))
         {
             return FieldStatus.Missing;
         }
 
-        var processId = await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
+        var processId = knownProcessId ?? await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
         if (string.IsNullOrWhiteSpace(processId))
         {
             return FieldStatus.Missing;
@@ -658,9 +674,10 @@ public sealed class ProvisionAzureDevOps
         HttpClient client,
         string processTemplateName,
         List<string> warnings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? knownProcessId = null)
     {
-        var processId = await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
+        var processId = knownProcessId ?? await TryGetProcessIdAsync(client, processTemplateName, cancellationToken);
         if (string.IsNullOrWhiteSpace(processId))
         {
             warnings.Add($"Could not resolve process '{processTemplateName}' to create Current AI Agent picklist field.");
@@ -1046,5 +1063,5 @@ public sealed class ProvisionAzureDevOps
         public static FieldStatus Missing => new(false, false, string.Empty);
     }
 
-    private sealed record ProjectInfo(string Id, string Name, string? ProcessTemplateName);
+    private sealed record ProjectInfo(string Id, string Name, string? ProcessTemplateName, string? ProcessTemplateId = null);
 }
