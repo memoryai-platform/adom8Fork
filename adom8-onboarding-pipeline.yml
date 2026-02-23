@@ -124,6 +124,8 @@ stages:
 
     - bash: |
         sed -i 's|__FUNCTION_APP_URL__|https://$(FUNCTION_APP_NAME).azurewebsites.net|g' dashboard/index.html
+        SAFE_ADO_PROJECT_NAME=$(printf '%s' "$(AZURE_DEVOPS_PROJECT)" | sed 's/[&|]/\\&/g')
+        sed -i "s|__ADO_PROJECT_NAME__|$SAFE_ADO_PROJECT_NAME|g" dashboard/index.html
       displayName: 'Update Function App URL in Dashboard'
 
     - task: AzureStaticWebApp@0
