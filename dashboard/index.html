@@ -4646,13 +4646,9 @@
         }
 
         // ========== Configuration ==========
-        const FUNCTION_URL_PLACEHOLDER = '__FUNCTION_APP_URL__';
-        const FUNCTION_URL_STORAGE_KEY = 'adom8-function-url';
-        const FUNCTION_URL_QUERY_PARAM = 'functionUrl';
-        const resolvedFunctionUrl = resolveFunctionUrl();
-        const API_URL = `${resolvedFunctionUrl}/api/status`;
+        const API_URL = '__FUNCTION_APP_URL__/api/status';
         const API_BASE = API_URL.replace('/status', '');
-        const EMERGENCY_STOP_URL = `${resolvedFunctionUrl}/api/emergency-stop`;
+        const EMERGENCY_STOP_URL = '__FUNCTION_APP_URL__/api/emergency-stop';
         const CLEAR_ACTIVITY_URL = API_URL.replace('/status', '/clear-activity');
         const CLEAR_STORIES_URL = API_URL.replace('/status', '/clear-stories');
         const INITIALIZE_CODEBASE_URL = API_URL.replace('/status', '/initialize-codebase');
@@ -4661,33 +4657,6 @@
         const DASHBOARD_DEPLOYED_AT_UTC = '2026-02-21T00:06:00Z';
         const POLL_INTERVAL = 2000;
         const FUNCTION_KEY_STORAGE_KEY = 'adom8-function-key';
-
-        function resolveFunctionUrl() {
-            const fromWindow = typeof window !== 'undefined' ? window.ADOM8_FUNCTION_URL : '';
-            const fromStorage = localStorage.getItem(FUNCTION_URL_STORAGE_KEY);
-            const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-            const fromQuery = params ? params.get(FUNCTION_URL_QUERY_PARAM) : '';
-            const hasDeployedDefault = FUNCTION_URL_PLACEHOLDER && FUNCTION_URL_PLACEHOLDER !== '__FUNCTION_APP_URL__';
-            const raw = String(
-                fromWindow
-                || fromQuery
-                || (hasDeployedDefault ? FUNCTION_URL_PLACEHOLDER : '')
-                || fromStorage
-                || FUNCTION_URL_PLACEHOLDER
-            ).trim();
-
-            if (raw && raw !== FUNCTION_URL_PLACEHOLDER) {
-                const normalized = raw.replace(/\/+$/, '');
-                localStorage.setItem(FUNCTION_URL_STORAGE_KEY, normalized);
-                return normalized;
-            }
-
-            return FUNCTION_URL_PLACEHOLDER;
-        }
-
-        function hasConfiguredFunctionUrl() {
-            return !!resolvedFunctionUrl && resolvedFunctionUrl !== FUNCTION_URL_PLACEHOLDER;
-        }
 
         function showToast(message, level = 'info') {
             if (!notificationManager?.toastManager) return;
@@ -6058,16 +6027,6 @@
 
         async function fetchStatus() {
             try {
-                if (!hasConfiguredFunctionUrl()) {
-                    isConnected = false;
-                    document.getElementById('connecting-overlay').classList.add('show');
-                    const state = document.getElementById('api-state-text');
-                    const details = document.getElementById('api-details');
-                    if (state) state.textContent = 'API URL not configured';
-                    if (details) details.textContent = `Set ${FUNCTION_URL_QUERY_PARAM}=https://<function-app>.azurewebsites.net in the dashboard URL, then refresh.`;
-                    return;
-                }
-
                 const response = await fetch(withFunctionKey(API_URL), { cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
