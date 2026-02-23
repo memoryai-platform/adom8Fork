@@ -25,6 +25,7 @@ variables:
   # - GITHUB_TOKEN (secret)
   # - AZURE_SERVICE_CONNECTION
   # - AdoDashboardKey (secret)
+  # - COPILOT_ENABLED (optional; defaults to true)
 
   # Resource names are derived at runtime from RESOURCE_GROUP_NAME so they are
   # stable across re-runs — same group name always produces the same suffix.
@@ -32,6 +33,12 @@ variables:
   FUNCTION_APP_NAME: 'adom8-func-placeholder'
   STORAGE_ACCOUNT_NAME: 'adom8stplaceholder'
   KEY_VAULT_NAME: 'adom8-kv-placeholder'
+  COPILOT_ENABLED: 'true'
+  COPILOT_MODE: 'Auto'
+  COPILOT_COMPLEXITY_THRESHOLD: '8'
+  COPILOT_CREATE_ISSUE: 'true'
+  COPILOT_MODEL: 'copilot'
+  COPILOT_WEBHOOK_SECRET: ''
 
 stages:
 - stage: Infrastructure
@@ -50,10 +57,13 @@ stages:
           # Compute stable 8-char suffix from resource group name so resource
           # names are identical on every re-run (idempotent).
           SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
+          PROJECT_SLUG=$(echo "$(AZURE_DEVOPS_PROJECT)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          if [ -z "$PROJECT_SLUG" ]; then PROJECT_SLUG="adom8"; fi
+          SWA_BASE=$(echo "$PROJECT_SLUG" | cut -c1-35)
           FUNCTION_APP_NAME="adom8-func-${SUFFIX}"
           STORAGE_ACCOUNT_NAME="adom8st${SUFFIX}"
           KEY_VAULT_NAME="adom8-kv-${SUFFIX}"
-          SWA_NAME="adom8-swa-${SUFFIX}"
+          SWA_NAME="${SWA_BASE}-${SUFFIX}"
           echo "##vso[task.setvariable variable=FUNCTION_APP_NAME]$FUNCTION_APP_NAME"
           echo "##vso[task.setvariable variable=STORAGE_ACCOUNT_NAME]$STORAGE_ACCOUNT_NAME"
           echo "##vso[task.setvariable variable=KEY_VAULT_NAME]$KEY_VAULT_NAME"
@@ -165,6 +175,12 @@ stages:
           export CLAUDE_API_KEY="$(CLAUDE_API_KEY)"
           export OPENAI_API_KEY="$(OPENAI_API_KEY)"
           export GITHUB_TOKEN="$(GITHUB_TOKEN)"
+          export COPILOT_ENABLED="$(COPILOT_ENABLED)"
+          export COPILOT_MODE="$(COPILOT_MODE)"
+          export COPILOT_COMPLEXITY_THRESHOLD="$(COPILOT_COMPLEXITY_THRESHOLD)"
+          export COPILOT_CREATE_ISSUE="$(COPILOT_CREATE_ISSUE)"
+          export COPILOT_MODEL="$(COPILOT_MODEL)"
+          export COPILOT_WEBHOOK_SECRET="$(COPILOT_WEBHOOK_SECRET)"
           
           python scripts/adom8-pipeline-setup.py \
             --subscription-id "$(AZURE_SUBSCRIPTION_ID)" \

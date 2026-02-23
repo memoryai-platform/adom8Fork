@@ -12,6 +12,10 @@
 - [ ] Confirm `Copilot__WebhookSecret` is correctly validated on first GitHub webhook delivery
 - [ ] Confirm `claude-sonnet-4-20250514` (or `gpt-4o` for OpenAI path) is accepted by the live API
 - [ ] Verify the runtime PAT created by Stage 2 has the correct scopes
+- [ ] Add SaaS onboarding compatibility diagnostics (repo drift, required app settings, and webhook alignment)
+- [ ] Add fork-sync freshness checks and guidance when customer repo is behind upstream
+- [ ] Add post-setup compatibility summary in SaaS showing "ready / drifted / needs sync"
+- [ ] Add guidance flow for "customize your fork" vs "stay sync-safe for upstream fixes"
 
 ### #2 â€” Per-Agent Model Overrides (Story-level config)
 Fields exist in ADO: `AI Model Tier`, `AI Planning Model`, `AI Coding Model`, `AI Testing Model`, `AI Review Model`, `AI Documentation Model`, `AI Coding Provider`

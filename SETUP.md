@@ -17,6 +17,7 @@ Before running the pipeline, you need to gather the following information and cr
 7. **Resource Group Name**: The desired name for the new Azure Resource Group.
 8. **Location**: The Azure region (e.g., `eastus`).
 9. **Azure Service Connection**: The name of an existing Azure Resource Manager service connection in your ADO project that has Contributor access to your subscription.
+10. **Copilot Enabled (Optional)**: Set pipeline variable `COPILOT_ENABLED` (`true` by default) to delegate coding to GitHub Copilot by default.
 
 ### Create Tokens
 
@@ -61,6 +62,7 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
    - `RESOURCE_GROUP_NAME`
    - `LOCATION`
    - `AZURE_SERVICE_CONNECTION`
+   - `COPILOT_ENABLED` (optional, defaults to `true`)
    
    **Secret Variables** (Make sure to check "Keep this value secret"):
    - `ONBOARDING_PAT`
@@ -85,6 +87,7 @@ Once the pipeline completes successfully:
 
 1. **Review the Summary**: Check the pipeline logs for the final summary, which includes the names of the created resources and the Key Vault URL.
 2. **Revoke Onboarding PAT**: You can now safely revoke the `ONBOARDING_PAT` you created in the prerequisites. The pipeline has automatically generated and securely stored a dedicated runtime PAT for the agent.
-3. **Configure GitHub Copilot Permissions**: If you are using GitHub Copilot, ensure the agent has the necessary permissions on the repository (this cannot be automated via API).
-4. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. You can configure a custom domain for this URL in the Azure Portal under the Static Web App settings.
-5. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
+3. **Copilot Webhook Secret (Auto-Managed)**: No manual secret creation is required. The pipeline auto-generates a secure webhook secret (unless you provide an override), stores it in Key Vault, and configures both the Function App and GitHub webhook to use the same secret.
+4. **Configure GitHub Copilot Permissions**: If you are using GitHub Copilot, ensure the agent has the necessary permissions on the repository (this cannot be automated via API).
+5. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
+6. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.

@@ -9,6 +9,7 @@ import argparse
 import os
 import sys
 import json
+import secrets
 import requests
 import time
 from azure.identity import DefaultAzureCredential
@@ -32,6 +33,16 @@ def main():
     google_api_key = os.environ.get("GOOGLE_API_KEY")   # optional — can be added post-setup
     github_token = os.environ.get("GITHUB_TOKEN")
     function_key = os.environ.get("FUNCTION_KEY")
+    copilot_enabled = os.environ.get("COPILOT_ENABLED", "true").strip().lower() in ["1", "true", "yes", "on"]
+    copilot_mode = os.environ.get("COPILOT_MODE", "Auto").strip() or "Auto"
+    copilot_complexity_threshold = os.environ.get("COPILOT_COMPLEXITY_THRESHOLD", "8").strip() or "8"
+    copilot_create_issue = os.environ.get("COPILOT_CREATE_ISSUE", "true").strip().lower() in ["1", "true", "yes", "on"]
+    copilot_model = os.environ.get("COPILOT_MODEL", "copilot").strip() or "copilot"
+    copilot_webhook_secret = (os.environ.get("COPILOT_WEBHOOK_SECRET") or "").strip()
+
+    if not copilot_webhook_secret:
+        copilot_webhook_secret = secrets.token_urlsafe(48)
+        print("No COPILOT_WEBHOOK_SECRET supplied — generated a secure webhook secret automatically.")
 
     if not all([onboarding_pat, github_token, function_key]):
         print("Error: Missing required environment variables (ONBOARDING_PAT, GITHUB_TOKEN, FUNCTION_KEY).")
@@ -97,7 +108,8 @@ def main():
         "ADOM8-ADO-PAT": runtime_pat,
         "ADOM8-AI-KEY": primary_ai_key,   # generic name — holds whichever primary key was supplied
         "GITHUB-TOKEN": github_token,
-        "FUNCTION-KEY": function_key
+        "FUNCTION-KEY": function_key,
+        "COPILOT-WEBHOOK-SECRET": copilot_webhook_secret
     }
     # Store secondary/additional provider keys if supplied
     if claude_api_key and openai_api_key:
@@ -127,8 +139,12 @@ def main():
         f"AzureDevOps__Pat=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=ADOM8-ADO-PAT)",
         f"AI__ApiKey=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=ADOM8-AI-KEY)",
         f"Git__Token=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=GITHUB-TOKEN)",
-        # Bug fix: runtime reads Copilot__WebhookSecret, not WebhookSharedSecret
-        f"Copilot__WebhookSecret=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=FUNCTION-KEY)",
+        f"Copilot__WebhookSecret=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=COPILOT-WEBHOOK-SECRET)",
+        f"Copilot__Enabled={'true' if copilot_enabled else 'false'}",
+        f"Copilot__Mode={copilot_mode}",
+        f"Copilot__ComplexityThreshold={copilot_complexity_threshold}",
+        f"Copilot__CreateIssue={'true' if copilot_create_issue else 'false'}",
+        f"Copilot__Model={copilot_model}",
         f"AzureDevOps__OrganizationUrl=https://dev.azure.com/{org_name}",
         f"AzureDevOps__Project={args.ado_project}",
         f"Git__Provider=github",
@@ -139,9 +155,8 @@ def main():
         f"GitHub__Owner={args.github_org}",
         f"GitHub__Repo={args.github_repo}",
         f"GitHub__Token=@Microsoft.KeyVault(VaultName={args.key_vault};SecretName=GITHUB-TOKEN)",
-        f"AI__Provider=anthropic",
-        # Bug fix: updated to current Claude Sonnet 4 model
-        f"AI__Model=claude-sonnet-4-20250514",
+        f"AI__Provider={ai_provider}",
+        f"AI__Model={ai_model}",
     ]
     # Wire optional AI provider keys into Function App settings if they were provided
     if openai_api_key:
@@ -243,8 +258,9 @@ def main():
         "active": True,
         "events": ["pull_request", "issue_comment"],
         "config": {
-            "url": f"https://{args.function_app}.azurewebsites.net/api/github-webhook?code={function_key}",
+            "url": f"https://{args.function_app}.azurewebsites.net/api/copilot-webhook?code={function_key}",
             "content_type": "json",
+            "secret": copilot_webhook_secret,
             "insecure_ssl": "0"
         }
     }

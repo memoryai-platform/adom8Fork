@@ -57,7 +57,9 @@ Before running the pipeline, you must configure the required variables.
    - `ONBOARDING_PAT`: The ADO PAT you created in Step 1.
    - `GITHUB_TOKEN`: The GitHub PAT you created in Step 1.
    - `CLAUDE_API_KEY`: Your AI provider API key.
-3. The pipeline will prompt you for the following parameters when you click Run:
+3. Add optional non-secret override variable:
+   - `COPILOT_ENABLED`: Defaults to `true`. Set to `false` if you want to disable GitHub Copilot delegation.
+4. The pipeline will prompt you for the following parameters when you click Run:
    - `AZURE_SERVICE_CONNECTION`: The name of your Azure Resource Manager service connection in ADO.
    - `AZURE_SUBSCRIPTION_ID`: Your Azure Subscription ID.
    - `AZURE_DEVOPS_ORG`: Your ADO organization URL (e.g., `https://dev.azure.com/yourorg`).
@@ -83,7 +85,9 @@ Click **Run**. The pipeline will execute the following stages:
 
 1. **Review the Summary**: Check the pipeline logs for the final summary output. It will list all created resources and validation results.
 2. **Revoke Onboarding PAT**: You can now safely delete the `ADOm8 Onboarding` PAT from your ADO profile. The pipeline automatically created and stored a restricted runtime PAT in Key Vault.
-3. **Configure GitHub Copilot (Optional)**: If you are using GitHub Copilot, ensure the agent permissions are configured on your repository.
+3. **Copilot Webhook Secret (Auto-Managed)**: The pipeline auto-generates a secure webhook secret, stores it in Key Vault, and configures both GitHub webhook delivery and Function App signature validation. No manual secret setup is required.
+4. **Configure GitHub Copilot (Optional)**: If you are using GitHub Copilot, ensure the agent permissions are configured on your repository.
+5. **Static Web App URL Note**: The Static Web App resource name is derived from your ADO project name, but Azure still assigns the default `*.azurestaticapps.net` hostname. Use a custom domain if you want a friendly URL.
 
 You are now ready to create your first User Story and assign it to the `AI Agent` state!
 
