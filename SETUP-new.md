@@ -88,6 +88,7 @@ Click **Run**. The pipeline will execute the following stages:
 3. **Copilot Webhook Secret (Auto-Managed)**: The pipeline auto-generates a secure webhook secret, stores it in Key Vault, and configures both GitHub webhook delivery and Function App signature validation. No manual secret setup is required.
 4. **Configure GitHub Copilot (Optional)**: If you are using GitHub Copilot, ensure the agent permissions are configured on your repository.
 5. **Static Web App URL Note**: The Static Web App resource name is derived from your ADO project name, but Azure still assigns the default `*.azurestaticapps.net` hostname. Use a custom domain if you want a friendly URL.
+6. **Default Field Values (Auto-Enforced)**: The pipeline enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
 
 You are now ready to create your first User Story and assign it to the `AI Agent` state!
 
