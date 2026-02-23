@@ -37,16 +37,16 @@ public sealed class ProvisionAzureDevOps
 
     private const string CurrentAgentPicklistName = "ADOm8 Current AI Agent";
     private const string AutonomyLevelPicklistName = "ADOm8 AI Autonomy Level";
-    private const int DefaultAutonomyLevel = 3;
+    private const string DefaultAutonomyLevel = "3";
     private const int DefaultMinimumReviewScore = 85;
 
-    private static readonly int[] AutonomyLevelPicklistValues =
+    private static readonly string[] AutonomyLevelPicklistValues =
     [
-        1,
-        2,
-        3,
-        4,
-        5
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
     ];
 
     private static readonly string[] RequiredStates =
@@ -306,7 +306,7 @@ public sealed class ProvisionAzureDevOps
                     else
                     {
                         warnings.Add("Autonomy/Review defaults could not be fully enforced. See warnings for API details.");
-                        additionalManualSteps.Add("In Organization Settings → Process → your inherited process → User Story → Fields, ensure 'AI Autonomy Level' (reference name Custom.AutonomyLevel) exists as Picklist (integer) with values 1-5 and default 3.");
+                        additionalManualSteps.Add("In Organization Settings → Process → your inherited process → User Story → Fields, ensure 'AI Autonomy Level' (reference name Custom.AutonomyLevel) exists as Picklist (string) with values 1-5 and default 3.");
                     }
                 }
             }
@@ -900,7 +900,7 @@ public sealed class ProvisionAzureDevOps
 
         if (!ensuredAutonomyBaseField)
         {
-            warnings.Add("Could not ensure global AI Autonomy Level base field as picklist. If Custom.AutonomyLevel exists as textbox/string, delete and recreate it as Picklist (integer).");
+            warnings.Add("Could not ensure global AI Autonomy Level base field as picklist. If Custom.AutonomyLevel exists as textbox/string, delete and recreate it as Picklist (string).");
             return false;
         }
 
@@ -909,7 +909,7 @@ public sealed class ProvisionAzureDevOps
             ["referenceName"] = CustomFieldNames.AutonomyLevel,
             ["name"] = "AI Autonomy Level",
             ["description"] = "Controls how far the AI pipeline runs automatically (1-5).",
-            ["type"] = "picklistInteger",
+            ["type"] = "picklistString",
             ["required"] = false,
             ["readOnly"] = false,
             ["allowGroups"] = false,
@@ -1095,7 +1095,7 @@ public sealed class ProvisionAzureDevOps
         var payload = new JsonObject
         {
             ["name"] = AutonomyLevelPicklistName,
-            ["type"] = "Integer",
+            ["type"] = "String",
             ["items"] = new JsonArray(AutonomyLevelPicklistValues.Select(v => JsonValue.Create(v)).ToArray())
         };
 
@@ -1354,7 +1354,7 @@ public sealed class ProvisionAzureDevOps
         {
             ["name"] = "AI Autonomy Level",
             ["referenceName"] = CustomFieldNames.AutonomyLevel,
-            ["type"] = "integer",
+            ["type"] = "string",
             ["usage"] = "workItem",
             ["isPicklist"] = true,
             ["pickList"] = new JsonObject
