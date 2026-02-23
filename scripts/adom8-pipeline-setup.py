@@ -265,16 +265,61 @@ def main():
         }
     }
     
+    target_webhook_url = webhook_payload["config"]["url"]
+
     try:
-        gh_response = requests.post(gh_webhook_url, headers=gh_headers, json=webhook_payload)
-        if gh_response.status_code in [200, 201]:
-            print("GitHub webhook registered successfully.")
-        elif gh_response.status_code == 422:
-            print("GitHub webhook already exists.")
+        hooks_response = requests.get(gh_webhook_url, headers=gh_headers, timeout=30)
+        if hooks_response.status_code != 200:
+            print(f"Warning: Could not list existing GitHub webhooks: {hooks_response.status_code} - {hooks_response.text}")
+            hooks = []
         else:
-            print(f"Warning: Failed to create GitHub webhook: {gh_response.status_code} - {gh_response.text}")
+            hooks = hooks_response.json() if isinstance(hooks_response.json(), list) else []
+
+        managed_hooks = []
+        for hook in hooks:
+            config = hook.get("config") or {}
+            existing_url = (config.get("url") or "").strip()
+            if ".azurewebsites.net/api/" in existing_url and ("copilot-webhook" in existing_url or "github-webhook" in existing_url):
+                managed_hooks.append(hook)
+
+        current_hook = None
+        for hook in managed_hooks:
+            hook_id = hook.get("id")
+            config = hook.get("config") or {}
+            existing_url = (config.get("url") or "").strip()
+
+            if existing_url == target_webhook_url and current_hook is None:
+                current_hook = hook
+                continue
+
+            if hook_id:
+                delete_url = f"{gh_webhook_url}/{hook_id}"
+                delete_response = requests.delete(delete_url, headers=gh_headers, timeout=30)
+                if delete_response.status_code in [204, 404]:
+                    print(f"Removed stale GitHub webhook (id={hook_id}).")
+                else:
+                    print(f"Warning: Failed to remove stale GitHub webhook (id={hook_id}): {delete_response.status_code} - {delete_response.text}")
+
+        if current_hook and current_hook.get("id"):
+            update_url = f"{gh_webhook_url}/{current_hook['id']}"
+            update_payload = {
+                "active": True,
+                "events": ["pull_request", "issue_comment"],
+                "config": webhook_payload["config"]
+            }
+            update_response = requests.patch(update_url, headers=gh_headers, json=update_payload, timeout=30)
+            if update_response.status_code in [200, 201]:
+                print("GitHub webhook already existed and was updated successfully.")
+            else:
+                print(f"Warning: Failed to update existing GitHub webhook: {update_response.status_code} - {update_response.text}")
+        else:
+            create_response = requests.post(gh_webhook_url, headers=gh_headers, json=webhook_payload, timeout=30)
+            if create_response.status_code in [200, 201]:
+                print("GitHub webhook registered successfully.")
+            else:
+                print(f"Warning: Failed to create GitHub webhook: {create_response.status_code} - {create_response.text}")
     except Exception as e:
-        print(f"Warning: Exception creating GitHub webhook: {e}")
+        print(f"Warning: Exception configuring GitHub webhook: {e}")
 
     # Create .adom8 folder structure
     print("Creating .adom8 folder structure...")
