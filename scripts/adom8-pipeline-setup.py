@@ -14,6 +14,7 @@ import requests
 import time
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+from azure.core.exceptions import ResourceNotFoundError
 
 def main():
     parser = argparse.ArgumentParser(description="ADOm8 Pipeline Setup Script")
@@ -104,6 +105,20 @@ def main():
     credential = DefaultAzureCredential()
     secret_client = SecretClient(vault_url=kv_url, credential=credential)
 
+    def set_secret_if_changed(secret_name, secret_value):
+        try:
+            current = secret_client.get_secret(secret_name)
+            if current and current.value == secret_value:
+                print(f"Secret unchanged (skipped): {secret_name}")
+                return
+        except ResourceNotFoundError:
+            pass
+        except Exception as ex:
+            print(f"Warning: Could not read existing secret {secret_name}; will attempt update. Details: {ex}")
+
+        secret_client.set_secret(secret_name, secret_value)
+        print(f"Stored secret: {secret_name}")
+
     secrets_to_store = {
         "ADOM8-ADO-PAT": runtime_pat,
         "ADOM8-AI-KEY": primary_ai_key,   # generic name — holds whichever primary key was supplied
@@ -125,8 +140,7 @@ def main():
 
     for secret_name, secret_value in secrets_to_store.items():
         try:
-            secret_client.set_secret(secret_name, secret_value)
-            print(f"Stored secret: {secret_name}")
+            set_secret_if_changed(secret_name, secret_value)
         except Exception as e:
             print(f"Error storing secret {secret_name}: {e}")
 

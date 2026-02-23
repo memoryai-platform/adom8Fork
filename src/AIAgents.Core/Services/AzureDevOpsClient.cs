@@ -291,7 +291,7 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
 
             // AI Input Fields
             AutonomyLevel = ParseAutonomyLevel(
-                GetField<string>(fields, CustomFieldNames.AutonomyLevel)
+                GetField<object>(fields, CustomFieldNames.AutonomyLevel)?.ToString()
                 ?? GetField<double?>(fields, "Custom.AIAutonomyLevel")?.ToString()),
             MinimumReviewScore = GetField<double?>(fields, CustomFieldNames.MinimumReviewScore) is double mrs
                 ? (int)mrs : 85,
@@ -532,8 +532,8 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
     }
 
     /// <summary>
-    /// Parses an autonomy level from a picklist string (e.g., "3 - Review &amp; Pause")
-    /// or a plain numeric string/double. Returns the leading integer, defaulting to 3.
+    /// Parses an autonomy level from either a numeric picklist value (1-5)
+    /// or legacy picklist text (e.g., "3 - Review &amp; Pause"). Returns default 3 when invalid.
     /// Also handles legacy integer field values that come through as doubles.
     /// </summary>
     internal static int ParseAutonomyLevel(string? value)

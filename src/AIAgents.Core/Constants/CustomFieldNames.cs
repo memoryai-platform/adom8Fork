@@ -15,9 +15,9 @@ public static class CustomFieldNames
     // ── Input Fields (set by the user per story) ────────────────────
     
     /// <summary>
-    /// Autonomy Level picklist (e.g., "3 - Review &amp; Pause").
+    /// AI Autonomy Level picklist (integer values 1-5).
     /// Controls how far the pipeline runs automatically (1-5).
-    /// Stored as Picklist(string); code parses the leading integer.
+    /// Stored as Picklist(integer).
     /// </summary>
     public const string AutonomyLevel = "Custom.AutonomyLevel";
     

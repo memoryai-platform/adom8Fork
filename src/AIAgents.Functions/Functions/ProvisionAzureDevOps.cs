@@ -36,17 +36,17 @@ public sealed class ProvisionAzureDevOps
     ];
 
     private const string CurrentAgentPicklistName = "ADOm8 Current AI Agent";
-    private const string AutonomyLevelPicklistName = "ADOm8 Autonomy Level";
-    private const string DefaultAutonomyLevel = "3 - Review & Pause";
+    private const string AutonomyLevelPicklistName = "ADOm8 AI Autonomy Level";
+    private const int DefaultAutonomyLevel = 3;
     private const int DefaultMinimumReviewScore = 85;
 
-    private static readonly string[] AutonomyLevelPicklistValues =
+    private static readonly int[] AutonomyLevelPicklistValues =
     [
-        "1 - Plan Only",
-        "2 - Plan & Code",
-        "3 - Review & Pause",
-        "4 - Auto to QA",
-        "5 - Auto to Deploy"
+        1,
+        2,
+        3,
+        4,
+        5
     ];
 
     private static readonly string[] RequiredStates =
@@ -74,7 +74,6 @@ public sealed class ProvisionAzureDevOps
 
     private static readonly FieldDefinition[] RequiredFields =
     [
-        new("Autonomy Level", "Custom.AutonomyLevel", "string"),
         new("AI Minimum Review Score", "Custom.AIMinimumReviewScore", "integer"),
 
         new("AI Model Tier", "Custom.AIModelTier", "string"),
@@ -304,11 +303,16 @@ public sealed class ProvisionAzureDevOps
                         steps.Add($"Configured '{CustomFieldNames.AutonomyLevel}' as picklist with default '{DefaultAutonomyLevel}'.");
                         steps.Add($"Configured '{CustomFieldNames.MinimumReviewScore}' default to {DefaultMinimumReviewScore}.");
                     }
+                    else
+                    {
+                        warnings.Add("Autonomy/Review defaults could not be fully enforced. See warnings for API details.");
+                        additionalManualSteps.Add("In Organization Settings → Process → your inherited process → User Story → Fields, ensure 'AI Autonomy Level' (reference name Custom.AutonomyLevel) exists as Picklist (integer) with values 1-5 and default 3.");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to enforce defaults for Autonomy Level and AI Minimum Review Score");
+                _logger.LogWarning(ex, "Failed to enforce defaults for AI Autonomy Level and AI Minimum Review Score");
                 warnings.Add($"Could not enforce defaults for Autonomy/Review fields: {ex.Message}");
             }
 
@@ -888,12 +892,24 @@ public sealed class ProvisionAzureDevOps
             return false;
         }
 
+        var ensuredAutonomyBaseField = await TryEnsureAutonomyBaseFieldAsync(
+            client,
+            autonomyPicklistId,
+            warnings,
+            cancellationToken);
+
+        if (!ensuredAutonomyBaseField)
+        {
+            warnings.Add("Could not ensure global AI Autonomy Level base field as picklist. If Custom.AutonomyLevel exists as textbox/string, delete and recreate it as Picklist (integer).");
+            return false;
+        }
+
         var autonomyPayload = new JsonObject
         {
             ["referenceName"] = CustomFieldNames.AutonomyLevel,
-            ["name"] = "Autonomy Level",
+            ["name"] = "AI Autonomy Level",
             ["description"] = "Controls how far the AI pipeline runs automatically (1-5).",
-            ["type"] = "picklistString",
+            ["type"] = "picklistInteger",
             ["required"] = false,
             ["readOnly"] = false,
             ["allowGroups"] = false,
@@ -929,7 +945,7 @@ public sealed class ProvisionAzureDevOps
             autonomyPayload,
             warnings,
             cancellationToken,
-            "Autonomy Level");
+            "AI Autonomy Level");
 
         if (!autonomyUpdated)
         {
@@ -962,9 +978,23 @@ public sealed class ProvisionAzureDevOps
                         autonomyPayload,
                         warnings,
                         cancellationToken,
-                        "Autonomy Level");
+                        "AI Autonomy Level");
                 }
             }
+        }
+
+        var autonomyAttached = await TryIsProcessFieldAttachedAsync(
+            client,
+            processId,
+            workItemTypeReferenceName,
+            CustomFieldNames.AutonomyLevel,
+            warnings,
+            cancellationToken,
+            "AI Autonomy Level");
+
+        if (!autonomyAttached)
+        {
+            return false;
         }
 
         var minReviewPayload = new JsonObject
@@ -1065,7 +1095,7 @@ public sealed class ProvisionAzureDevOps
         var payload = new JsonObject
         {
             ["name"] = AutonomyLevelPicklistName,
-            ["type"] = "String",
+            ["type"] = "Integer",
             ["items"] = new JsonArray(AutonomyLevelPicklistValues.Select(v => JsonValue.Create(v)).ToArray())
         };
 
@@ -1078,7 +1108,7 @@ public sealed class ProvisionAzureDevOps
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            warnings.Add($"Could not create Autonomy Level picklist ({(int)response.StatusCode}): {body}");
+            warnings.Add($"Could not create AI Autonomy Level picklist ({(int)response.StatusCode}): {body}");
             return null;
         }
 
@@ -1300,6 +1330,83 @@ public sealed class ProvisionAzureDevOps
 
         var finalStatus = await GetFieldStatusAsync(client, CustomFieldNames.CurrentAIAgent, cancellationToken);
         return finalStatus.Exists;
+    }
+
+    private async Task<bool> TryEnsureAutonomyBaseFieldAsync(
+        HttpClient client,
+        string picklistId,
+        List<string> warnings,
+        CancellationToken cancellationToken)
+    {
+        var currentStatus = await GetFieldStatusAsync(client, CustomFieldNames.AutonomyLevel, cancellationToken);
+        if (currentStatus.Exists)
+        {
+            if (currentStatus.IsPicklist)
+            {
+                return true;
+            }
+
+            warnings.Add($"AI Autonomy Level base field exists with type '{currentStatus.Type}' (not picklist). Azure DevOps does not support in-place type conversion for global fields.");
+            return false;
+        }
+
+        var picklistPayload = new JsonObject
+        {
+            ["name"] = "AI Autonomy Level",
+            ["referenceName"] = CustomFieldNames.AutonomyLevel,
+            ["type"] = "integer",
+            ["usage"] = "workItem",
+            ["isPicklist"] = true,
+            ["pickList"] = new JsonObject
+            {
+                ["id"] = picklistId
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "_apis/wit/fields?api-version=7.1")
+        {
+            Content = new StringContent(picklistPayload.ToJsonString(), Encoding.UTF8, "application/json")
+        };
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (!(response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.Conflict))
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            warnings.Add($"Could not create AI Autonomy Level base picklist field ({(int)response.StatusCode}): {body}");
+            return false;
+        }
+
+        var finalStatus = await GetFieldStatusAsync(client, CustomFieldNames.AutonomyLevel, cancellationToken);
+        if (finalStatus.Exists && finalStatus.IsPicklist)
+        {
+            return true;
+        }
+
+        warnings.Add($"AI Autonomy Level base field exists but is not picklist after create attempt (type: '{finalStatus.Type}').");
+        return false;
+    }
+
+    private async Task<bool> TryIsProcessFieldAttachedAsync(
+        HttpClient client,
+        string processId,
+        string workItemTypeReferenceName,
+        string referenceName,
+        List<string> warnings,
+        CancellationToken cancellationToken,
+        string fieldLabel)
+    {
+        using var response = await client.GetAsync(
+            $"_apis/work/processes/{Uri.EscapeDataString(processId)}/workItemTypes/{Uri.EscapeDataString(workItemTypeReferenceName)}/fields/{Uri.EscapeDataString(referenceName)}?api-version=7.1-preview.2",
+            cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        warnings.Add($"{fieldLabel} is not attached to User Story in process '{processId}' ({(int)response.StatusCode}): {body}");
+        return false;
     }
 
     private static async Task<JsonObject?> ReadJsonAsync(HttpResponseMessage response, CancellationToken cancellationToken)
