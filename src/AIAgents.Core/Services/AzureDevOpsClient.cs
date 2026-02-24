@@ -13,6 +13,7 @@ using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace AIAgents.Core.Services;
@@ -76,6 +77,11 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
     {
         _logger.LogDebug("Adding comment to work item {WorkItemId}", workItemId);
 
+        if (await TryAddCommentViaApiAsync(workItemId, comment, cancellationToken))
+        {
+            return;
+        }
+
         var patchDocument = new JsonPatchDocument
         {
             new JsonPatchOperation
@@ -88,6 +94,38 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
 
         var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
+    }
+
+    private async Task<bool> TryAddCommentViaApiAsync(int workItemId, string comment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var httpClient = CreateAdoHttpClient();
+            var payload = JsonSerializer.Serialize(new { text = comment });
+
+            using var response = await httpClient.PostAsync(
+                $"_apis/wit/workItems/{workItemId}/comments?api-version=7.1-preview.4",
+                new StringContent(payload, Encoding.UTF8, "application/json"),
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+
+            _logger.LogWarning(
+                "Comments API rejected comment for WI-{WorkItemId} (status: {StatusCode}); falling back to System.History",
+                workItemId,
+                response.StatusCode);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Comments API failed for WI-{WorkItemId}; falling back to System.History",
+                workItemId);
+            return false;
+        }
     }
 
     public async Task UpdateWorkItemFieldAsync(

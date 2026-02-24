@@ -1,0 +1,16 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "number": 999,
+    "title": "Smoke test PR",
+    "body": "No-op smoke payload",
+    "draft": false,
+    "requested_reviewers": [],
+    "head": {
+      "ref": "copilot/smoke-test"
+    },
+    "base": {
+      "ref": "feature/US-12345"
+    }
+  }
+}

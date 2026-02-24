@@ -70,6 +70,16 @@ publish/
 publish.zip
 deploy.zip
 
+# Artifacts
+.artifacts/
+artifacts/
+
+# Temp diagnostic / debug scratch files
+tmp_*/
+tmp_*.json
+tmp_*.zip
+tmp_*.txt
+
 # SWA deployment artifacts
 *-app.zip
 

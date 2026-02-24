@@ -170,7 +170,14 @@ public sealed class ProvisionAzureDevOps
 
             try
             {
-                var webhookUrl = $"{req.Scheme}://{req.Host}/api/OrchestratorWebhook";
+                var functionCode = req.Query["code"].ToString();
+                if (string.IsNullOrWhiteSpace(functionCode) && req.Headers.TryGetValue("x-functions-key", out var headerFunctionKey))
+                {
+                    functionCode = headerFunctionKey.ToString();
+                }
+                var webhookUrl = string.IsNullOrWhiteSpace(functionCode)
+                    ? $"{req.Scheme}://{req.Host}/api/webhook"
+                    : $"{req.Scheme}://{req.Host}/api/webhook?code={Uri.EscapeDataString(functionCode)}";
                 var serviceHookCreated = await EnsureServiceHookAsync(
                     adoClient,
                     projectInfo,

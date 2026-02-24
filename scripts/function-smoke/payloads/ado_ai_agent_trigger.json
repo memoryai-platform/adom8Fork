@@ -1,0 +1,10 @@
+{
+  "resource": {
+    "workItemId": 12345,
+    "fields": {
+      "System.State": {
+        "newValue": "AI Agent"
+      }
+    }
+  }
+}

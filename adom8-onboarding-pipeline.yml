@@ -81,9 +81,19 @@ stages:
           az keyvault show --name $KEY_VAULT_NAME --resource-group $(RESOURCE_GROUP_NAME) 2>/dev/null || \
             az keyvault create --name $KEY_VAULT_NAME --resource-group $(RESOURCE_GROUP_NAME) --location $(LOCATION) --enable-rbac-authorization false
 
-          echo "Creating Function App: $FUNCTION_APP_NAME"
-          az functionapp show --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) 2>/dev/null || \
-            az functionapp create --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) --storage-account $STORAGE_ACCOUNT_NAME --consumption-plan-location $(LOCATION) --functions-version 4 --os-type Linux --runtime dotnet-isolated --runtime-version 8.0
+          echo "Ensuring Windows Consumption Function App: $FUNCTION_APP_NAME"
+          if az functionapp show --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) >/dev/null 2>&1; then
+            IS_LINUX=$(az functionapp show --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) --query "reserved" -o tsv)
+            if [ "$IS_LINUX" = "true" ]; then
+              echo "Existing app is Linux. Recreating as Windows Consumption (Y1-compatible)."
+              az functionapp delete --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME)
+            else
+              echo "Existing app is Windows-compatible. Reusing app."
+            fi
+          fi
+
+          az functionapp show --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) >/dev/null 2>&1 || \
+            az functionapp create --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) --storage-account $STORAGE_ACCOUNT_NAME --consumption-plan-location $(LOCATION) --functions-version 4 --os-type Windows --runtime dotnet-isolated --runtime-version 8.0
 
           echo "Creating Static Web App: $SWA_NAME"
           az staticwebapp show --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) 2>/dev/null || \
@@ -118,9 +128,46 @@ stages:
       displayName: 'Deploy Azure Function'
       inputs:
         azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-        appType: 'functionAppLinux'
+        appType: 'functionApp'
         appName: '$(FUNCTION_APP_NAME)'
         package: '$(System.DefaultWorkingDirectory)/publish_output/**/*.zip'
+
+    - task: AzureCLI@2
+      displayName: 'Validate Function Host Discovery'
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          set -euo pipefail
+
+          FUNCTION_APP_NAME="$(FUNCTION_APP_NAME)"
+          RESOURCE_GROUP_NAME="$(RESOURCE_GROUP_NAME)"
+          FUNCTION_URL="https://${FUNCTION_APP_NAME}.azurewebsites.net/api/health"
+
+          echo "Waiting for functions to be indexed..."
+          indexed=""
+          for i in {1..18}; do
+            indexed=$(az functionapp function list --name "$FUNCTION_APP_NAME" --resource-group "$RESOURCE_GROUP_NAME" --query "length(@)" -o tsv || echo "0")
+            echo "Attempt $i: indexed functions = ${indexed}"
+            if [ "${indexed}" != "0" ] && [ -n "${indexed}" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          if [ -z "${indexed}" ] || [ "${indexed}" = "0" ]; then
+            echo "ERROR: No functions were indexed after deployment."
+            exit 1
+          fi
+
+          echo "Checking health endpoint: ${FUNCTION_URL}"
+          health_code=$(curl -sS -o /dev/null -w "%{http_code}" "$FUNCTION_URL" || true)
+          echo "Health endpoint HTTP ${health_code}"
+          if [ "$health_code" != "200" ]; then
+            echo "ERROR: Health endpoint check failed."
+            exit 1
+          fi
 
     - bash: |
         sed -i 's|__FUNCTION_APP_URL__|https://$(FUNCTION_APP_NAME).azurewebsites.net|g' dashboard/index.html
@@ -193,3 +240,51 @@ stages:
             --resource-group "$(RESOURCE_GROUP_NAME)" \
             --function-app "${FUNCTION_APP_NAME}" \
             --key-vault "${KEY_VAULT_NAME}"
+
+    - task: AzureCLI@2
+      displayName: 'Final Pipeline Summary'
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          set -euo pipefail
+
+          SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
+          FUNCTION_APP_NAME="adom8-func-${SUFFIX}"
+          FUNCTION_URL="https://${FUNCTION_APP_NAME}.azurewebsites.net/api/health"
+
+          APP_STATE=$(az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$(RESOURCE_GROUP_NAME)" --query "state" -o tsv)
+          APP_KIND=$(az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$(RESOURCE_GROUP_NAME)" --query "kind" -o tsv)
+          IS_LINUX=$(az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$(RESOURCE_GROUP_NAME)" --query "reserved" -o tsv)
+          PLAN_ID=$(az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$(RESOURCE_GROUP_NAME)" --query "serverFarmId" -o tsv)
+          PLAN_SKU=$(az appservice plan show --ids "$PLAN_ID" --query "sku.tier" -o tsv)
+          PLAN_OS=$(az appservice plan show --ids "$PLAN_ID" --query "reserved" -o tsv)
+          INDEXED_COUNT=$(az functionapp function list --name "$FUNCTION_APP_NAME" --resource-group "$(RESOURCE_GROUP_NAME)" --query "length(@)" -o tsv || echo "0")
+          HEALTH_CODE=$(curl -sS -o /dev/null -w "%{http_code}" "$FUNCTION_URL" || true)
+
+          APP_OS="Windows"
+          if [ "$IS_LINUX" = "true" ]; then
+            APP_OS="Linux"
+          fi
+
+          PLAN_OS_LABEL="Windows"
+          if [ "$PLAN_OS" = "true" ]; then
+            PLAN_OS_LABEL="Linux"
+          fi
+
+          echo ""
+          echo "========================================"
+          echo "FINAL PIPELINE SUMMARY"
+          echo "========================================"
+          echo "Function App:      $FUNCTION_APP_NAME"
+          echo "Resource Group:    $(RESOURCE_GROUP_NAME)"
+          echo "State:             $APP_STATE"
+          echo "App OS:            $APP_OS"
+          echo "Kind:              $APP_KIND"
+          echo "Plan SKU Tier:     $PLAN_SKU"
+          echo "Plan OS:           $PLAN_OS_LABEL"
+          echo "Indexed Functions: $INDEXED_COUNT"
+          echo "Health Endpoint:   $FUNCTION_URL"
+          echo "Health HTTP:       $HEALTH_CODE"
+          echo "========================================"

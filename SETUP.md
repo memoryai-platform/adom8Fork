@@ -81,6 +81,8 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
      - **Stage 6**: Create an ADO Service Connection to GitHub.
      - **Stage 7**: Run validation checks and output a summary.
 
+    **Hosting model note**: Stage 1 now enforces a Windows Consumption (`Y1`) Function App for `.NET 8` isolated. If a same-name app already exists on Linux, the pipeline deletes and recreates it on Windows to remove hosting drift.
+
 ## Post-Setup Steps
 
 Once the pipeline completes successfully:

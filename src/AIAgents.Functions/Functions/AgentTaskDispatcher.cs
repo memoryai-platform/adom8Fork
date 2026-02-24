@@ -64,6 +64,35 @@ public sealed class AgentTaskDispatcher
             return;
         }
 
+        try
+        {
+            await RunCoreAsync(agentTask, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (agentTask.WorkItemId <= 0)
+            {
+                throw;
+            }
+
+            var dispatcherFailure = AgentResult.Fail(
+                ErrorCategory.Code,
+                $"Dispatcher failed before completion: {ex.Message}",
+                ex);
+
+            _logger.LogError(
+                ex,
+                "Dispatcher exception for WI-{WorkItemId} ({AgentType})",
+                agentTask.WorkItemId,
+                agentTask.AgentType);
+
+            await MarkWorkItemFailedAsync(agentTask, dispatcherFailure, cancellationToken);
+        }
+    }
+
+    private async Task RunCoreAsync(AgentTask agentTask, CancellationToken cancellationToken)
+    {
+
         using var scope = _serviceProvider.CreateScope();
 
         // Autonomy-level early exit: fetch work item to check autonomy level
@@ -258,39 +287,73 @@ public sealed class AgentTaskDispatcher
             switch (result.Category)
             {
                 case ErrorCategory.Transient:
-                    // Let queue retry — throw so message stays in queue
+                    // For story-backed tasks, fail fast and surface the error immediately.
+                    if (agentTask.WorkItemId > 0)
+                    {
+                        await MarkWorkItemFailedAsync(agentTask, result, cancellationToken);
+                        break;
+                    }
+
+                    // Standalone tasks (e.g., WI-0) retain retry behavior.
                     throw result.Exception ?? new InvalidOperationException(result.ErrorMessage);
 
                 case ErrorCategory.Configuration:
                 case ErrorCategory.Data:
-                    // Permanent failure — don't waste retries, notify user
+                    // Permanent failure — notify user and stop retry loop for story-backed tasks
                     if (agentTask.WorkItemId > 0)
                     {
-                        await PostFailureCommentAsync(agentTask, result, cancellationToken);
-                        await _adoClient.UpdateWorkItemFieldAsync(
-                            agentTask.WorkItemId,
-                            CustomFieldNames.Paths.CurrentAIAgent,
-                            ToCurrentAgentValue(agentTask.AgentType),
-                            cancellationToken);
-                        await _adoClient.UpdateWorkItemStateAsync(
-                            agentTask.WorkItemId, "Agent Failed", cancellationToken);
+                        await MarkWorkItemFailedAsync(agentTask, result, cancellationToken);
                     }
-
-                    _telemetry.TrackEvent(TelemetryEvents.AgentPermanentFailure, new Dictionary<string, string>
-                    {
-                        [TelemetryProperties.WorkItemId] = agentTask.WorkItemId.ToString(),
-                        [TelemetryProperties.AgentType] = agentKey,
-                        [TelemetryProperties.CorrelationId] = agentTask.CorrelationId,
-                        [TelemetryProperties.ErrorCategory] = result.Category.ToString()!
-                    });
                     break; // Consume message — no retry
 
                 case ErrorCategory.Code:
                 default:
-                    // Bug — retry once in case it's transient, then it'll hit DLQ
+                    // For story-backed tasks, fail fast with visible ADO state/comment.
+                    if (agentTask.WorkItemId > 0)
+                    {
+                        await MarkWorkItemFailedAsync(agentTask, result, cancellationToken);
+                        break;
+                    }
+
+                    // Standalone tasks (e.g., WI-0) retain retry behavior.
                     throw result.Exception ?? new InvalidOperationException(result.ErrorMessage);
             }
         }
+    }
+
+    private async Task MarkWorkItemFailedAsync(AgentTask task, AgentResult result, CancellationToken ct)
+    {
+        await PostFailureCommentAsync(task, result, ct);
+
+        try
+        {
+            await _adoClient.UpdateWorkItemFieldAsync(
+                task.WorkItemId,
+                CustomFieldNames.Paths.CurrentAIAgent,
+                ToCurrentAgentValue(task.AgentType),
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set Current AI Agent before fail-state for WI-{WorkItemId}", task.WorkItemId);
+        }
+
+        try
+        {
+            await _adoClient.UpdateWorkItemStateAsync(task.WorkItemId, "Agent Failed", ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set Agent Failed state for WI-{WorkItemId}", task.WorkItemId);
+        }
+
+        _telemetry.TrackEvent(TelemetryEvents.AgentPermanentFailure, new Dictionary<string, string>
+        {
+            [TelemetryProperties.WorkItemId] = task.WorkItemId.ToString(),
+            [TelemetryProperties.AgentType] = task.AgentType.ToString(),
+            [TelemetryProperties.CorrelationId] = task.CorrelationId,
+            [TelemetryProperties.ErrorCategory] = result.Category.ToString()!
+        });
     }
 
     /// <summary>

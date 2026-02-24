@@ -26,7 +26,7 @@ Azure DevOps Service Hook (work item state change)
           └── DocsAgent       → Generates documentation
 ```
 
-**State Machine:** `Story Planning` → `AI Code` → `AI Test` → `AI Review` → `AI Docs` → `Ready for QA`
+**Trigger Model:** Move work item state to `AI Agent` to start processing. Internal stage progression is tracked via `Current AI Agent` and queue dispatch.
 
 ### System Components
 
@@ -67,7 +67,7 @@ sequenceDiagram
     participant AI as AI Provider
     participant G as Git Repository
 
-    U->>ADO: Move story to "Story Planning"
+    U->>ADO: Move story to "AI Agent"
     ADO->>WH: Service Hook (state change)
     WH->>WH: Validate input
     WH->>Q: Enqueue agent task
@@ -128,6 +128,8 @@ The preferred way to onboard ADOm8 is using the automated Azure Pipeline. This s
 3. Import `adom8-onboarding-pipeline.yml` into your Azure DevOps project.
 4. Configure the required pipeline variables (see [SETUP.md](SETUP.md) for the full list).
 5. Run the pipeline.
+
+The onboarding pipeline standardizes Function App hosting to Windows Consumption (`Y1`) for `.NET 8` isolated runtime and will replace an existing Linux app with the same derived name to keep deployments consistent.
 
 For detailed step-by-step instructions, see the [Pipeline Setup Guide](SETUP.md).
 

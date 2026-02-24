@@ -2916,18 +2916,12 @@
             position: absolute;
             inset: 0;
             border-radius: 8px;
-            padding: 2px;
-            background: repeating-conic-gradient(
-                from 0deg,
-                rgba(17, 24, 39, 0.95) 0deg 14deg,
-                transparent 14deg 36deg,
-                rgba(0, 120, 212, 0.85) 36deg 52deg,
-                transparent 52deg 72deg
-            );
-            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-            -webkit-mask-composite: xor;
-            mask-composite: exclude;
-            animation: activeBorderSpin 2.6s linear infinite;
+            background:
+                radial-gradient(circle, rgba(0, 120, 212, 0.95) 58%, transparent 62%) top left / 10px 2px repeat-x,
+                radial-gradient(circle, rgba(0, 120, 212, 0.95) 58%, transparent 62%) top right / 2px 10px repeat-y,
+                radial-gradient(circle, rgba(0, 120, 212, 0.95) 58%, transparent 62%) bottom left / 10px 2px repeat-x,
+                radial-gradient(circle, rgba(0, 120, 212, 0.95) 58%, transparent 62%) top left / 2px 10px repeat-y;
+            animation: activeDottedBorder 1.15s linear infinite;
             pointer-events: none;
         }
 
@@ -2944,9 +2938,21 @@
             color: #005a9e;
         }
 
-        @keyframes activeBorderSpin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        @keyframes activeDottedBorder {
+            from {
+                background-position:
+                    0 0,
+                    100% 0,
+                    0 100%,
+                    0 0;
+            }
+            to {
+                background-position:
+                    10px 0,
+                    100% 10px,
+                    -10px 100%,
+                    0 -10px;
+            }
         }
 
         .token-summary-card {
@@ -3298,13 +3304,11 @@
         }
 
         body.dark-mode .agent-detail-item.active-now::before {
-            background: repeating-conic-gradient(
-                from 0deg,
-                rgba(216, 234, 255, 0.95) 0deg 14deg,
-                transparent 14deg 36deg,
-                rgba(100, 181, 246, 0.9) 36deg 52deg,
-                transparent 52deg 72deg
-            );
+            background:
+                radial-gradient(circle, rgba(216, 234, 255, 0.95) 58%, transparent 62%) top left / 10px 2px repeat-x,
+                radial-gradient(circle, rgba(216, 234, 255, 0.95) 58%, transparent 62%) top right / 2px 10px repeat-y,
+                radial-gradient(circle, rgba(216, 234, 255, 0.95) 58%, transparent 62%) bottom left / 10px 2px repeat-x,
+                radial-gradient(circle, rgba(216, 234, 255, 0.95) 58%, transparent 62%) top left / 2px 10px repeat-y;
         }
 
         body.dark-mode .agent-detail-item.copilot_delegated.active-now {
@@ -4656,6 +4660,7 @@
         const DASHBOARD_UI_VERSION = '2026.02.21.2';
         const DASHBOARD_DEPLOYED_AT_UTC = '2026-02-21T00:06:00Z';
         const POLL_INTERVAL = 2000;
+        const QUEUE_DEPTH_POLL_INTERVAL = 15000;
         const FUNCTION_KEY_STORAGE_KEY = 'adom8-function-key';
 
         function showToast(message, level = 'info') {
@@ -5859,8 +5864,26 @@
 
         async function checkCodebaseIntelligence() {
             try {
-                const response = await fetch(CODEBASE_INTEL_URL);
-                const data = await response.json();
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
+                const response = await fetch(withFunctionKey(CODEBASE_INTEL_URL), {
+                    cache: 'no-store',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const raw = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch {
+                    throw new Error('Invalid JSON response');
+                }
+
                 const badge = document.getElementById('codebase-badge');
                 const badgeLabel = document.getElementById('codebase-badge-label');
                 const lastScanMeta = document.getElementById('codebase-last-scan');
@@ -5909,6 +5932,25 @@
                 }
             } catch (err) {
                 console.warn('Codebase intelligence check failed:', err.message);
+                codebaseInitialized = false;
+
+                const badge = document.getElementById('codebase-badge');
+                const badgeLabel = document.getElementById('codebase-badge-label');
+                const lastScanMeta = document.getElementById('codebase-last-scan');
+                const scanBtn = document.getElementById('btn-scan-codebase');
+
+                if (badge && badgeLabel) {
+                    badge.className = 'codebase-badge not-initialized';
+                    badgeLabel.textContent = '⚠ Codebase status unavailable';
+                    badge.title = 'Unable to load codebase intelligence status right now';
+                }
+                if (lastScanMeta) {
+                    lastScanMeta.textContent = 'Last Codebase Scan: Unknown';
+                }
+                if (scanBtn) {
+                    scanBtn.textContent = '🔄';
+                    scanBtn.title = 'Try codebase status check again';
+                }
             }
         }
 
@@ -6111,6 +6153,8 @@
         async function pollQueueDepth() {
             try {
                 if (!getFunctionKey()) return;
+                if (document.visibilityState !== 'visible') return;
+                if (refreshManager?.isPaused) return;
                 const resp = await fetch(withFunctionKey(EMERGENCY_STOP_URL));
                 if (!resp.ok) return;
                 const data = await resp.json();
@@ -6300,7 +6344,7 @@
 
             // Poll queue depth for abort button badge
             pollQueueDepth();
-            setInterval(pollQueueDepth, 5000);
+            setInterval(pollQueueDepth, QUEUE_DEPTH_POLL_INTERVAL);
 
             // Tick copilot elapsed timers every second
             setInterval(() => {

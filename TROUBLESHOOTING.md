@@ -64,6 +64,75 @@ az storage message peek --queue-name agent-tasks-poison \
   --account-name <storage-account> --num-messages 32
 ```
 
+### 4. Run Function Smoke Harness (Fast Contract Check)
+
+```bash
+# Validates health, status, ADO webhook, and GitHub webhook guardrails
+pwsh ./scripts/function-smoke/run-function-smoke.ps1 \
+  -FunctionAppUrl "https://<function-app>.azurewebsites.net" \
+  -FunctionKey "<function-key>"
+```
+
+Use this before and after any process/service-hook change.
+
+---
+
+## Webhook Flow (Current)
+
+When a story is moved to **AI Agent**, Azure DevOps should emit a `workitem.updated` service-hook event that hits the Function webhook endpoint.
+
+```mermaid
+flowchart TD
+  A[Azure DevOps Board<br/>User Story state -> AI Agent] --> B[ADO Service Hook<br/>event: workitem.updated<br/>changedFields: System.State]
+  B --> C[Azure Function HTTP Trigger<br/>POST /api/webhook?code=...<br/>OrchestratorWebhook]
+  C -->|state is AI Agent| D[(agent-tasks queue)]
+  C -->|state not mapped / invalid| E[Return skipped/validation response]
+
+  D --> F[AgentTaskDispatcher]
+  F --> G[Planning Agent]
+  G --> H[Coding Agent]
+  H --> I{Copilot enabled for coding?}
+
+  I -->|No| J[Testing -> Review -> Documentation -> Deployment]
+  I -->|Yes| K[GitHub Issue/PR path]
+  K --> L[GitHub webhook<br/>pull_request event]
+  L --> M[POST /api/copilot-webhook?code=...]
+  M --> N[Reconcile + enqueue Review]
+  N --> J
+
+  J --> O[Update ADO fields/state/comments]
+  F -->|failure| P[Set state Agent Failed<br/>add failure comment]
+```
+
+### AI Agent Trigger Checklist (2-minute runbook)
+
+1. **Service hook delivery**
+   - Azure DevOps → Project Settings → Service Hooks → open the subscription.
+   - Verify recent delivery entries exist when state moved to `AI Agent`.
+   - Confirm destination response is HTTP `200`.
+
+2. **Subscription target URL**
+   - Must be: `https://<function-app>.azurewebsites.net/api/webhook?code=<function-key>`
+   - Route `/api/OrchestratorWebhook` is legacy and should not be used.
+
+3. **Subscription filters**
+   - Event type: `workitem.updated`
+   - Work item type: `User Story`
+   - Changed field filter includes `System.State`
+   - Project filter points to the intended project
+
+4. **Queue handoff**
+   - After delivery, verify message appears in `agent-tasks` queue.
+   - If webhook succeeded but queue is empty, inspect function logs for validation failures.
+
+5. **Dispatcher outcome**
+   - Verify `AgentTaskDispatcher` invocation.
+   - On failures, story should move to `Agent Failed` with a comment.
+
+6. **GitHub bridge (if Copilot path used)**
+   - Confirm `copilot-webhook` receives PR events with valid signature.
+   - If no PR event arrives, review GitHub webhook delivery logs.
+
 ---
 
 ## Common Issues
@@ -89,11 +158,12 @@ requests
 
 1. **Service Hook not configured:**
    - Go to Azure DevOps → Project Settings → Service Hooks
-   - Verify a Web Hook exists pointing to `https://<function-app>.azurewebsites.net/api/OrchestratorWebhook`
+   - Verify a Web Hook exists pointing to `https://<function-app>.azurewebsites.net/api/webhook?code=<function-key>`
    - Trigger: Work Item Updated, State field changes
 
 2. **Wrong state transition:**
-   - Agents only trigger on specific states: `Story Planning`, `AI Code`, `AI Test`, `AI Review`, `AI Docs`, `AI Deployment`
+   - Webhook dispatch triggers when new state is `AI Agent`
+   - Downstream stages are controlled by `Current AI Agent` and queue orchestration
    - Verify your work item type is `User Story` and the state matches exactly
 
 3. **Function app not running:**
@@ -471,6 +541,8 @@ If a work item is stuck in a processing state:
 ---
 
 ## Getting Help
+
+For shared-org setups with multiple projects, review: **[Project Isolation Checklist](PROJECT_ISOLATION_CHECKLIST.md)**.
 
 1. **Check this guide** — most issues are covered above
 2. **Review Application Insights** — search `exceptions` and `customEvents` tables
