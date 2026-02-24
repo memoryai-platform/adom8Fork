@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using LibGit2Sharp;
@@ -29,7 +30,7 @@ public sealed class GitOperations : IGitOperations
         };
     }
 
-    public Task<string> EnsureBranchAsync(string branchName, CancellationToken cancellationToken = default)
+    public async Task<string> EnsureBranchAsync(string branchName, CancellationToken cancellationToken = default)
     {
         var basePath = _options.LocalBasePath ?? Path.Combine(Path.GetTempPath(), "ado-agent-repos");
         var repoDir = Path.Combine(basePath, SanitizeDirectoryName(branchName));
@@ -59,14 +60,9 @@ public sealed class GitOperations : IGitOperations
 
         if (!Directory.Exists(Path.Combine(repoDir, ".git")))
         {
-            _logger.LogInformation("Cloning repository to {RepoDir}", repoDir);
+            _logger.LogInformation("Shallow-cloning repository (depth=1) to {RepoDir}", repoDir);
             Directory.CreateDirectory(repoDir);
-
-            var cloneOptions = new CloneOptions
-            {
-                FetchOptions = { CredentialsProvider = (_, _, _) => _credentials }
-            };
-            Repository.Clone(_options.RepositoryUrl, repoDir, cloneOptions);
+            await ShallowCloneAsync(_options.RepositoryUrl, repoDir, _options.Username, _options.Token, _logger);
         }
         else
         {
@@ -130,7 +126,7 @@ public sealed class GitOperations : IGitOperations
             _logger.LogInformation("Checked out branch '{BranchName}'", branchName);
         }
 
-        return Task.FromResult(repoDir);
+        return repoDir;
     }
 
     public Task CommitAndPushAsync(string repositoryPath, string message, CancellationToken cancellationToken = default)
@@ -266,6 +262,39 @@ public sealed class GitOperations : IGitOperations
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete repo dir {RepoPath}", repositoryPath); }
         }
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Performs a shallow (depth=1) clone via the git CLI to avoid full history download.
+    /// LibGit2Sharp does not support shallow clones, so we shell out for the initial clone only.
+    /// </summary>
+    private static async Task ShallowCloneAsync(string repoUrl, string targetDir, string username, string token, ILogger logger)
+    {
+        // Embed credentials in the URL so git CLI can authenticate without an interactive prompt.
+        var uri = new Uri(repoUrl);
+        var authedUrl = $"{uri.Scheme}://{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(token)}@{uri.Host}{uri.PathAndQuery}";
+
+        var psi = new ProcessStartInfo("git",
+            $"clone --depth 1 --no-single-branch \"{authedUrl}\" \"{targetDir}\"")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError  = true,
+            UseShellExecute        = false,
+            CreateNoWindow         = true,
+            // Clear any inherited GIT_TERMINAL_PROMPT that might block on CI
+            Environment = { ["GIT_TERMINAL_PROMPT"] = "0" }
+        };
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start git process.");
+
+        var stderr = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"git clone --depth 1 failed (exit {process.ExitCode}): {stderr.Trim()}");
+
+        logger.LogInformation("Shallow clone complete at {TargetDir}", targetDir);
     }
 
     /// <summary>
