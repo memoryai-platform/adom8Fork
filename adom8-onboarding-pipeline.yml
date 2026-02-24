@@ -22,7 +22,7 @@ variables:
   # - OPENAI_API_KEY (secret)   ← OpenAI; used as primary if CLAUDE_API_KEY is not set
   # - RESOURCE_GROUP_NAME
   # - LOCATION
-  # - GITHUB_TOKEN (secret)
+  # - GITHUB_TOKEN (secret)      ← must have 'repo' scope (read + write secrets)
   # - AZURE_SERVICE_CONNECTION
   # - AdoDashboardKey (secret)
   # - COPILOT_ENABLED (optional; defaults to true)
@@ -252,6 +252,49 @@ stages:
             --resource-group "$(RESOURCE_GROUP_NAME)" \
             --function-app "${FUNCTION_APP_NAME}" \
             --key-vault "${KEY_VAULT_NAME}"
+
+    - task: AzureCLI@2
+      displayName: 'Set GitHub Actions Secrets'
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          set -euo pipefail
+
+          # Recompute stable resource names (same logic as Stage 1)
+          SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
+          PROJECT_SLUG=$(echo "$(AZURE_DEVOPS_PROJECT)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          if [ -z "$PROJECT_SLUG" ]; then PROJECT_SLUG="adom8"; fi
+          SWA_BASE=$(echo "$PROJECT_SLUG" | cut -c1-35)
+          FUNCTION_APP_NAME="adom8-func-${SUFFIX}"
+          SWA_NAME="${SWA_BASE}-${SUFFIX}"
+
+          echo "Fetching Function App publish profile..."
+          PUBLISH_PROFILE=$(az functionapp deployment list-publishing-profiles \
+            --name "$FUNCTION_APP_NAME" \
+            --resource-group "$(RESOURCE_GROUP_NAME)" \
+            --xml)
+
+          echo "Fetching Static Web App deployment token..."
+          SWA_TOKEN=$(az staticwebapp secrets list \
+            --name "$SWA_NAME" \
+            --resource-group "$(RESOURCE_GROUP_NAME)" \
+            --query "properties.apiKey" -o tsv)
+
+          echo "Writing GitHub Actions secrets to $(GITHUB_ORG)/$(GITHUB_REPO)..."
+          gh secret set AZURE_FUNCTIONAPP_NAME \
+            --body "$FUNCTION_APP_NAME" \
+            --repo "$(GITHUB_ORG)/$(GITHUB_REPO)"
+          gh secret set AZURE_FUNCTIONAPP_PUBLISH_PROFILE \
+            --body "$PUBLISH_PROFILE" \
+            --repo "$(GITHUB_ORG)/$(GITHUB_REPO)"
+          gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN \
+            --body "$SWA_TOKEN" \
+            --repo "$(GITHUB_ORG)/$(GITHUB_REPO)"
+          echo "GitHub secrets set successfully — deploy workflows are ready to run."
+      env:
+        GH_TOKEN: $(GITHUB_TOKEN)
 
     - task: AzureCLI@2
       displayName: 'Final Pipeline Summary'
