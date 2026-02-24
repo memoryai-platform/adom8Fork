@@ -86,6 +86,16 @@ public sealed class GitOperations : IGitOperations
 
         if (!Directory.Exists(Path.Combine(repoDir, ".git")))
         {
+            // If repoDir exists but has no .git, a previous clone attempt failed partway
+            // and left partial debris on disk. Delete it first so we start clean and free
+            // that space before the new clone writes its data.
+            if (Directory.Exists(repoDir))
+            {
+                _logger.LogWarning("Partial/failed clone detected at {RepoDir} — deleting before retry", repoDir);
+                try { DeleteDirectory(repoDir); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Could not delete partial clone dir {RepoDir}", repoDir); }
+            }
+
             _logger.LogInformation("Shallow-cloning repository (depth=1) to {RepoDir}", repoDir);
             Directory.CreateDirectory(repoDir);
             await ShallowCloneAsync(_options.RepositoryUrl, repoDir, _options.Username, _options.Token, _logger);
