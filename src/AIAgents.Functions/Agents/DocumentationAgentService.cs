@@ -53,6 +53,7 @@ public sealed class DocumentationAgentService : IAgentService
         var failureStage = "initialization";
         var sourceBranch = $"feature/US-{task.WorkItemId}";
         var targetBranch = "main";
+        string? repoPath = null;
         try
         {
         _logger.LogInformation("Documentation agent starting for WI-{WorkItemId}", task.WorkItemId);
@@ -63,7 +64,7 @@ public sealed class DocumentationAgentService : IAgentService
         var aiClient = _aiClientFactory.GetClientForAgent("Documentation", workItem.GetModelOverrides());
         var branchName = sourceBranch;
         failureStage = "ensure_branch";
-        var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
         await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
         var state = await context.LoadStateAsync(cancellationToken);
@@ -253,6 +254,14 @@ Generate comprehensive documentation for these changes.";
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Documentation agent for WI-{task.WorkItemId} at stage '{failureStage}': {ex.Message}", ex);
+        }
+        finally
+        {
+            if (repoPath is not null)
+            {
+                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
+            }
         }
     }
 

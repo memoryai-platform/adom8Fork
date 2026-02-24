@@ -50,13 +50,14 @@ public sealed class DeploymentAgentService : IAgentService
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
+        string? repoPath = null;
         try
         {
         _logger.LogInformation("Deployment agent starting for WI-{WorkItemId}", task.WorkItemId);
 
         var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
         var branchName = $"feature/US-{task.WorkItemId}";
-        var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
         await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
         var state = await context.LoadStateAsync(cancellationToken);
@@ -210,6 +211,14 @@ public sealed class DeploymentAgentService : IAgentService
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Deployment agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
+        finally
+        {
+            if (repoPath is not null)
+            {
+                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
+            }
         }
     }
 

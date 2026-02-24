@@ -49,6 +49,7 @@ public sealed class PlanningAgentService : IAgentService
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
+        string? repoPath = null;
         try
         {
         _logger.LogInformation("Planning agent starting for WI-{WorkItemId}", task.WorkItemId);
@@ -61,7 +62,7 @@ public sealed class PlanningAgentService : IAgentService
 
         // 2. Ensure branch and get repo path
         var branchName = $"feature/US-{task.WorkItemId}";
-        var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
         // 2b. Materialize supporting files (images/documents) into the story workspace/repo
         var supportingArtifacts = await _adoClient.DownloadSupportingArtifactsAsync(task.WorkItemId, repoPath, cancellationToken);
@@ -329,6 +330,14 @@ Analyze this story and create a comprehensive implementation plan.";
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Planning agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
+        finally
+        {
+            if (repoPath is not null)
+            {
+                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
+            }
         }
     }
 

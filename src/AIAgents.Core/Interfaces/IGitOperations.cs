@@ -52,4 +52,10 @@ public interface IGitOperations
     /// Used as a fallback when artifact tracking is empty.
     /// </summary>
     Task<IReadOnlyList<string>> GetChangedFilesAsync(string repositoryPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the local repository clone at the given path to free temp disk space.
+    /// Safe to call even if the directory does not exist.
+    /// </summary>
+    Task CleanupRepoAsync(string repositoryPath, CancellationToken cancellationToken = default);
 }

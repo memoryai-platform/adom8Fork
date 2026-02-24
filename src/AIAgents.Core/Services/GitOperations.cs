@@ -34,6 +34,29 @@ public sealed class GitOperations : IGitOperations
         var basePath = _options.LocalBasePath ?? Path.Combine(Path.GetTempPath(), "ado-agent-repos");
         var repoDir = Path.Combine(basePath, SanitizeDirectoryName(branchName));
 
+        // Sweep stale clone dirs to prevent disk exhaustion on Consumption plans.
+        // Any directory not touched in the last 2 hours is considered completed/abandoned.
+        if (Directory.Exists(basePath))
+        {
+            var threshold = DateTime.UtcNow.AddHours(-2);
+            foreach (var staleDir in Directory.EnumerateDirectories(basePath))
+            {
+                if (string.Equals(staleDir, repoDir, StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    if (Directory.GetLastWriteTimeUtc(staleDir) < threshold)
+                    {
+                        _logger.LogInformation("Sweeping stale repo dir: {Dir}", staleDir);
+                        DeleteDirectory(staleDir);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not sweep stale repo dir {Dir}", staleDir);
+                }
+            }
+        }
+
         if (!Directory.Exists(Path.Combine(repoDir, ".git")))
         {
             _logger.LogInformation("Cloning repository to {RepoDir}", repoDir);
@@ -232,6 +255,29 @@ public sealed class GitOperations : IGitOperations
             _logger.LogWarning(ex, "Failed to get changed files via git diff");
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
         }
+    }
+
+    public Task CleanupRepoAsync(string repositoryPath, CancellationToken cancellationToken = default)
+    {
+        if (Directory.Exists(repositoryPath))
+        {
+            _logger.LogInformation("Cleaning up repo at {RepoPath}", repositoryPath);
+            try { DeleteDirectory(repositoryPath); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete repo dir {RepoPath}", repositoryPath); }
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Deletes a directory including read-only git pack files.
+    /// </summary>
+    private static void DeleteDirectory(string path)
+    {
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+        {
+            try { File.SetAttributes(file, FileAttributes.Normal); } catch { /* best effort */ }
+        }
+        Directory.Delete(path, recursive: true);
     }
 
     private static string SanitizeDirectoryName(string name)

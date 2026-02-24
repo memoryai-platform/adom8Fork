@@ -47,6 +47,7 @@ public sealed class ReviewAgentService : IAgentService
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
+        string? repoPath = null;
         try
         {
         _logger.LogInformation("Review agent starting for WI-{WorkItemId}", task.WorkItemId);
@@ -54,7 +55,7 @@ public sealed class ReviewAgentService : IAgentService
         var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
         var aiClient = _aiClientFactory.GetClientForAgent("Review", workItem.GetModelOverrides());
         var branchName = $"feature/US-{task.WorkItemId}";
-        var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
         await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
         var state = await context.LoadStateAsync(cancellationToken);
@@ -260,6 +261,14 @@ Perform a comprehensive code review.";
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Review agent for WI-{task.WorkItemId}: {ex.Message}", ex);
+        }
+        finally
+        {
+            if (repoPath is not null)
+            {
+                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
+            }
         }
     }
 
