@@ -47,6 +47,7 @@ variables:
   CODEBASE_API_ONLY_INIT: 'true'
   CODEBASE_API_FILE_LIMIT_KB: '100'
   CODEBASE_API_PUBLISH_ENABLED: 'true'
+  MCP_BOOTSTRAP_ENABLED: 'true'
 
 stages:
 - stage: Infrastructure
@@ -258,6 +259,7 @@ stages:
           export CODEBASE_API_ONLY_INIT="$(CODEBASE_API_ONLY_INIT)"
           export CODEBASE_API_FILE_LIMIT_KB="$(CODEBASE_API_FILE_LIMIT_KB)"
           export CODEBASE_API_PUBLISH_ENABLED="$(CODEBASE_API_PUBLISH_ENABLED)"
+          export MCP_BOOTSTRAP_ENABLED="$(MCP_BOOTSTRAP_ENABLED)"
           
           python scripts/adom8-pipeline-setup.py \
             --subscription-id "$(AZURE_SUBSCRIPTION_ID)" \

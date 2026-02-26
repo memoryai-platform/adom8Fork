@@ -48,6 +48,7 @@ def main():
     codebase_api_only_init = os.environ.get("CODEBASE_API_ONLY_INIT", "true").strip().lower() in ["1", "true", "yes", "on"]
     codebase_api_file_limit_kb = (os.environ.get("CODEBASE_API_FILE_LIMIT_KB", "100").strip() or "100")
     codebase_api_publish_enabled = os.environ.get("CODEBASE_API_PUBLISH_ENABLED", "true").strip().lower() in ["1", "true", "yes", "on"]
+    mcp_bootstrap_enabled = os.environ.get("MCP_BOOTSTRAP_ENABLED", "true").strip().lower() in ["1", "true", "yes", "on"]
 
     if not copilot_webhook_secret:
         copilot_webhook_secret = secrets.token_urlsafe(48)
@@ -280,6 +281,40 @@ def main():
         "Authorization": f"token {github_token}",
         "Accept": "application/vnd.github.v3+json"
     }
+
+    def upsert_github_file(path, content, commit_message, overwrite=True):
+        file_url = f"https://api.github.com/repos/{args.github_org}/{args.github_repo}/contents/{path}"
+        encoded_content = base64.b64encode(content.encode()).decode()
+
+        sha = None
+        try:
+            existing = requests.get(file_url, headers=gh_headers, timeout=30)
+            if existing.status_code == 200:
+                body = existing.json()
+                sha = body.get("sha")
+                if not overwrite:
+                    print(f"Skipped existing file (overwrite disabled): {path}")
+                    return
+            elif existing.status_code != 404:
+                print(f"Warning: Could not inspect {path}: {existing.status_code} - {existing.text}")
+        except Exception as e:
+            print(f"Warning: Exception checking file {path}: {e}")
+
+        payload = {
+            "message": commit_message,
+            "content": encoded_content
+        }
+        if sha:
+            payload["sha"] = sha
+
+        try:
+            put_resp = requests.put(file_url, headers=gh_headers, json=payload, timeout=30)
+            if put_resp.status_code in [200, 201]:
+                print(f"Upserted GitHub file: {path}")
+            else:
+                print(f"Warning: Failed to upsert {path}: {put_resp.status_code} - {put_resp.text}")
+        except Exception as e:
+            print(f"Warning: Exception upserting {path}: {e}")
     
     # Create Webhook
     gh_webhook_url = f"https://api.github.com/repos/{args.github_org}/{args.github_repo}/hooks"
@@ -353,26 +388,73 @@ def main():
 
     # Create .adom8 folder structure
     print("Creating .adom8 folder structure...")
-    readme_content = "# ADOm8 Configuration\n\nThis folder contains configuration and context for the ADOm8 AI agents."
     import base64
-    readme_b64 = base64.b64encode(readme_content.encode()).decode()
-    
-    gh_file_url = f"https://api.github.com/repos/{args.github_org}/{args.github_repo}/contents/.adom8/README.md"
-    file_payload = {
-        "message": "Initialize .adom8 configuration folder",
-        "content": readme_b64
-    }
-    
-    try:
-        file_response = requests.put(gh_file_url, headers=gh_headers, json=file_payload)
-        if file_response.status_code in [200, 201]:
-            print("Created .adom8/README.md successfully.")
-        elif file_response.status_code == 422:
-            print(".adom8/README.md already exists.")
-        else:
-            print(f"Warning: Failed to create .adom8/README.md: {file_response.status_code}")
-    except Exception as e:
-        print(f"Warning: Exception creating file: {e}")
+
+    readme_content = "# ADOm8 Configuration\n\nThis folder contains configuration and context for the ADOm8 AI agents."
+    upsert_github_file(
+        ".adom8/README.md",
+        readme_content,
+        "Initialize .adom8 configuration folder",
+        overwrite=False
+    )
+
+    if mcp_bootstrap_enabled:
+        print("MCP bootstrap is enabled — creating repository MCP guidance files.")
+        mcp_readme = f"""# MCP Bootstrap (ADOm8)
+
+This repository was bootstrapped by the ADOm8 onboarding pipeline with MCP guidance artifacts.
+
+## What the pipeline configured automatically
+
+- Created this guidance folder under `.adom8/mcp/`
+- Added a starter MCP manifest at `.adom8/mcp/mcp.template.json`
+
+## What cannot be automated in Azure DevOps pipeline
+
+- Installing MCP client tooling on each developer machine
+- Signing in interactively to provider accounts (GitHub, Azure DevOps) inside local MCP clients
+- Approving organization-level policies that require admin UI confirmation
+
+## Recommended next step
+
+Use `mcp.template.json` as a starting point in your MCP client and provide credentials through the client's secure secret store.
+"""
+
+        mcp_template = json.dumps({
+            "version": 1,
+            "generatedBy": "ADOm8 onboarding pipeline",
+            "servers": {
+                "github": {
+                    "description": "Configure your GitHub MCP server in your MCP client.",
+                    "requiredAuth": "GitHub token with repository access"
+                },
+                "azure_devops": {
+                    "description": "Configure your Azure DevOps MCP-compatible connector in your MCP client.",
+                    "requiredAuth": "Azure DevOps PAT with work item/code access",
+                    "organizationUrl": args.ado_org,
+                    "project": args.ado_project
+                }
+            },
+            "notes": [
+                "This is a bootstrap template, not an executable local client config.",
+                "Keep credentials out of source control; store them in client secret stores."
+            ]
+        }, indent=2)
+
+        upsert_github_file(
+            ".adom8/mcp/README.md",
+            mcp_readme,
+            "docs: add MCP bootstrap guidance",
+            overwrite=True
+        )
+        upsert_github_file(
+            ".adom8/mcp/mcp.template.json",
+            mcp_template,
+            "docs: add MCP bootstrap template",
+            overwrite=True
+        )
+    else:
+        print("MCP bootstrap disabled via MCP_BOOTSTRAP_ENABLED=false")
 
     # Stage 6: ADO Service Connection
     print("\n--- Stage 6: ADO Service Connection ---")

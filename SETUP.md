@@ -18,6 +18,7 @@ Before running the pipeline, you need to gather the following information and cr
 8. **Location**: The Azure region (e.g., `eastus`).
 9. **Azure Service Connection**: The name of an existing Azure Resource Manager service connection in your ADO project that has Contributor access to your subscription.
 10. **Copilot Enabled (Optional)**: Set pipeline variable `COPILOT_ENABLED` (`true` by default) to delegate coding to GitHub Copilot by default.
+11. **MCP Bootstrap Enabled (Optional)**: Set pipeline variable `MCP_BOOTSTRAP_ENABLED` (`true` by default) to create MCP bootstrap guidance files in your GitHub repo.
 
 ### Create Tokens
 
@@ -41,6 +42,7 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
 - Pull requests (Read/Write)
 - Issues (Read/Write)
 - Webhooks (Read/Write)
+- Secrets (Read/Write)
 
 ## Running the Pipeline
 
@@ -63,6 +65,7 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
    - `LOCATION`
    - `AZURE_SERVICE_CONNECTION`
    - `COPILOT_ENABLED` (optional, defaults to `true`)
+   - `MCP_BOOTSTRAP_ENABLED` (optional, defaults to `true`)
    
    **Secret Variables** (Make sure to check "Keep this value secret"):
    - `ONBOARDING_PAT`
@@ -78,6 +81,7 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
      - **Stage 3**: Store all secrets securely in Key Vault and configure the Function App.
      - **Stage 4**: Customize the ADO Process (create inherited process, custom fields, states, and board rules).
      - **Stage 5**: Configure GitHub (register webhook, create `.adom8` folder).
+          - Includes MCP bootstrap guidance files under `.adom8/mcp/` when `MCP_BOOTSTRAP_ENABLED=true`.
      - **Stage 6**: Create an ADO Service Connection to GitHub.
      - **Stage 7**: Run validation checks and output a summary.
 
@@ -94,6 +98,20 @@ Once the pipeline completes successfully:
 5. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
 6. **Default Field Values (Auto-Enforced)**: The pipeline now enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
 7. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
+
+## MCP Automation Matrix
+
+### Automated by the onboarding pipeline
+- Create repository MCP bootstrap guidance in `.adom8/mcp/README.md`.
+- Create starter template at `.adom8/mcp/mcp.template.json`.
+- Keep these files idempotent across re-runs.
+
+### Not automatable via Azure DevOps pipeline (manual)
+- Installing MCP clients/tools on developer machines.
+- Interactive sign-in/authorization flows inside MCP clients.
+- Organization/admin approvals that require UI confirmation in GitHub or Azure DevOps.
+
+Use the generated `.adom8/mcp/*` files as your baseline and complete local client wiring manually.
 
 ## Re-run Checklist (MyCreditPlan / Existing Projects)
 
