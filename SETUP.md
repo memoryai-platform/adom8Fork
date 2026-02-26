@@ -55,7 +55,7 @@ Create a Fine-grained Personal Access Token in GitHub scoped to your target repo
    Before running the pipeline, you must define the required variables. Click **Variables** in the top right corner of the pipeline editor and add the following:
    
    - `AZURE_SUBSCRIPTION_ID`
-   - `AZURE_DEVOPS_ORG`
+   - `AZURE_DEVOPS_ORG` (full URL, e.g. `https://dev.azure.com/yourorg`)
    - `AZURE_DEVOPS_PROJECT`
    - `GITHUB_ORG`
    - `GITHUB_REPO`
