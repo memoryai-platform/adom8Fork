@@ -106,4 +106,16 @@ public sealed class CopilotBridgeWebhookTests
 
         Assert.True(result);
     }
+
+    [Fact]
+    public void IsReadyToReconcile_ReviewRequested_DraftWip_True()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile(
+            action: "review_requested",
+            isDraft: true,
+            prTitle: "[WIP] Feature implementation",
+            hasReviewers: true);
+
+        Assert.True(result);
+    }
 }

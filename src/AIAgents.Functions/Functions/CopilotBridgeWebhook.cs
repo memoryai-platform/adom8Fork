@@ -240,7 +240,6 @@ public sealed class CopilotBridgeWebhook
         string copilotBranch,
         CancellationToken cancellationToken)
     {
-        var branchName = delegation.BranchName;
         var workItemId = delegation.WorkItemId;
 
         await _activityLogger.LogAsync("Coding", workItemId,
@@ -261,69 +260,14 @@ public sealed class CopilotBridgeWebhook
             return;
         }
 
-        // Check out the pipeline branch
-        var repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
-
-        // Fetch each changed file from Copilot's branch and write to pipeline branch
-        var reconciledFiles = new List<string>();
-        foreach (var file in changedFiles)
-        {
-            if (file.Status == "removed")
-                continue; // Don't delete files through reconciliation
-
-            var content = await FetchFileContentAsync(file.Filename, copilotBranch, cancellationToken);
-            if (content is not null)
-            {
-                await _gitOps.WriteFileAsync(repoPath, file.Filename, content, cancellationToken);
-                reconciledFiles.Add(file.Filename);
-            }
-        }
-
-        // Update state.json
-        await using var context = _contextFactory.Create(workItemId, repoPath);
-        var state = await context.LoadStateAsync(cancellationToken);
-
-        foreach (var file in reconciledFiles)
-            state.Artifacts.Code.Add(file);
-
-        // Record Copilot metrics as a special token usage entry
-        state.TokenUsage.RecordUsage("Coding", new TokenUsageData
-        {
-            InputTokens = 0,
-            OutputTokens = 0,
-            TotalTokens = 0,
-            EstimatedCost = 0m,
-            Model = "copilot-coding-agent"
-        });
-
-        state.Agents["Coding"] = AgentStatus.Completed();
-        state.Agents["Coding"].AdditionalData = new Dictionary<string, object>
-        {
-            ["mode"] = "copilot",
-            ["copilotPrNumber"] = prNumber,
-            ["issueNumber"] = delegation.IssueNumber,
-            ["filesChanged"] = metrics.FilesChanged,
-            ["linesAdded"] = metrics.LinesAdded,
-            ["linesDeleted"] = metrics.LinesDeleted,
-            ["durationMinutes"] = metrics.DurationMinutes,
-            ["commitCount"] = metrics.CommitCount
-        };
-        state.CurrentState = "AI Review"; // Skip Testing — Copilot already tested
-        state.Agents["Testing"] = AgentStatus.Skipped("Copilot coding agent already runs tests");
-        await context.SaveStateAsync(state, cancellationToken);
-
-        // Commit reconciled changes
-        await _gitOps.CommitAndPushAsync(repoPath,
-            $"[AI Coding] US-{workItemId}: Copilot implementation (PR #{prNumber}, {reconciledFiles.Count} files)",
-            cancellationToken);
+        var reconciledFiles = changedFiles
+            .Where(file => file.Status != "removed")
+            .Select(file => file.Filename)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         // Close Copilot's PR if configured
-        if (_copilotOptions.AutoCloseCopilotPr)
-        {
-            await ClosePullRequestAsync(prNumber,
-                $"Changes incorporated into pipeline branch `{branchName}`. Pipeline continuing via ADO-Agent.",
-                cancellationToken);
-        }
+        // Intentionally do not merge or close PR here. Human review controls merge decisions.
 
         // Close the GitHub Issue if one was created (safe if already closed)
         if (delegation.IssueNumber > 0)
@@ -342,9 +286,8 @@ public sealed class CopilotBridgeWebhook
         try { await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.LastAgent, "Coding", cancellationToken); }
         catch { /* field may not exist yet */ }
 
-        // Skip Testing — Copilot coding agent already runs tests during its session.
-        // Keep ADO state user-controlled; only mark Current AI Agent for resume routing.
-        try { await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Review, cancellationToken); }
+        // Move to Testing as the next pipeline stage.
+        try { await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Testing, cancellationToken); }
         catch { /* field may not exist yet */ }
 
         await _adoClient.AddWorkItemCommentAsync(workItemId,
@@ -352,14 +295,14 @@ public sealed class CopilotBridgeWebhook
             $"Strategy: Copilot coding agent<br/>" +
             $"PR: #{prNumber} | Files: {metrics.FilesChanged} | +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines<br/>" +
             $"Duration: {metrics.DurationMinutes:F1} minutes | Commits: {metrics.CommitCount}<br/>" +
-            $"Skipping Testing agent (Copilot already validated code)",
+            $"Handing off to Testing agent",
             cancellationToken);
 
-        // Enqueue Review agent — skip Testing since Copilot handles testing in its process
+        // Enqueue Testing agent
         var nextTask = new AgentTask
         {
             WorkItemId = workItemId,
-            AgentType = AgentType.Review,
+            AgentType = AgentType.Testing,
             CorrelationId = delegation.CorrelationId
         };
         await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
@@ -369,11 +312,11 @@ public sealed class CopilotBridgeWebhook
         var tokensForLog = 1;
         var costForLog = 0m; // No direct API cost — included in GitHub subscription
         await _activityLogger.LogAsync("Coding", workItemId,
-            $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Skipping Testing → Review. (1 premium credit)",
+            $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Advancing to Testing. (1 premium credit)",
             tokensForLog, costForLog, "info", cancellationToken);
 
         _logger.LogInformation(
-            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, pipeline resumed (Testing skipped → Review)",
+            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, pipeline resumed (Coding → Testing)",
             prNumber, workItemId, reconciledFiles.Count);
     }
 
@@ -390,6 +333,13 @@ public sealed class CopilotBridgeWebhook
     internal static bool IsReadyToReconcile(string action, bool isDraft, string prTitle, bool hasReviewers)
     {
         if (string.Equals(action, "ready_for_review", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Copilot often keeps PRs in draft and may leave [WIP] in the title,
+        // but explicitly requests reviewers once coding is done.
+        if (string.Equals(action, "review_requested", StringComparison.OrdinalIgnoreCase) && hasReviewers)
         {
             return true;
         }
@@ -472,7 +422,10 @@ public sealed class CopilotBridgeWebhook
             files.Add(new PrFile
             {
                 Filename = file.GetProperty("filename").GetString() ?? "",
-                Status = file.GetProperty("status").GetString() ?? ""
+                Status = file.GetProperty("status").GetString() ?? "",
+                ContentsUrl = file.TryGetProperty("contents_url", out var contentsUrl)
+                    ? contentsUrl.GetString()
+                    : null
             });
         }
 
@@ -495,22 +448,39 @@ public sealed class CopilotBridgeWebhook
     /// Fetches raw file content from a specific branch via GitHub API.
     /// </summary>
     private async Task<string?> FetchFileContentAsync(
-        string filePath, string branch, CancellationToken cancellationToken)
+        PrFile file, string branch, CancellationToken cancellationToken)
     {
         using var httpClient = CreateGitHubClient();
         httpClient.DefaultRequestHeaders.Accept.Clear();
         httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/vnd.github.raw+json"));
 
-        var encodedPath = Uri.EscapeDataString(filePath);
+        // Preferred path: use GitHub PR file `contents_url` (commit-pinned).
+        // This avoids branch/ref resolution failures with Copilot temporary branch naming.
+        if (!string.IsNullOrWhiteSpace(file.ContentsUrl))
+        {
+            var contentsResponse = await httpClient.GetAsync(file.ContentsUrl, cancellationToken);
+            if (contentsResponse.IsSuccessStatusCode)
+            {
+                return await contentsResponse.Content.ReadAsStringAsync(cancellationToken);
+            }
+
+            _logger.LogWarning(
+                "Failed to fetch {File} via contents_url: {Status}",
+                file.Filename,
+                contentsResponse.StatusCode);
+        }
+
+        var encodedPath = Uri.EscapeDataString(file.Filename);
+        var encodedBranch = Uri.EscapeDataString(branch);
         var response = await httpClient.GetAsync(
-            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/contents/{encodedPath}?ref={branch}",
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/contents/{encodedPath}?ref={encodedBranch}",
             cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Failed to fetch {File} from branch {Branch}: {Status}",
-                filePath, branch, response.StatusCode);
+                file.Filename, branch, response.StatusCode);
             return null;
         }
 
@@ -581,5 +551,6 @@ public sealed class CopilotBridgeWebhook
     {
         public required string Filename { get; init; }
         public required string Status { get; init; }
+        public string? ContentsUrl { get; init; }
     }
 }

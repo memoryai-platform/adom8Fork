@@ -119,8 +119,6 @@ public sealed class InputValidatorTests
     [InlineData("<iframe src='evil.com'></iframe>")]
     [InlineData("<object data='x'></object>")]
     [InlineData("<embed src='x'>")]
-    [InlineData("<form action='x'>")]
-    [InlineData("<input type='text'>")]
     public void ValidateWorkItem_HtmlTag_InDescription_ReturnsError(string htmlContent)
     {
         var validator = CreateValidator();
@@ -130,6 +128,18 @@ public sealed class InputValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.Contains("dangerous HTML tags"));
+    }
+
+    [Fact]
+    public void ValidateWorkItem_AdoCheckboxHtml_InAcceptanceCriteria_ReturnsValid()
+    {
+        var validator = CreateValidator();
+        var wi = CreateWorkItem(acceptanceCriteria: "<ul><li><input disabled=\"\" type=checkbox> Item one</li></ul>");
+
+        var result = validator.ValidateWorkItem(wi);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("dangerous HTML tags"));
     }
 
     [Fact]

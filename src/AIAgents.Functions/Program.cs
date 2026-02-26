@@ -27,8 +27,15 @@ var host = new HostBuilder()
         services.Configure<SaasOptions>(configuration.GetSection(SaasOptions.SectionName));
 
         // Application Insights — register BEFORE HTTP resilience handlers
-        services.AddApplicationInsightsTelemetryWorkerService();
-        services.ConfigureFunctionsApplicationInsights();
+        try
+        {
+            services.AddApplicationInsightsTelemetryWorkerService();
+            services.ConfigureFunctionsApplicationInsights();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Application Insights initialization skipped: {ex.Message}");
+        }
 
         // Named HTTP client for AI API calls with resilience pipeline.
         // Base URL and auth are set per-request by AIClient so that

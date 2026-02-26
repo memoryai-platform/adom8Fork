@@ -37,7 +37,7 @@ public sealed class InputValidator : IInputValidator
 
     // HTML/script tag pattern
     private static readonly Regex s_htmlTagRegex = new(
-        @"<\s*(script|iframe|object|embed|form|input|link|meta|style)\b[^>]*>",
+        @"<\s*(script|iframe|object|embed)\b[^>]*>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // SQL injection patterns
