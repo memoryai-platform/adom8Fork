@@ -57,6 +57,15 @@ Consider: single update at end of run vs. progressive updates per stage.
 - [ ] Create / verify `step-4-run.svg` (pipeline stages diagram)
 - [ ] Update `step-5-verify.svg` to reflect trimmed field list (2 settings + 4 tracking)
 
+### #8 â€” Agent Library, Selection & Governance
+- [ ] Add layered `.adom8/agents` library (`stack/`, `standards/`, `patterns/`, `meta/`) as reusable defaults
+- [ ] Keep existing `.agent` indexed docs as factual context source (read-only reference)
+- [ ] Add `agent-selector` manifest and deterministic `applicable_agents` output from Planning agent
+- [ ] Define versioning plus precedence/conflict rules across org/default/custom agents
+- [ ] Add token-budgeting rules per stage/agent with fallback behavior when limits are hit
+- [ ] Add onboarding flow for org-provided custom agents and approval of generated defaults
+- [ ] Roll out in phases: Phase 1 (baseline), Phase 2 (governance), Phase 3 (advanced tuning)
+
 ---
 
 ## Completed

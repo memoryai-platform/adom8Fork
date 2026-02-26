@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AZURE_FUNCTIONAPP_NAME: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
+      AZURE_FUNCTIONAPP_NAME_ADOM8: ${{ secrets.AZURE_FUNCTIONAPP_NAME_ADOM8 }}
+      AZURE_FUNCTIONAPP_PUBLISH_PROFILE_ADOM8: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_ADOM8 }}
 
     steps:
       - name: Checkout code
@@ -43,9 +45,9 @@ jobs:
           package: ./publish
 
       - name: Deploy to Azure Functions (adom8)
-        if: ${{ secrets.AZURE_FUNCTIONAPP_NAME_ADOM8 != '' }}
+        if: ${{ env.AZURE_FUNCTIONAPP_NAME_ADOM8 != '' && env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_ADOM8 != '' }}
         uses: azure/functions-action@v1
         with:
-          app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME_ADOM8 }}
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_ADOM8 }}
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME_ADOM8 }}
+          publish-profile: ${{ env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_ADOM8 }}
           package: ./publish

@@ -82,6 +82,11 @@ public sealed class PlanningAgentService : IAgentService
         try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Planning, cancellationToken); }
         catch { /* field may not exist yet */ }
 
+        await _adoClient.AddWorkItemCommentAsync(
+            workItem.Id,
+            "Moved to Planning Agent: triaging requirements and preparing implementation plan.",
+            cancellationToken);
+
         // 5. Detect placeholder text before calling AI
         var placeholderWarning = DetectPlaceholders(workItem);
 
@@ -245,6 +250,14 @@ Analyze this story and create a comprehensive implementation plan.";
                 $"<br/><br/><i>Please address the blockers and questions above, then move the story back to 'AI Agent' to re-trigger the pipeline.</i>";
 
             await _adoClient.AddWorkItemCommentAsync(workItem.Id, rejectComment, cancellationToken);
+
+            var shortReason = readiness.Blockers.FirstOrDefault()
+                              ?? readiness.Reason
+                              ?? "Requirements clarification is needed before coding can proceed.";
+            await _adoClient.AddWorkItemCommentAsync(
+                workItem.Id,
+                $"Moved to Needs Revision. Reason: {System.Net.WebUtility.HtmlEncode(shortReason)}",
+                cancellationToken);
 
             // Update state — mark planning as completed with rejection info
             state.Agents["Planning"] = AgentStatus.Completed();

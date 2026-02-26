@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Agents;
@@ -156,8 +157,23 @@ public sealed class PlanningAgentServiceTests
 
         await service.ExecuteAsync(task);
 
-        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "AI Agent", It.IsAny<CancellationToken>()), Times.Once);
-        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Planning, It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Coding, It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_HappyPath_PostsMovedToPlanningComment()
+    {
+        SetupHappyPath();
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Moved to Planning Agent")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -324,6 +340,35 @@ public sealed class PlanningAgentServiceTests
 
         _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
             It.Is<string>(c => c.Contains("Story Not Ready for Coding") && c.Contains("Blockers")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_PostsMovedToNeedsRevisionComment()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Moved to Needs Revision. Reason:")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_PostsShortReasonFromFirstBlocker()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Moved to Needs Revision. Reason:") &&
+                              c.Contains("No acceptance criteria provided")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -218,6 +218,33 @@ customEvents
 ### Issue 3: Agent Fails Permanently (Configuration Errors)
 
 **Symptoms:**
+
+---
+
+### Issue 4: Coding Agent Appears Stuck After Copilot Finishes
+
+**Symptoms:**
+- Story remains on `Coding Agent` in dashboard even though Copilot posted/updated a PR
+- PR may stay Draft for a while
+- No follow-on transition to Review is observed
+
+**Current mechanism (important):**
+- Coding delegation pauses until `CopilotBridgeWebhook` reconciles a GitHub PR.
+- Bridge listens to `pull_request` events and resumes pipeline after readiness conditions are met.
+- `ready_for_review` action is treated as sufficient to reconcile and continue.
+- For other PR actions, bridge still uses readiness heuristics.
+- Timeout checker is a safety net and **does not** auto-resume pipeline; it marks timeout and waits for explicit resume.
+
+**Checks:**
+1. In GitHub webhook deliveries, verify `pull_request` events are arriving at `/api/copilot-webhook` with HTTP `200`.
+2. Confirm webhook secret matches the Function App `Copilot__WebhookSecret` value.
+3. Confirm PR includes `US-<id>` in title/body so bridge can map it to the delegation.
+4. Confirm branch naming still matches expected `feature/US-<id>` conventions.
+
+**Recovery options:**
+1. If PR is complete, mark it `Ready for review` (or re-trigger a `pull_request` update event).
+2. If webhook was missed, call `POST /api/resume` with stage `Review` to continue pipeline.
+3. If delegation timed out, resume explicitly (`/api/resume`) rather than waiting for auto-fallback.
 - Agent fails immediately without retry
 - `AgentPermanentFailure` events in Application Insights
 - Work item state set to "Agent Failed"

@@ -178,9 +178,25 @@ public sealed class CodebaseIntelligence
             // Copilot path: create an ADO story that flows through the pipeline → Copilot does the work
             var title = "Initialize Codebase Intelligence Documentation";
             var description = BuildCodebaseScanStoryDescription();
+            var acceptanceCriteria = BuildCodebaseScanStoryAcceptanceCriteria();
 
             var workItemId = await _adoClient.CreateWorkItemAsync(
                 title, description, AIPipelineNames.ProcessingState, cancellationToken);
+
+            try
+            {
+                await _adoClient.UpdateWorkItemFieldAsync(
+                    workItemId,
+                    "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+                    acceptanceCriteria,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Could not set Acceptance Criteria for initialize-codebase story {WorkItemId}",
+                    workItemId);
+            }
 
             await _activityLogger.LogAsync(
                 "CodebaseDocumentation",
@@ -356,4 +372,26 @@ based on the ACTUAL code — not generic templates.</li>
 </ul>
 """;
     }
+
+        private static string BuildCodebaseScanStoryAcceptanceCriteria()
+        {
+                return """
+<ol>
+    <li>A <code>.agent/</code> folder exists at repository root with at least:
+        <ul>
+            <li><code>CONTEXT_INDEX.md</code></li>
+            <li><code>TECH_STACK.md</code></li>
+            <li><code>ARCHITECTURE.md</code></li>
+            <li><code>CODING_STANDARDS.md</code></li>
+            <li><code>COMMON_PATTERNS.md</code></li>
+            <li><code>TESTING_STRATEGY.md</code></li>
+            <li><code>DEPLOYMENT.md</code></li>
+        </ul>
+    </li>
+    <li><code>.agent/metadata.json</code> is generated and includes scan summary fields (files analyzed, languages detected, last analysis timestamp).</li>
+    <li>Documentation reflects the current repository content and provides concrete file paths/patterns for future AI agents.</li>
+    <li>Pipeline records successful codebase onboarding completion in activity/status.</li>
+</ol>
+""";
+        }
 }

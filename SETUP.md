@@ -94,3 +94,28 @@ Once the pipeline completes successfully:
 5. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
 6. **Default Field Values (Auto-Enforced)**: The pipeline now enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
 7. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
+
+## Re-run Checklist (MyCreditPlan / Existing Projects)
+
+Use this quick checklist after re-running `adom8-onboarding-pipeline.yml` to confirm the latest runtime behavior is active.
+
+1. **Initialize Codebase story no longer auto-fails for missing AC**
+   - Trigger **Initialize Codebase** from the dashboard.
+   - Open the created story and confirm **Acceptance Criteria** is populated (not blank).
+   - Move state to `AI Agent` and verify it proceeds to `Coding Agent` instead of immediately returning to `Needs Revision`.
+
+2. **Current AI Agent remains on Coding during Copilot delegation**
+   - When Coding delegates to GitHub Copilot, verify `Current AI Agent` stays `Coding Agent` while the Copilot run is in progress.
+   - It should no longer clear to blank during the wait period.
+
+3. **Copilot completion advances without reviewer request dependency**
+   - When GitHub emits `pull_request` action `ready_for_review`, pipeline should reconcile and continue even if no reviewer was requested.
+   - Expected progression on Copilot path: `Coding Agent` → skip Testing → `Review Agent`.
+
+4. **Webhook wiring check**
+   - In GitHub repo settings, confirm webhook events include `pull_request` and destination is:
+     - `https://<function-app>.azurewebsites.net/api/copilot-webhook?code=<function-key>`
+   - In Azure DevOps Service Hooks, confirm work-item state hook points to:
+     - `https://<function-app>.azurewebsites.net/api/webhook?code=<function-key>`
+
+If any check fails, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) sections for Copilot draft/reconciliation and resume behavior.

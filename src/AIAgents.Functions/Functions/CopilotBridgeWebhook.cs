@@ -151,12 +151,13 @@ public sealed class CopilotBridgeWebhook
         var reviewerRequested = hasReviewers;
 
         var signals = (notDraft ? 1 : 0) + (notWip ? 1 : 0) + (reviewerRequested ? 1 : 0);
+        var isReady = IsReadyToReconcile(action, isDraft, prTitle, hasReviewers);
 
         _logger.LogInformation(
             "PR #{PrNumber} action={Action}: draft={IsDraft}, wip={HasWip}, reviewers={HasReviewers} → {Signals}/3 readiness signals",
             prNumber, action, isDraft, !notWip, hasReviewers, signals);
 
-        if (signals < 2)
+        if (!isReady)
         {
             _logger.LogInformation(
                 "PR #{PrNumber} has only {Signals}/3 readiness signals — not ready yet, waiting for more signals",
@@ -384,6 +385,21 @@ public sealed class CopilotBridgeWebhook
         var combined = $"{title}\n{body}";
         var match = System.Text.RegularExpressions.Regex.Match(combined, @"US-(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
+    }
+
+    internal static bool IsReadyToReconcile(string action, bool isDraft, string prTitle, bool hasReviewers)
+    {
+        if (string.Equals(action, "ready_for_review", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var notDraft = !isDraft;
+        var notWip = !prTitle.Contains("[WIP]", StringComparison.OrdinalIgnoreCase);
+        var reviewerRequested = hasReviewers;
+        var signals = (notDraft ? 1 : 0) + (notWip ? 1 : 0) + (reviewerRequested ? 1 : 0);
+
+        return signals >= 2;
     }
 
     /// <summary>

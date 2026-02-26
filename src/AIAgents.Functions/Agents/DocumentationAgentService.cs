@@ -190,9 +190,20 @@ Generate comprehensive documentation for these changes.";
             description: prDescription,
             cancellationToken: cancellationToken);
 
+        var hasBreakingChanges = !string.IsNullOrWhiteSpace(docResult.BreakingChanges);
+        var hasMigrationGuide = !string.IsNullOrWhiteSpace(docResult.MigrationGuide);
+
         // Update ADO
         await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-            $"<b>\ud83e\udd16 AI Documentation Agent Complete</b><br/>Pull Request: <a href=\"#\">PR #{prId}</a><br/>All code-generation agents completed. Handing off to Deployment agent.",
+            $"<b>AI Documentation Agent Complete</b><br/>" +
+            $"Pull Request: PR #{prId}<br/>" +
+            $"Documentation artifact: <code>.ado/stories/US-{workItem.Id}/DOCUMENTATION.md</code><br/>" +
+            $"Code files summarized: {state.Artifacts.Code.Count}<br/>" +
+            $"Test files summarized: {state.Artifacts.Tests.Count}<br/>" +
+            $"Sections generated: Overview, Changes, API Docs, Usage Examples, Configuration Changes<br/>" +
+            $"Includes breaking changes: {(hasBreakingChanges ? "Yes" : "No")}<br/>" +
+            $"Includes migration guide: {(hasMigrationGuide ? "Yes" : "No")}<br/>" +
+            $"All code-generation agents completed. Handing off to Deployment agent.",
             cancellationToken);
 
         // Store PR ID in state so DeploymentAgent can access it

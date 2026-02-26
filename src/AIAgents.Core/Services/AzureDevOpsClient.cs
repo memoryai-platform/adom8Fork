@@ -59,6 +59,16 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
     {
         _logger.LogInformation("Updating work item {WorkItemId} state to '{NewState}'", workItemId, newState);
 
+        StoryWorkItem? before = null;
+        try
+        {
+            before = await GetWorkItemAsync(workItemId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch current work item before state update for WI-{WorkItemId}", workItemId);
+        }
+
         var patchDocument = new JsonPatchDocument
         {
             new JsonPatchOperation
@@ -71,16 +81,21 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
 
         var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
+
+        if (!string.Equals(before?.State, newState, StringComparison.OrdinalIgnoreCase))
+        {
+            var oldState = string.IsNullOrWhiteSpace(before?.State) ? "(unknown)" : before!.State;
+            await TryAddAutoTransitionCommentAsync(
+                workItemId,
+                before,
+                $"State changed: **{oldState}** -> **{newState}**",
+                cancellationToken);
+        }
     }
 
     public async Task AddWorkItemCommentAsync(int workItemId, string comment, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Adding comment to work item {WorkItemId}", workItemId);
-
-        if (await TryAddCommentViaApiAsync(workItemId, comment, cancellationToken))
-        {
-            return;
-        }
 
         var patchDocument = new JsonPatchDocument
         {
@@ -96,43 +111,6 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
     }
 
-    private async Task<bool> TryAddCommentViaApiAsync(int workItemId, string comment, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var httpClient = CreateAdoHttpClient();
-            var payload = JsonSerializer.Serialize(new { text = comment });
-
-            // Build the absolute URL: {orgUrl}/{project}/_apis/wit/workItems/{id}/comments
-            var baseUrl = _options.OrganizationUrl.TrimEnd('/');
-            var project = Uri.EscapeDataString(_options.Project);
-            var requestUrl = $"{baseUrl}/{project}/_apis/wit/workItems/{workItemId}/comments?api-version=7.1-preview.4";
-
-            using var response = await httpClient.PostAsync(
-                requestUrl,
-                new StringContent(payload, Encoding.UTF8, "application/json"),
-                cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-            {
-                return true;
-            }
-
-            _logger.LogWarning(
-                "Comments API rejected comment for WI-{WorkItemId} (status: {StatusCode}); falling back to System.History",
-                workItemId,
-                response.StatusCode);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Comments API failed for WI-{WorkItemId}; falling back to System.History",
-                workItemId);
-            return false;
-        }
-    }
-
     public async Task UpdateWorkItemFieldAsync(
         int workItemId,
         string fieldPath,
@@ -140,6 +118,19 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Updating field '{FieldPath}' on work item {WorkItemId}", fieldPath, workItemId);
+
+        StoryWorkItem? before = null;
+        if (IsAgentFieldPath(fieldPath))
+        {
+            try
+            {
+                before = await GetWorkItemAsync(workItemId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch current work item before field update for WI-{WorkItemId}", workItemId);
+            }
+        }
 
         var patchDocument = new JsonPatchDocument
         {
@@ -153,6 +144,8 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
 
         var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
+
+        await TryCommentAgentFieldChangeAsync(workItemId, before, fieldPath, value?.ToString(), cancellationToken);
     }
 
     public async Task UpdateWorkItemFieldsAsync(
@@ -163,6 +156,19 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         if (fieldUpdates.Count == 0) return;
 
         _logger.LogDebug("Updating {Count} fields on work item {WorkItemId}", fieldUpdates.Count, workItemId);
+
+        StoryWorkItem? before = null;
+        if (fieldUpdates.Keys.Any(IsAgentFieldPath))
+        {
+            try
+            {
+                before = await GetWorkItemAsync(workItemId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch current work item before bulk field update for WI-{WorkItemId}", workItemId);
+            }
+        }
 
         var patchDocument = new JsonPatchDocument();
         foreach (var (path, value) in fieldUpdates)
@@ -177,6 +183,11 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
 
         var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
+
+        foreach (var (path, value) in fieldUpdates)
+        {
+            await TryCommentAgentFieldChangeAsync(workItemId, before, path, value?.ToString(), cancellationToken);
+        }
     }
 
     public async Task<int> CreateWorkItemAsync(
@@ -609,5 +620,85 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
             return (int)d;
 
         return 3; // Default
+    }
+
+    private async Task TryCommentAgentFieldChangeAsync(
+        int workItemId,
+        StoryWorkItem? before,
+        string fieldPath,
+        string? newValue,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAgentFieldPath(fieldPath))
+            return;
+
+        var normalized = NormalizeDisplayValue(newValue);
+        string? oldValue = fieldPath.Equals(CustomFieldNames.Paths.CurrentAIAgent, StringComparison.OrdinalIgnoreCase)
+            ? NormalizeDisplayValue(before?.CurrentAIAgent)
+            : NormalizeDisplayValue(before?.AILastAgent);
+
+        if (string.Equals(oldValue, normalized, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var fieldLabel = fieldPath.Equals(CustomFieldNames.Paths.CurrentAIAgent, StringComparison.OrdinalIgnoreCase)
+            ? "Current AI Agent"
+            : "Last AI Agent";
+
+        var renderedNew = string.IsNullOrWhiteSpace(normalized) ? "(cleared)" : normalized;
+        var renderedOld = string.IsNullOrWhiteSpace(oldValue) ? "(empty)" : oldValue;
+
+        await TryAddAutoTransitionCommentAsync(
+            workItemId,
+            before,
+            $"{fieldLabel} changed: **{renderedOld}** -> **{renderedNew}**",
+            cancellationToken);
+    }
+
+    private async Task TryAddAutoTransitionCommentAsync(
+        int workItemId,
+        StoryWorkItem? workItem,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var mention = BuildOwnerMention(workItem?.AssignedTo);
+        var comment = string.IsNullOrWhiteSpace(mention)
+            ? message
+            : $"{mention} {message}";
+
+        try
+        {
+            await AddWorkItemCommentAsync(workItemId, comment, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to add automatic transition comment for WI-{WorkItemId}",
+                workItemId);
+        }
+    }
+
+    private static bool IsAgentFieldPath(string fieldPath)
+        => fieldPath.Equals(CustomFieldNames.Paths.CurrentAIAgent, StringComparison.OrdinalIgnoreCase)
+           || fieldPath.Equals(CustomFieldNames.Paths.LastAgent, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeDisplayValue(string? value)
+        => (value ?? string.Empty).Trim();
+
+    private static string? BuildOwnerMention(string? assignedTo)
+    {
+        if (string.IsNullOrWhiteSpace(assignedTo))
+            return null;
+
+        var cleaned = assignedTo.Trim();
+        var angleIndex = cleaned.IndexOf('<');
+        if (angleIndex > 0)
+        {
+            cleaned = cleaned[..angleIndex].Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(cleaned))
+            return null;
+
+        return $"@{cleaned}";
     }
 }

@@ -68,4 +68,42 @@ public sealed class CopilotBridgeWebhookTests
             "This PR implements the changes for US-54321 as described in the plan.");
         Assert.Equal(54321, result);
     }
+
+    // ========== READINESS GATING TESTS ==========
+
+    [Fact]
+    public void IsReadyToReconcile_ReadyForReview_AlwaysTrue()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile(
+            action: "ready_for_review",
+            isDraft: true,
+            prTitle: "Draft PR",
+            hasReviewers: false);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsReadyToReconcile_Opened_NeedsTwoSignals()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile(
+            action: "opened",
+            isDraft: true,
+            prTitle: "[WIP] Work in progress",
+            hasReviewers: true);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsReadyToReconcile_Edited_TwoSignalsTrue()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile(
+            action: "edited",
+            isDraft: false,
+            prTitle: "Feature implementation",
+            hasReviewers: false);
+
+        Assert.True(result);
+    }
 }

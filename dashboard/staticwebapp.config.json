@@ -1,4 +1,7 @@
 {
+  "mimeTypes": {
+    ".html": "text/html; charset=utf-8"
+  },
   "globalHeaders": {
     "Content-Security-Policy": "frame-ancestors 'none'",
     "X-Frame-Options": "DENY"

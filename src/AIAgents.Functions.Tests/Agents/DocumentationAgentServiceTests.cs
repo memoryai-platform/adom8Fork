@@ -1,4 +1,5 @@
 using AIAgents.Core.Interfaces;
+using AIAgents.Core.Constants;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Agents;
 using AIAgents.Functions.Models;
@@ -122,7 +123,10 @@ public sealed class DocumentationAgentServiceTests
 
         Assert.Equal("AI Deployment", _capturedState.CurrentState);
         Assert.Equal("completed", _capturedState.Agents["Documentation"].Status);
-        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "AI Agent", It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(12345,
+            CustomFieldNames.Paths.CurrentAIAgent,
+            AIPipelineNames.CurrentAgentValues.Deployment,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -172,5 +176,22 @@ public sealed class DocumentationAgentServiceTests
 
         Assert.Contains(_capturedState.Artifacts.Docs,
             d => d.Contains("DOCUMENTATION.md"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PostsDetailedDocumentationSummaryComment()
+    {
+        SetupHappyPath();
+        var service = CreateService();
+
+        await service.ExecuteAsync(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Documentation });
+
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("AI Documentation Agent Complete") &&
+                              c.Contains("Documentation artifact") &&
+                              c.Contains("Code files summarized") &&
+                              c.Contains("Test files summarized") &&
+                              c.Contains("Sections generated")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

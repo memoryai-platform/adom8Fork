@@ -162,7 +162,7 @@ public sealed class CodingAgentService : IAgentService
                 try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Coding", cancellationToken); }
                 catch { /* field may not exist yet */ }
 
-                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
+                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Coding, cancellationToken); }
                 catch { /* field may not exist yet */ }
 
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
