@@ -1,0 +1,84 @@
+{
+  "workItemId": 110,
+  "currentState": "AI Docs",
+  "createdAt": "2026-02-26T04:22:50.0311277Z",
+  "updatedAt": "2026-02-26T06:50:09.6325613Z",
+  "agents": {
+    "Planning": {
+      "status": "in_progress",
+      "startedAt": "2026-02-26T05:50:03.1046797Z",
+      "completedAt": null,
+      "additionalData": null
+    },
+    "Coding": {
+      "status": "completed",
+      "startedAt": null,
+      "completedAt": "2026-02-26T06:49:38.7580351Z",
+      "additionalData": {
+        "mode": "copilot",
+        "copilotPrNumber": 92,
+        "issueNumber": 91,
+        "filesChanged": 10,
+        "linesAdded": 1197,
+        "linesDeleted": 21,
+        "durationMinutes": 58.92197416333333,
+        "commitCount": 2
+      }
+    },
+    "Testing": {
+      "status": "skipped",
+      "startedAt": null,
+      "completedAt": "2026-02-26T06:49:38.7581475Z",
+      "additionalData": {
+        "reason": "Copilot coding agent already runs tests"
+      }
+    },
+    "Review": {
+      "status": "in_progress",
+      "startedAt": "2026-02-26T06:49:46.1706947Z",
+      "completedAt": null,
+      "additionalData": null
+    },
+    "Documentation": {
+      "status": "in_progress",
+      "startedAt": "2026-02-26T06:50:09.6325566Z",
+      "completedAt": null,
+      "additionalData": null
+    }
+  },
+  "artifacts": {
+    "code": [
+      ".agent/DATABASE_SCHEMA.md",
+      ".agent/FEATURES/ado-integration.md",
+      ".agent/FEATURES/agent-pipeline.md",
+      ".agent/FEATURES/ai-client.md",
+      ".agent/FEATURES/codebase-intelligence.md",
+      ".agent/FEATURES/copilot-integration.md",
+      ".agent/FEATURES/dashboard.md",
+      ".agent/FEATURES/git-operations.md",
+      ".agent/README.md",
+      ".agent/metadata.json"
+    ],
+    "tests": [],
+    "docs": []
+  },
+  "decisions": [],
+  "questions": [],
+  "tokenUsage": {
+    "totalInputTokens": 0,
+    "totalOutputTokens": 0,
+    "totalTokens": 0,
+    "totalCost": 0,
+    "complexity": "XS",
+    "agents": {
+      "Coding": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "estimatedCost": 0,
+        "model": "copilot-coding-agent",
+        "callCount": 1
+      }
+    }
+  }
+}
