@@ -29,6 +29,8 @@ public sealed class CodebaseIntelligence
     private readonly ILogger<CodebaseIntelligence> _logger;
     private readonly QueueClient _queueClient;
     private readonly CopilotOptions _copilotOptions;
+    private readonly string? _adoOrganizationUrl;
+    private readonly string? _adoProject;
 
     public CodebaseIntelligence(
         IAzureDevOpsClient adoClient,
@@ -45,6 +47,10 @@ public sealed class CodebaseIntelligence
         _activityLogger = activityLogger;
         _logger = logger;
         _copilotOptions = copilotOptions.Value;
+        _adoOrganizationUrl = configuration["AzureDevOps:OrganizationUrl"]
+            ?? configuration["AzureDevOps__OrganizationUrl"];
+        _adoProject = configuration["AzureDevOps:Project"]
+            ?? configuration["AzureDevOps__Project"];
 
         var connectionString = configuration["AzureWebJobsStorage"]
             ?? throw new InvalidOperationException("AzureWebJobsStorage is required.");
@@ -162,7 +168,7 @@ public sealed class CodebaseIntelligence
     /// <summary>
     /// POST /api/initialize-codebase
     /// Creates an ADO User Story with detailed codebase scanning instructions
-    /// and sets it to "Story Planning" so it flows through the AI pipeline.
+    /// and sets it to "New" so users can review it before moving to AI Agent.
     /// When Copilot is enabled, GitHub Copilot Coding Agent handles the heavy lifting.
     /// When not, the built-in agentic loop processes it via API.
     /// </summary>
@@ -175,13 +181,13 @@ public sealed class CodebaseIntelligence
 
         if (_copilotOptions.Enabled)
         {
-            // Copilot path: create an ADO story that flows through the pipeline → Copilot does the work
+            // Copilot path: create an ADO story in New so user can review before triggering AI Agent.
             var title = "Initialize Codebase Intelligence Documentation";
             var description = BuildCodebaseScanStoryDescription();
             var acceptanceCriteria = BuildCodebaseScanStoryAcceptanceCriteria();
 
             var workItemId = await _adoClient.CreateWorkItemAsync(
-                title, description, AIPipelineNames.ProcessingState, cancellationToken);
+                title, description, "New", cancellationToken);
 
             try
             {
@@ -201,12 +207,21 @@ public sealed class CodebaseIntelligence
             await _activityLogger.LogAsync(
                 "CodebaseDocumentation",
                 workItemId,
-                "Codebase scan story created and set to AI Agent (Copilot path)",
+                "Codebase scan story created in New state. User must move it to AI Agent to start processing.",
                 cancellationToken: cancellationToken);
 
-            _logger.LogInformation("Created codebase scan story {WorkItemId} for Copilot path", workItemId);
+            var workItemUrl = BuildWorkItemUrl(workItemId);
 
-            return new OkObjectResult(new { workItemId, status = "created", path = "copilot" });
+            _logger.LogInformation("Created codebase scan story {WorkItemId} in New state for Copilot path", workItemId);
+
+            return new OkObjectResult(new
+            {
+                workItemId,
+                workItemUrl,
+                status = "created",
+                path = "copilot",
+                nextStep = "Open the story in Azure DevOps, review it, then move state to AI Agent when ready."
+            });
         }
         else
         {
@@ -232,6 +247,18 @@ public sealed class CodebaseIntelligence
             return new OkObjectResult(new { workItemId = 0, status = "queued", path = "direct" });
         }
     }
+
+        private string? BuildWorkItemUrl(int workItemId)
+        {
+            if (workItemId <= 0 || string.IsNullOrWhiteSpace(_adoOrganizationUrl) || string.IsNullOrWhiteSpace(_adoProject))
+            {
+                return null;
+            }
+
+            var orgUrl = _adoOrganizationUrl.TrimEnd('/');
+            var projectSegment = Uri.EscapeDataString(_adoProject);
+            return $"{orgUrl}/{projectSegment}/_workitems/edit/{workItemId}";
+        }
 
     private static bool ShouldRecommendReanalysis(CodebaseAnalysisMetadata? metadata)
     {

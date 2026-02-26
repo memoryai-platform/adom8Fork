@@ -3839,7 +3839,7 @@
                     <!-- Content injected by JS based on Copilot config -->
                 </div>
                 <div class="scan-modal-actions">
-                    <button class="btn-modal-cancel" onclick="closeScanModal()">Cancel</button>
+                    <button class="btn-modal-cancel" id="btn-scan-cancel" onclick="closeScanModal()">Cancel</button>
                     <button class="btn-scan" id="btn-scan-confirm" onclick="confirmCodebaseScan()">
                         Proceed
                     </button>
@@ -5971,6 +5971,9 @@
             const modal = document.getElementById('scan-modal');
             const content = document.getElementById('scan-modal-content');
             const confirmBtn = document.getElementById('btn-scan-confirm');
+            const cancelBtn = document.getElementById('btn-scan-cancel');
+
+            confirmBtn.onclick = confirmCodebaseScan;
 
             const isCopilotEnabled = cachedProviders?.copilot?.enabled || false;
 
@@ -5998,6 +6001,12 @@
                 `;
                 confirmBtn.textContent = 'Proceed';
                 confirmBtn.className = 'btn-scan';
+                confirmBtn.dataset.mode = 'proceed';
+                confirmBtn.disabled = false;
+                if (cancelBtn) {
+                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.disabled = false;
+                }
             } else {
                 const providerName = escapeHtml(safeText(cachedProviders?.ai?.name, 'your AI API'));
                 content.innerHTML = `
@@ -6022,6 +6031,12 @@
                 `;
                 confirmBtn.textContent = 'Proceed Anyway';
                 confirmBtn.className = 'btn-scan warning';
+                confirmBtn.dataset.mode = 'proceed';
+                confirmBtn.disabled = false;
+                if (cancelBtn) {
+                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.disabled = false;
+                }
             }
 
             modal.classList.add('show');
@@ -6036,7 +6051,12 @@
 
         async function confirmCodebaseScan() {
             const confirmBtn = document.getElementById('btn-scan-confirm');
+            if (confirmBtn?.dataset?.mode === 'done') {
+                closeScanModal();
+                return;
+            }
             if (!ensureFunctionKey('initialize codebase intelligence')) return;
+            const originalLabel = confirmBtn.textContent;
             confirmBtn.disabled = true;
             confirmBtn.textContent = 'Starting...';
 
@@ -6045,10 +6065,57 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
-
-                closeScanModal();
+                const content = document.getElementById('scan-modal-content');
+                const cancelBtn = document.getElementById('btn-scan-cancel');
                 const btnScan = document.getElementById('btn-scan-codebase');
+
+                const workItemId = Number(data?.workItemId || 0);
+                const workItemUrl = safeText(data?.workItemUrl);
+                const hasWorkItemLink = workItemId > 0 && /^https?:\/\//i.test(workItemUrl);
+
+                if (content) {
+                    if (workItemId > 0) {
+                        content.innerHTML = `
+                            <div class="scan-modal-recommended">
+                                ✅ <strong>Success:</strong> Your Initialize Codebase user story was created.
+                            </div>
+                            <p><strong>Work Item:</strong> #${workItemId}</p>
+                            ${hasWorkItemLink
+                                ? `<p><a href="${escapeHtml(workItemUrl)}" target="_blank" rel="noopener noreferrer">Open Work Item #${workItemId} in Azure DevOps</a></p>`
+                                : `<p>Open Azure DevOps Boards and find Work Item <strong>#${workItemId}</strong>.</p>`}
+                            <p style="margin-top: 10px;"><strong>Next step:</strong> Review the story, then move it to <strong>AI Agent</strong> when you're ready to start the pipeline.</p>
+                        `;
+                    } else {
+                        content.innerHTML = `
+                            <div class="scan-modal-recommended">
+                                ✅ <strong>Success:</strong> Codebase initialization started.
+                            </div>
+                            <p>The scan is queued. Check Azure DevOps and dashboard status for progress.</p>
+                        `;
+                    }
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.textContent = 'Close';
+                }
+
+                confirmBtn.dataset.mode = 'done';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = hasWorkItemLink ? `Open #${workItemId}` : 'Done';
+                confirmBtn.className = 'btn-scan';
+                if (hasWorkItemLink) {
+                    confirmBtn.onclick = () => {
+                        window.open(workItemUrl, '_blank', 'noopener,noreferrer');
+                    };
+                } else {
+                    confirmBtn.onclick = () => {
+                        closeScanModal();
+                    };
+                }
 
                 // Update badge
                 const badge = document.getElementById('codebase-badge');
@@ -6066,16 +6133,24 @@
 
                 // Show toast
                 if (typeof showToast === 'function') {
-                    showToast('Codebase scan started! ' + (data.path === 'copilot' ? `Story #${data.workItemId} created.` : 'Processing via AI agent.'), 'success');
+                    if (workItemId > 0) {
+                        showToast(`Codebase story #${workItemId} created in New state. Move it to AI Agent when ready.`, 'success');
+                    } else {
+                        showToast('Codebase scan started! Processing via AI agent.', 'success');
+                    }
                 }
             } catch (err) {
                 console.error('Failed to start codebase scan:', err);
                 if (typeof showToast === 'function') {
                     showToast('Failed to start codebase scan: ' + err.message, 'error');
                 }
+                confirmBtn.dataset.mode = 'proceed';
+                confirmBtn.onclick = confirmCodebaseScan;
             } finally {
                 confirmBtn.disabled = false;
-                confirmBtn.textContent = 'Proceed';
+                if (confirmBtn.dataset.mode !== 'done') {
+                    confirmBtn.textContent = originalLabel;
+                }
             }
         }
 
