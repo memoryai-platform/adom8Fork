@@ -1,0 +1,92 @@
+{
+  "projects": {
+    "fileCount": 5,
+    "samplePaths": [
+      "PROJECT_ISOLATION_CHECKLIST.md",
+      "dashboard/ADO-M8.code-workspace",
+      "src/AIAgents.Core/Interfaces/IRepositoryProvider.cs",
+      "src/AIAgents.Core/Services/AzureDevOpsRepositoryProvider.cs",
+      "src/AIAgents.Core/Services/GitHubRepositoryProvider.cs"
+    ]
+  },
+  "runs": {
+    "fileCount": 11,
+    "samplePaths": [
+      ".ado/pipelines/terraform.yml",
+      "adom8-onboarding-pipeline.yml",
+      "scripts/adom8-pipeline-setup-new.py",
+      "scripts/adom8-pipeline-setup.py",
+      "scripts/function-smoke/run-function-smoke.ps1",
+      "src/AIAgents.Core/Constants/AIPipelineNames.cs",
+      "src/AIAgents.Functions.Tests/Functions/DeadLetterQueueHandlerTests.cs",
+      "src/AIAgents.Functions/Functions/DeadLetterQueueHandler.cs",
+      "src/AIAgents.Functions/Functions/ResumePipeline.cs",
+      "src/AIAgents.Functions/Services/AgentTaskQueue.cs",
+      "src/AIAgents.Functions/Services/IAgentTaskQueue.cs"
+    ]
+  },
+  "deployment": {
+    "fileCount": 15,
+    "samplePaths": [
+      ".ado/pipelines/terraform.yml",
+      ".agent/DEPLOYMENT.md",
+      ".github/workflows/deploy-dashboard.yml",
+      ".github/workflows/deploy-functions.yml",
+      "infrastructure/functions.tf",
+      "infrastructure/main.tf",
+      "infrastructure/monitoring.tf",
+      "infrastructure/outputs.tf",
+      "infrastructure/static-web-app.tf",
+      "infrastructure/storage.tf",
+      "infrastructure/terraform.tfvars.example",
+      "infrastructure/variables.tf",
+      "src/AIAgents.Core/Configuration/DeploymentOptions.cs",
+      "src/AIAgents.Functions.Tests/Agents/DeploymentAgentServiceTests.cs",
+      "src/AIAgents.Functions/Agents/DeploymentAgentService.cs"
+    ]
+  },
+  "testing": {
+    "fileCount": 45,
+    "samplePaths": [
+      ".ado/stories/US-73/TEST_PLAN.md",
+      ".ado/stories/US-75/TEST_PLAN.md",
+      ".ado/stories/US-76/TEST_PLAN.md",
+      ".ado/stories/US-77/TEST_PLAN.md",
+      ".ado/stories/US-78/TEST_PLAN.md",
+      ".ado/stories/US-88/TEST_PLAN.md",
+      ".ado/stories/US-89/TEST_PLAN.md",
+      ".ado/stories/US-90/TEST_PLAN.md",
+      ".ado/templates/TEST_PLAN.template.md",
+      ".agent/TESTING_STRATEGY.md",
+      "scripts/function-smoke-tests.ps1",
+      "src/AIAgents.Core.Tests/AIAgents.Core.Tests.csproj",
+      "src/AIAgents.Core.Tests/GlobalUsings.cs",
+      "src/AIAgents.Core.Tests/Models/ModelSerializationTests.cs",
+      "src/AIAgents.Core.Tests/Models/TokenUsageTests.cs",
+      "src/AIAgents.Core.Tests/README.md",
+      "src/AIAgents.Core.Tests/Services/AIClientFactoryTests.cs",
+      "src/AIAgents.Core.Tests/Services/AIClientTests.cs",
+      "src/AIAgents.Core.Tests/Services/AutonomyLevelParsingTests.cs",
+      "src/AIAgents.Core.Tests/Services/InputValidatorTests.cs",
+      "src/AIAgents.Core.Tests/Services/ScribanTemplateEngineTests.cs",
+      "src/AIAgents.Core.Tests/Services/StoryContextTests.cs",
+      "src/AIAgents.Core/Models/TestCase.cs",
+      "src/AIAgents.Core/Templates/TEST_PLAN.template.md",
+      "src/AIAgents.Functions.Tests/AIAgents.Functions.Tests.csproj"
+    ]
+  },
+  "dashboard": {
+    "fileCount": 9,
+    "samplePaths": [
+      ".github/workflows/deploy-dashboard.yml",
+      "DEMO_GUIDE.md",
+      "dashboard/ADO-M8.code-workspace",
+      "dashboard/dashboard.zip",
+      "dashboard/index.html",
+      "dashboard/staticwebapp.config.json",
+      "setup/CODEBASE_SETUP_GUIDE.md",
+      "src/AIAgents.Functions/Functions/ResetDashboard.cs",
+      "src/AIAgents.Functions/Models/DashboardStatus.cs"
+    ]
+  }
+}
