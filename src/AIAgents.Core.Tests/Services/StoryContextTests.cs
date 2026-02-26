@@ -204,6 +204,46 @@ public sealed class StoryContextTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveStateAsync_PreservesMemoryAndTraceabilityFields()
+    {
+        var ctx = CreateContext(550);
+
+        var state = new StoryState
+        {
+            WorkItemId = 550,
+            CurrentState = "Story Planning",
+            CurrentStage = "Planning",
+            LastActivityUtc = DateTime.UtcNow,
+            HandoffRef = new StoryHandoffReference
+            {
+                Source = "OrchestratorWebhook",
+                Stage = "Planning",
+                CorrelationId = "corr-550",
+                Details = "State transition"
+            }
+        };
+        state.Blockers.Add("Need API contract details");
+        state.AcceptanceTrace.Add(new AcceptanceTraceItem
+        {
+            AcceptanceId = "AC-01",
+            AcceptanceText = "Feature toggles can be enabled",
+            MappedSubTasks = ["Create toggle endpoint"],
+            PlannedArtifacts = ["src/feature-toggle.cs"]
+        });
+
+        await ctx.SaveStateAsync(state);
+        var loaded = await ctx.LoadStateAsync();
+
+        Assert.Equal("Planning", loaded.CurrentStage);
+        Assert.NotNull(loaded.LastActivityUtc);
+        Assert.Single(loaded.Blockers);
+        Assert.NotNull(loaded.HandoffRef);
+        Assert.Equal("OrchestratorWebhook", loaded.HandoffRef!.Source);
+        Assert.Single(loaded.AcceptanceTrace);
+        Assert.Equal("AC-01", loaded.AcceptanceTrace[0].AcceptanceId);
+    }
+
+    [Fact]
     public async Task MultipleContexts_SameWorkItem_ShareDirectory()
     {
         var ctx1 = CreateContext(600);

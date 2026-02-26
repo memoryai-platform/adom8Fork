@@ -133,6 +133,8 @@ public sealed class PlanningAgentServiceTests
 
         _contextMock.Verify(c => c.WriteArtifactAsync("PLAN.md", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         _contextMock.Verify(c => c.WriteArtifactAsync("TASKS.md", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _contextMock.Verify(c => c.WriteArtifactAsync("ACCEPTANCE_TRACE.json", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _contextMock.Verify(c => c.WriteArtifactAsync("INITIALIZATION_BUNDLE.json", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

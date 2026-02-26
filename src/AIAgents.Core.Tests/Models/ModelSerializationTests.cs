@@ -23,10 +23,27 @@ public sealed class ModelSerializationTests
         var state = new StoryState
         {
             WorkItemId = 12345,
-            CurrentState = "AI Code"
+            CurrentState = "AI Code",
+            CurrentStage = "Coding",
+            LastActivityUtc = new DateTime(2026, 2, 26, 10, 30, 0, DateTimeKind.Utc),
+            HandoffRef = new StoryHandoffReference
+            {
+                Source = "PlanningAgentService",
+                Stage = "Coding",
+                CorrelationId = "corr-123",
+                Details = "handoff"
+            }
         };
         state.Agents["Planning"] = AgentStatus.Completed();
         state.Artifacts.Code.Add("src/file.cs");
+        state.Blockers.Add("Missing requirement detail");
+        state.AcceptanceTrace.Add(new AcceptanceTraceItem
+        {
+            AcceptanceId = "AC-01",
+            AcceptanceText = "User can submit form",
+            MappedSubTasks = ["Implement submit endpoint"],
+            PlannedArtifacts = ["src/submit.cs"]
+        });
         state.Decisions.Add(new Decision
         {
             Agent = "Planning",
@@ -50,7 +67,13 @@ public sealed class ModelSerializationTests
         Assert.NotNull(deserialized);
         Assert.Equal(12345, deserialized!.WorkItemId);
         Assert.Equal("AI Code", deserialized.CurrentState);
+        Assert.Equal("Coding", deserialized.CurrentStage);
+        Assert.NotNull(deserialized.LastActivityUtc);
+        Assert.NotNull(deserialized.HandoffRef);
+        Assert.Equal("PlanningAgentService", deserialized.HandoffRef!.Source);
         Assert.True(deserialized.Agents.ContainsKey("Planning"));
+        Assert.Single(deserialized.Blockers);
+        Assert.Single(deserialized.AcceptanceTrace);
         Assert.Contains("src/file.cs", deserialized.Artifacts.Code);
         Assert.Single(deserialized.Decisions);
         Assert.Single(deserialized.Questions);
@@ -68,6 +91,9 @@ public sealed class ModelSerializationTests
         Assert.Empty(state.Artifacts.Docs);
         Assert.Empty(state.Decisions);
         Assert.Empty(state.Questions);
+        Assert.Empty(state.Blockers);
+        Assert.Empty(state.AcceptanceTrace);
+        Assert.Null(state.HandoffRef);
         Assert.Equal(0, state.TokenUsage.TotalTokens);
     }
 
