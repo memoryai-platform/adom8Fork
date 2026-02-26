@@ -1,0 +1,147 @@
+{
+  "generatedAtUtc": "2026-02-26T04:17:02.1364786Z",
+  "totalFiles": 290,
+  "totalBytes": 2123381,
+  "topDirectories": [
+    ".ado",
+    ".ado/pipelines",
+    ".ado/stories",
+    ".ado/stories/US-73",
+    ".ado/stories/US-75",
+    ".ado/stories/US-76",
+    ".ado/stories/US-77",
+    ".ado/stories/US-78",
+    ".ado/stories/US-88",
+    ".ado/stories/US-89",
+    ".ado/stories/US-90",
+    ".ado/stories/US-92",
+    ".ado/stories/US-93",
+    ".ado/stories/US-94",
+    ".ado/stories/US-95",
+    ".ado/stories/US-96",
+    ".ado/stories/US-97",
+    ".ado/stories/US-99",
+    ".ado/templates",
+    ".agent",
+    ".github",
+    ".github/workflows",
+    "dashboard",
+    "infrastructure",
+    "scripts",
+    "scripts/function-smoke",
+    "scripts/function-smoke/payloads",
+    "setup",
+    "src",
+    "src/AIAgents.Core",
+    "src/AIAgents.Core.Tests",
+    "src/AIAgents.Core.Tests/Models",
+    "src/AIAgents.Core.Tests/Services",
+    "src/AIAgents.Core/Configuration",
+    "src/AIAgents.Core/Constants",
+    "src/AIAgents.Core/Interfaces",
+    "src/AIAgents.Core/Models",
+    "src/AIAgents.Core/Services",
+    "src/AIAgents.Core/Telemetry",
+    "src/AIAgents.Core/Templates",
+    "src/AIAgents.Functions",
+    "src/AIAgents.Functions.Tests",
+    "src/AIAgents.Functions.Tests/Agents",
+    "src/AIAgents.Functions.Tests/Functions",
+    "src/AIAgents.Functions.Tests/Helpers",
+    "src/AIAgents.Functions.Tests/Models",
+    "src/AIAgents.Functions/Agents",
+    "src/AIAgents.Functions/Functions",
+    "src/AIAgents.Functions/Models",
+    "src/AIAgents.Functions/Services",
+    "tests"
+  ],
+  "techIndicatorFiles": [
+    "src/AIAgents.Core.Tests/AIAgents.Core.Tests.csproj",
+    "src/AIAgents.Core/AIAgents.Core.csproj",
+    "src/AIAgents.Functions.Tests/AIAgents.Functions.Tests.csproj",
+    "src/AIAgents.Functions/AIAgents.Functions.csproj",
+    "src/AIAgents.sln"
+  ],
+  "extensionGroups": {
+    ".cs": {
+      "count": 121,
+      "totalBytes": 864268
+    },
+    ".md": {
+      "count": 106,
+      "totalBytes": 364824
+    },
+    ".json": {
+      "count": 24,
+      "totalBytes": 33623
+    },
+    ".tf": {
+      "count": 7,
+      "totalBytes": 15403
+    },
+    ".jpg": {
+      "count": 6,
+      "totalBytes": 415722
+    },
+    ".yml": {
+      "count": 4,
+      "totalBytes": 24229
+    },
+    ".ps1": {
+      "count": 4,
+      "totalBytes": 44120
+    },
+    ".csproj": {
+      "count": 4,
+      "totalBytes": 5443
+    },
+    ".py": {
+      "count": 2,
+      "totalBytes": 43888
+    },
+    ".sh": {
+      "count": 2,
+      "totalBytes": 15418
+    },
+    ".png": {
+      "count": 1,
+      "totalBytes": 21725
+    },
+    ".gitignore": {
+      "count": 1,
+      "totalBytes": 963
+    },
+    ".planning": {
+      "count": 1,
+      "totalBytes": 4117
+    },
+    "(no-extension)": {
+      "count": 1,
+      "totalBytes": 10490
+    },
+    ".code-workspace": {
+      "count": 1,
+      "totalBytes": 122
+    },
+    ".zip": {
+      "count": 1,
+      "totalBytes": 18137
+    },
+    ".html": {
+      "count": 1,
+      "totalBytes": 229228
+    },
+    ".example": {
+      "count": 1,
+      "totalBytes": 596
+    },
+    ".sln": {
+      "count": 1,
+      "totalBytes": 2423
+    },
+    ".txt": {
+      "count": 1,
+      "totalBytes": 8642
+    }
+  }
+}
