@@ -272,7 +272,7 @@ Analyze this story and create a comprehensive implementation plan.";
             {
                 Agent = "Planning",
                 DecisionText = $"Story rejected by triage gate (score: {readiness.ReadinessScore}/100)",
-                Rationale = readiness.Reason
+                Rationale = readiness.Reason ?? "Story failed planning triage gate checks."
             });
             await context.SaveStateAsync(state, cancellationToken);
 
