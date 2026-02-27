@@ -105,11 +105,15 @@ public sealed class GetCurrentStatus
             };
         }
 
+        var adoProjectName = Environment.GetEnvironmentVariable("AZURE_DEVOPS_PROJECT")
+            ?? Environment.GetEnvironmentVariable("AzureDevOps__Project")
+            ?? Environment.GetEnvironmentVariable("AzureDevOps:Project");
+
         var status = new DashboardStatus
         {
-            AdoProjectName = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AZURE_DEVOPS_PROJECT"))
+            AdoProjectName = string.IsNullOrWhiteSpace(adoProjectName)
                 ? null
-                : Environment.GetEnvironmentVariable("AZURE_DEVOPS_PROJECT"),
+                : adoProjectName,
             CurrentWorkItem = currentWorkItem,
             Stories = storyStatuses,
             Stats = new DashboardStats
