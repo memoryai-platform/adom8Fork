@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
+using AIAgents.Core.Models;
 using AIAgents.Core.Telemetry;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
@@ -97,12 +98,13 @@ public sealed class AgentTaskDispatcher
     {
 
         using var scope = _serviceProvider.CreateScope();
+        StoryWorkItem? workItem = null;
 
         // Autonomy-level early exit: fetch work item to check autonomy level
         // Skip work item lookup for standalone agents (e.g., CodebaseDocumentation with WI-0)
         if (agentTask.WorkItemId > 0)
         {
-            var workItem = await _adoClient.GetWorkItemAsync(agentTask.WorkItemId, cancellationToken);
+            workItem = await _adoClient.GetWorkItemAsync(agentTask.WorkItemId, cancellationToken);
             var autonomyLevel = workItem.AutonomyLevel;
 
             if (ShouldSkipAgent(autonomyLevel, agentTask.AgentType))
@@ -142,7 +144,9 @@ public sealed class AgentTaskDispatcher
             }
         }
 
-        if (RequiresCloneCapacityCheck(agentTask.AgentType))
+        var skipCloneCapacityCheck = IsInitializeNoClonePath(workItem, agentTask);
+
+        if (!skipCloneCapacityCheck && RequiresCloneCapacityCheck(agentTask.AgentType))
         {
             var sizing = await _repositorySizingService.EvaluateAsync(cancellationToken);
             if (sizing.CheckPerformed && !sizing.CanProceed)
@@ -472,6 +476,17 @@ public sealed class AgentTaskDispatcher
         AgentType.CodebaseDocumentation => false,
         _ => false
     };
+
+    private static bool IsInitializeNoClonePath(StoryWorkItem? workItem, AgentTask task)
+    {
+        if (workItem is null || task.AgentType != AgentType.Coding)
+        {
+            return false;
+        }
+
+        return workItem.Tags.Any(tag =>
+            string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Returns true if the work item's current ADO state is BEFORE the stage where

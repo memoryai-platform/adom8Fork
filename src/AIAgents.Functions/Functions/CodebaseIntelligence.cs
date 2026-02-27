@@ -196,11 +196,21 @@ public sealed class CodebaseIntelligence
                     "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
                     acceptanceCriteria,
                     cancellationToken);
+
+                await _adoClient.UpdateWorkItemFieldsAsync(
+                    workItemId,
+                    new Dictionary<string, object>
+                    {
+                        ["/fields/System.Tags"] = $"ADOM8;{AIPipelineNames.InitializeCodebaseTag}",
+                        [CustomFieldNames.Paths.CodingProvider] = "Copilot",
+                        [CustomFieldNames.Paths.CurrentAIAgent] = AIPipelineNames.CurrentAgentValues.Coding
+                    },
+                    cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "Could not set Acceptance Criteria for initialize-codebase story {WorkItemId}",
+                    "Could not set initialization metadata fields for initialize-codebase story {WorkItemId}",
                     workItemId);
             }
 

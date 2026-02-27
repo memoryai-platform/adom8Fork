@@ -79,7 +79,83 @@ public sealed class CodingAgentService : IAgentService
             _logger.LogInformation("Coding agent starting for WI-{WorkItemId}", task.WorkItemId);
 
             var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
+
+            var preflightState = new StoryState
+            {
+                WorkItemId = task.WorkItemId,
+                CurrentState = "AI Code"
+            };
+            preflightState.Agents["Coding"] = AgentStatus.InProgress();
+
+            var preflightStrategy = ResolveStrategy(preflightState, workItem);
             var branchName = $"feature/US-{task.WorkItemId}";
+
+            if (IsInitializeCodebaseNoClonePath(workItem, preflightStrategy))
+            {
+                var noCloneStrategyName = preflightStrategy is CopilotCodingStrategy noCloneCopilotStrategy
+                    ? $"GitHub @{noCloneCopilotStrategy.AgentAssignee}"
+                    : "Agentic";
+
+                await _activityLogger.LogAsync("Coding", task.WorkItemId,
+                    $"Starting coding ({noCloneStrategyName} strategy, initialize no-clone path)", "info", cancellationToken);
+
+                try
+                {
+                    await _adoClient.UpdateWorkItemFieldAsync(
+                        workItem.Id,
+                        CustomFieldNames.Paths.CurrentAIAgent,
+                        AIPipelineNames.CurrentAgentValues.Coding,
+                        cancellationToken);
+                }
+                catch
+                {
+                    // best effort
+                }
+
+                var noCloneContext = new CodingContext
+                {
+                    WorkItemId = task.WorkItemId,
+                    RepositoryPath = string.Empty,
+                    State = preflightState,
+                    WorkItem = workItem,
+                    PlanMarkdown = "Initialize codebase documentation through GitHub Copilot with no local clone.",
+                    CodingGuidelines = string.Empty,
+                    ExistingFilesSummary = "Repository not cloned locally for initialize flow.",
+                    BranchName = branchName,
+                    CorrelationId = task.CorrelationId
+                };
+
+                var noCloneResult = await preflightStrategy.ExecuteAsync(noCloneContext, cancellationToken);
+                if (noCloneResult.Mode == "copilot-delegated")
+                {
+                    var agentName = (preflightStrategy as CopilotCodingStrategy)?.AgentAssignee ?? "copilot";
+
+                    await _adoClient.AddWorkItemCommentAsync(workItem.Id,
+                        $"<b>🤖 AI Coding Agent — Delegated to GitHub @{agentName}</b><br/>" +
+                        "Initialize Codebase no-clone path is active.<br/>" +
+                        "Local repository clone was intentionally skipped for this story.<br/>" +
+                        (noCloneResult.CopilotMetrics?.IssueNumber > 0
+                            ? $"GitHub Issue: <a href=\"https://github.com/{_githubOptions.Value.Owner}/{_githubOptions.Value.Repo}/issues/{noCloneResult.CopilotMetrics.IssueNumber}\">#{noCloneResult.CopilotMetrics.IssueNumber}</a><br/>"
+                            : "") +
+                        $"Pipeline is paused — waiting for @{agentName} to create a PR.",
+                        cancellationToken);
+
+                    try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Coding", cancellationToken); }
+                    catch { }
+
+                    await _activityLogger.LogAsync("Coding", task.WorkItemId,
+                        $"Delegated to @{agentName} (initialize no-clone path). Pipeline paused.",
+                        "info", cancellationToken);
+
+                    _logger.LogInformation(
+                        "Coding agent delegated WI-{WorkItemId} via initialize no-clone path to @{Agent}",
+                        task.WorkItemId,
+                        agentName);
+
+                    return AgentResult.Ok(0, 0m);
+                }
+            }
+
             repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
 
             // Materialize work-item supporting files so coding agents can inspect local documents and visuals
@@ -364,6 +440,17 @@ public sealed class CodingAgentService : IAgentService
 
     private CopilotCodingStrategy CreateCopilotStrategy(string? agentOverride = null) =>
         new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger, agentOverride);
+
+    private static bool IsInitializeCodebaseNoClonePath(StoryWorkItem workItem, ICodingStrategy strategy)
+    {
+        if (strategy is not CopilotCodingStrategy)
+        {
+            return false;
+        }
+
+        return workItem.Tags.Any(tag =>
+            string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Extracts story points from the Planning agent's complexity decision.

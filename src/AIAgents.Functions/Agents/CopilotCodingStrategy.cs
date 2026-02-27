@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Net;
 using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
@@ -84,6 +85,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
             };
         }
 
+        await EnsureBranchExistsAsync(context.BranchName, cancellationToken);
+
         int issueNumber = 0;
 
         if (_copilotOptions.CreateIssue)
@@ -142,6 +145,78 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
                 IssueNumber = issueNumber
             }
         };
+    }
+
+    private async Task EnsureBranchExistsAsync(string branchName, CancellationToken cancellationToken)
+    {
+        var encodedBranch = Uri.EscapeDataString(branchName);
+        var refResponse = await _httpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{encodedBranch}",
+            cancellationToken);
+
+        if (refResponse.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        if (refResponse.StatusCode != HttpStatusCode.NotFound)
+        {
+            var body = await refResponse.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Could not verify branch {Branch} existence (status {StatusCode}): {Body}",
+                branchName,
+                refResponse.StatusCode,
+                body);
+            return;
+        }
+
+        var repoResponse = await _httpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}",
+            cancellationToken);
+        repoResponse.EnsureSuccessStatusCode();
+
+        var repoJson = await repoResponse.Content.ReadAsStringAsync(cancellationToken);
+        using var repoDoc = JsonDocument.Parse(repoJson);
+        var defaultBranch = repoDoc.RootElement.GetProperty("default_branch").GetString() ?? "main";
+
+        var baseRefResponse = await _httpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{Uri.EscapeDataString(defaultBranch)}",
+            cancellationToken);
+        baseRefResponse.EnsureSuccessStatusCode();
+
+        var baseRefJson = await baseRefResponse.Content.ReadAsStringAsync(cancellationToken);
+        using var baseRefDoc = JsonDocument.Parse(baseRefJson);
+        var sha = baseRefDoc.RootElement.GetProperty("object").GetProperty("sha").GetString();
+
+        if (string.IsNullOrWhiteSpace(sha))
+        {
+            throw new InvalidOperationException($"Could not resolve base SHA for default branch '{defaultBranch}'.");
+        }
+
+        var createPayload = new
+        {
+            @ref = $"refs/heads/{branchName}",
+            sha
+        };
+
+        var createResponse = await _httpClient.PostAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/refs",
+            new StringContent(JsonSerializer.Serialize(createPayload), Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+        if (createResponse.IsSuccessStatusCode || createResponse.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            // 422 means the branch was created concurrently.
+            _logger.LogInformation(
+                "Ensured branch {Branch} exists for Copilot delegation (default base: {DefaultBranch})",
+                branchName,
+                defaultBranch);
+            return;
+        }
+
+        var createBody = await createResponse.Content.ReadAsStringAsync(cancellationToken);
+        throw new InvalidOperationException(
+            $"Failed to create branch '{branchName}' for Copilot delegation (status {(int)createResponse.StatusCode}): {createBody}");
     }
 
     /// <summary>

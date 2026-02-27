@@ -9,6 +9,7 @@ public static class AIPipelineNames
     /// Single active Azure DevOps state used while AI agents are processing a story.
     /// </summary>
     public const string ProcessingState = "AI Agent";
+    public const string InitializeCodebaseTag = "InitializeCodebase";
 
     public static class CurrentAgentValues
     {

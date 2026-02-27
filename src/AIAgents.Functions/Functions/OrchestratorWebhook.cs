@@ -120,10 +120,13 @@ public sealed class OrchestratorWebhook
 
         // Validate work item content before queuing
         string? currentAIAgentValue = null;
+        var isInitializeCodebaseStory = false;
         try
         {
             var workItem = await _adoClient.GetWorkItemAsync(workItemId, cancellationToken);
             currentAIAgentValue = workItem.CurrentAIAgent;
+            isInitializeCodebaseStory = workItem.Tags.Any(tag =>
+                string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
             var validation = _inputValidator.ValidateWorkItem(workItem);
 
             if (!validation.IsValid)
@@ -184,6 +187,14 @@ public sealed class OrchestratorWebhook
                 agentType,
                 currentAIAgentValue);
         }
+
+            if (agentType == AgentType.Planning && isInitializeCodebaseStory)
+            {
+                agentType = AgentType.Coding;
+                _logger.LogInformation(
+                "AI Agent trigger for WI-{WorkItemId} detected InitializeCodebase tag; routing directly to Coding",
+                workItemId);
+            }
 
         // Enqueue the agent task
         var agentTask = new AgentTask
