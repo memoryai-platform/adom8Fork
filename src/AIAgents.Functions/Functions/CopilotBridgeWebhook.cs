@@ -290,6 +290,20 @@ public sealed class CopilotBridgeWebhook
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var isInitializeCodebaseStory = false;
+        try
+        {
+            var workItem = await _adoClient.GetWorkItemAsync(workItemId, cancellationToken);
+            isInitializeCodebaseStory = workItem.Tags.Any(tag =>
+                string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not evaluate InitializeCodebase tag for WI-{WorkItemId}; proceeding with standard Copilot handoff",
+                workItemId);
+        }
+
         // Close Copilot's PR if configured
         // Intentionally do not merge or close PR here. Human review controls merge decisions.
 
@@ -314,11 +328,15 @@ public sealed class CopilotBridgeWebhook
                 workItemId);
         }
 
-        // Copilot path: skip Testing and move directly to Review.
+        // Copilot path: skip Testing and move directly to Review (or complete initialize stories without review enqueue).
         var currentAgentUpdated = false;
         try
         {
-            await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Review, cancellationToken);
+            var nextAgentValue = isInitializeCodebaseStory
+                ? string.Empty
+                : AIPipelineNames.CurrentAgentValues.Review;
+
+            await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.CurrentAIAgent, nextAgentValue, cancellationToken);
             currentAgentUpdated = true;
         }
         catch (Exception ex)
@@ -349,7 +367,9 @@ public sealed class CopilotBridgeWebhook
                 $"Strategy: Copilot coding agent<br/>" +
                 $"PR: #{prNumber} | Files: {metrics.FilesChanged} | +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines<br/>" +
                 $"Duration: {metrics.DurationMinutes:F1} minutes | Commits: {metrics.CommitCount}<br/>" +
-                $"Testing skipped (validated by Copilot session) → handing off to Review agent",
+                (isInitializeCodebaseStory
+                    ? "Testing skipped (validated by Copilot session) → initialize flow complete (Review enqueue skipped for no-clone path)"
+                    : "Testing skipped (validated by Copilot session) → handing off to Review agent"),
                 cancellationToken);
             completionCommentAdded = true;
         }
@@ -411,6 +431,49 @@ public sealed class CopilotBridgeWebhook
             }
         }
 
+        // Log 1 token as a marker for "1 premium credit" — Copilot agent sessions
+        // cost 1 GitHub premium request regardless of output size.
+        var tokensForLog = 1;
+        var costForLog = 0m; // No direct API cost — included in GitHub subscription
+
+        if (isInitializeCodebaseStory)
+        {
+            try
+            {
+                await _adoClient.UpdateWorkItemStateAsync(workItemId, "Code Review", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to move InitializeCodebase story WI-{WorkItemId} to Code Review after Copilot reconciliation",
+                    workItemId);
+            }
+
+            try
+            {
+                await _activityLogger.LogAsync("Coding", workItemId,
+                    $"Copilot completed initialize flow for PR #{prNumber}. Review enqueue skipped to preserve no-clone path.",
+                    tokensForLog, costForLog, "info", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Non-critical activity log failed for initialize no-clone completion on WI-{WorkItemId}",
+                    workItemId);
+            }
+
+            delegation.Status = "Completed";
+            delegation.CopilotPrNumber = prNumber;
+            delegation.CompletedAt = DateTime.UtcNow;
+            await _delegationService.UpdateAsync(delegation, cancellationToken);
+
+            _logger.LogInformation(
+                "Copilot bridge reconciled PR #{PrNumber} for initialize story WI-{WorkItemId} — review enqueue skipped (no-clone path preserved)",
+                prNumber,
+                workItemId);
+            return;
+        }
+
         // Enqueue Review agent
         var nextTask = new AgentTask
         {
@@ -428,10 +491,6 @@ public sealed class CopilotBridgeWebhook
         delegation.CompletedAt = DateTime.UtcNow;
         await _delegationService.UpdateAsync(delegation, cancellationToken);
 
-        // Log 1 token as a marker for "1 premium credit" — Copilot agent sessions
-        // cost 1 GitHub premium request regardless of output size.
-        var tokensForLog = 1;
-        var costForLog = 0m; // No direct API cost — included in GitHub subscription
         try
         {
             await _activityLogger.LogAsync("Coding", workItemId,

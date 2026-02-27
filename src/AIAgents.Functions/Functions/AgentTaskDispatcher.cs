@@ -479,7 +479,7 @@ public sealed class AgentTaskDispatcher
 
     private static bool IsInitializeNoClonePath(StoryWorkItem? workItem, AgentTask task)
     {
-        if (workItem is null || task.AgentType != AgentType.Coding)
+        if (workItem is null)
         {
             return false;
         }
