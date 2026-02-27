@@ -95,15 +95,21 @@ Once the pipeline completes successfully:
 2. **Revoke Onboarding PAT**: You can now safely revoke the `ONBOARDING_PAT` you created in the prerequisites. The pipeline has automatically generated and securely stored a dedicated runtime PAT for the agent.
 3. **Copilot Webhook Secret (Auto-Managed)**: No manual secret creation is required. The pipeline auto-generates a secure webhook secret (unless you provide an override), stores it in Key Vault, and configures both the Function App and GitHub webhook to use the same secret.
 4. **Configure GitHub Copilot Permissions**: If you are using GitHub Copilot, ensure the agent has the necessary permissions on the repository (this cannot be automated via API).
-5. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
-6. **Default Field Values (Auto-Enforced)**: The pipeline now enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
-7. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
+5. **Register MCP Servers in GitHub Copilot (Required for MCP Tools)**:
+   - Open GitHub repository settings → **Copilot** → **Coding agent** → **MCP configuration**.
+   - Copy/paste `.adom8/mcp/mcp.template.json` into the MCP configuration box.
+   - Replace `{{ADOM8_FUNCTION_KEY}}` with your Function App key and save.
+   - This UI registration step is manual and required; pipeline bootstrap prepares the config file but cannot populate the GitHub MCP textbox via API.
+6. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
+7. **Default Field Values (Auto-Enforced)**: The pipeline now enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
+8. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
 
 ## MCP Automation Matrix
 
 ### Automated by the onboarding pipeline
 - Create repository MCP bootstrap guidance in `.adom8/mcp/README.md`.
 - Create starter template at `.adom8/mcp/mcp.template.json`.
+- Include a GitHub Copilot Coding Agent MCP-ready `adom8_orchestrator` server template with Phase 1 tools (`set_stage`, `add_comment`, `stage_event`).
 - Keep these files idempotent across re-runs.
 
 ### Not automatable via Azure DevOps pipeline (manual)
