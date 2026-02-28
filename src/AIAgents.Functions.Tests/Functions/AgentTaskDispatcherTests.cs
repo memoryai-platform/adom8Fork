@@ -48,10 +48,10 @@ public sealed class AgentTaskDispatcherTests
             });
     }
 
-    private AgentTaskDispatcher CreateDispatcher(int autonomyLevel = 3, bool registerAgent = true)
+    private AgentTaskDispatcher CreateDispatcher(int autonomyLevel = 3, bool registerAgent = true, AIAgents.Core.Models.StoryWorkItem? workItemOverride = null)
     {
         // Setup work item with specified autonomy level
-        var wi = MockAIResponses.SampleWorkItem(autonomyLevel: autonomyLevel);
+        var wi = workItemOverride ?? MockAIResponses.SampleWorkItem(autonomyLevel: autonomyLevel);
         _adoMock.Setup(a => a.GetWorkItemAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(wi);
 
         // Build service provider with keyed DI
@@ -151,6 +151,28 @@ public sealed class AgentTaskDispatcherTests
             _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Once,
                 $"{agentType} should run at autonomy level 3");
         }
+    }
+
+    [Fact]
+    public async Task Run_InitializeCodebase_ReviewSkipped()
+    {
+        var initializeStory = MockAIResponses.SampleWorkItem(autonomyLevel: 3) with
+        {
+            Tags = new[] { AIAgents.Core.Constants.AIPipelineNames.InitializeCodebaseTag }
+        };
+
+        var dispatcher = CreateDispatcher(autonomyLevel: 3, workItemOverride: initializeStory);
+        var msg = Serialize(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Review });
+
+        await dispatcher.Run(msg, CancellationToken.None);
+
+        _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Never);
+        _activityMock.Verify(a => a.LogAsync(
+            "Review",
+            12345,
+            It.Is<string>(m => m.Contains("InitializeCodebase no-clone", StringComparison.OrdinalIgnoreCase)),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

@@ -53,6 +53,29 @@ public sealed class ReviewAgentService : IAgentService
         _logger.LogInformation("Review agent starting for WI-{WorkItemId}", task.WorkItemId);
 
         var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
+        var isInitializeCodebaseStory = workItem.Tags.Any(tag =>
+            string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+
+        if (isInitializeCodebaseStory)
+        {
+            _logger.LogInformation(
+                "Skipping Review for InitializeCodebase story WI-{WorkItemId}; enqueuing Documentation",
+                task.WorkItemId);
+
+            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Documentation, cancellationToken); }
+            catch { /* field may not exist yet */ }
+
+            var skipTask = new AgentTask
+            {
+                WorkItemId = task.WorkItemId,
+                AgentType = AgentType.Documentation,
+                CorrelationId = task.CorrelationId
+            };
+            await _taskQueue.EnqueueAsync(skipTask, cancellationToken);
+
+            return AgentResult.Ok();
+        }
+
         var aiClient = _aiClientFactory.GetClientForAgent("Review", workItem.GetModelOverrides());
         var branchName = $"feature/US-{task.WorkItemId}";
         repoPath = await _gitOps.EnsureBranchAsync(branchName, lightweightCheckout: true, cancellationToken);

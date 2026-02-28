@@ -146,6 +146,22 @@ public sealed class AgentTaskDispatcher
 
         var skipCloneCapacityCheck = IsInitializeNoClonePath(workItem, agentTask);
 
+        if (skipCloneCapacityCheck && ShouldSkipForInitializeNoClone(agentTask.AgentType))
+        {
+            _logger.LogInformation(
+                "Skipping {AgentType} agent for WI-{WorkItemId}: InitializeCodebase no-clone path",
+                agentTask.AgentType,
+                agentTask.WorkItemId);
+
+            await _activityLogger.LogAsync(
+                agentTask.AgentType.ToString(),
+                agentTask.WorkItemId,
+                $"Skipped — InitializeCodebase no-clone path bypasses {agentTask.AgentType}.",
+                cancellationToken: cancellationToken);
+
+            return;
+        }
+
         if (!skipCloneCapacityCheck && RequiresCloneCapacityCheck(agentTask.AgentType))
         {
             var sizing = await _repositorySizingService.EvaluateAsync(cancellationToken);
@@ -487,6 +503,15 @@ public sealed class AgentTaskDispatcher
         return workItem.Tags.Any(tag =>
             string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool ShouldSkipForInitializeNoClone(AgentType agentType) => agentType switch
+    {
+        AgentType.Testing => true,
+        AgentType.Review => true,
+        AgentType.Documentation => true,
+        AgentType.Deployment => true,
+        _ => false
+    };
 
     /// <summary>
     /// Returns true if the work item's current ADO state is BEFORE the stage where

@@ -1,5 +1,6 @@
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
+using AIAgents.Core.Constants;
 using AIAgents.Functions.Agents;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
@@ -31,6 +32,31 @@ public sealed class ReviewAgentServiceTests
     {
         _aiFactoryMock.Setup(f => f.GetClientForAgent("Review", It.IsAny<StoryModelOverrides?>())).Returns(_aiClientMock.Object);
         _contextFactoryMock.Setup(f => f.Create(It.IsAny<int>(), It.IsAny<string>())).Returns(_contextMock.Object);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InitializeCodebaseStory_SkipsReviewAndEnqueuesDocumentation()
+    {
+        var wi = MockAIResponses.SampleWorkItem(state: "AI Review") with
+        {
+            Tags = new[] { AIPipelineNames.InitializeCodebaseTag }
+        };
+
+        _adoMock.Setup(a => a.GetWorkItemAsync(wi.Id, It.IsAny<CancellationToken>())).ReturnsAsync(wi);
+
+        var service = CreateService();
+        var result = await service.ExecuteAsync(new AgentTask { WorkItemId = wi.Id, AgentType = AgentType.Review, CorrelationId = "corr-1" });
+
+        Assert.True(result.Success);
+        _gitMock.Verify(g => g.EnsureBranchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(
+            It.Is<AgentTask>(t => t.WorkItemId == wi.Id && t.AgentType == AgentType.Documentation),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(
+            wi.Id,
+            CustomFieldNames.Paths.CurrentAIAgent,
+            AIPipelineNames.CurrentAgentValues.Documentation,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private ReviewAgentService CreateService()
