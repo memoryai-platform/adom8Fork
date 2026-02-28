@@ -70,13 +70,18 @@ stages:
           # Compute stable 8-char suffix from resource group name so resource
           # names are identical on every re-run (idempotent).
           SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
-          PROJECT_SLUG=$(echo "$(AZURE_DEVOPS_PROJECT)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          ADO_PROJECT_NAME="$(System.TeamProject)"
+          if [ -z "$ADO_PROJECT_NAME" ] || [ "$ADO_PROJECT_NAME" = "null" ]; then
+            ADO_PROJECT_NAME="$(AZURE_DEVOPS_PROJECT)"
+          fi
+          PROJECT_SLUG=$(echo "$ADO_PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
           if [ -z "$PROJECT_SLUG" ]; then PROJECT_SLUG="adom8"; fi
           SWA_BASE=$(echo "$PROJECT_SLUG" | cut -c1-35)
           FUNCTION_APP_NAME="adom8-func-${SUFFIX}"
           STORAGE_ACCOUNT_NAME="adom8st${SUFFIX}"
           KEY_VAULT_NAME="adom8-kv-${SUFFIX}"
           SWA_NAME="${SWA_BASE}-${SUFFIX}"
+          echo "Using ADO-project-derived Static Web App name: $SWA_NAME"
           echo "##vso[task.setvariable variable=FUNCTION_APP_NAME]$FUNCTION_APP_NAME"
           echo "##vso[task.setvariable variable=STORAGE_ACCOUNT_NAME]$STORAGE_ACCOUNT_NAME"
           echo "##vso[task.setvariable variable=KEY_VAULT_NAME]$KEY_VAULT_NAME"
@@ -290,11 +295,16 @@ stages:
 
           # Recompute stable resource names (same logic as Stage 1)
           SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
-          PROJECT_SLUG=$(echo "$(AZURE_DEVOPS_PROJECT)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          ADO_PROJECT_NAME="$(System.TeamProject)"
+          if [ -z "$ADO_PROJECT_NAME" ] || [ "$ADO_PROJECT_NAME" = "null" ]; then
+            ADO_PROJECT_NAME="$(AZURE_DEVOPS_PROJECT)"
+          fi
+          PROJECT_SLUG=$(echo "$ADO_PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
           if [ -z "$PROJECT_SLUG" ]; then PROJECT_SLUG="adom8"; fi
           SWA_BASE=$(echo "$PROJECT_SLUG" | cut -c1-35)
           FUNCTION_APP_NAME="adom8-func-${SUFFIX}"
           SWA_NAME="${SWA_BASE}-${SUFFIX}"
+          echo "Using ADO-project-derived Static Web App name: $SWA_NAME"
 
           echo "Fetching Function App publish profile..."
           PUBLISH_PROFILE=$(az functionapp deployment list-publishing-profiles \
