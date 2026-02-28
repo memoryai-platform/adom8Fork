@@ -229,17 +229,11 @@ public sealed class GitOperations : IGitOperations
 
         var quotedPaths = string.Join(" ", cleanedPaths.Select(p => $"\"{p}\""));
 
+        // Avoid sparse-checkout metadata (extensions.worktreeconfig) because some
+        // runtime git/libgit2 combinations used by Functions cannot read it.
+        // Hydrate only requested files directly from HEAD.
         await RunGitCommandAsync(repositoryPath,
-            $"sparse-checkout init --no-cone",
-            cancellationToken,
-            ignoreExitCode: true);
-
-        await RunGitCommandAsync(repositoryPath,
-            $"sparse-checkout set --no-cone {quotedPaths}",
-            cancellationToken);
-
-        await RunGitCommandAsync(repositoryPath,
-            "checkout --force",
+            $"checkout --force HEAD -- {quotedPaths}",
             cancellationToken);
     }
 
