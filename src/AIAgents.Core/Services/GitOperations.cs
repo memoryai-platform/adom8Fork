@@ -322,7 +322,7 @@ public sealed class GitOperations : IGitOperations
         var authedUrl = $"{uri.Scheme}://{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(token)}@{uri.Host}{uri.PathAndQuery}";
 
         var psi = new ProcessStartInfo("git",
-            $"clone --depth 1 --no-single-branch \"{authedUrl}\" \"{targetDir}\"")
+            $"-c credential.helper= clone --depth 1 --single-branch --filter=blob:none \"{authedUrl}\" \"{targetDir}\"")
         {
             RedirectStandardOutput = true,
             RedirectStandardError  = true,
@@ -332,10 +332,8 @@ public sealed class GitOperations : IGitOperations
             {
                 // Prevent interactive prompts on CI/Functions hosts
                 ["GIT_TERMINAL_PROMPT"] = "0",
-                // Credentials are embedded in the URL; disable the credential store
-                // entirely to suppress 'wincredman' / 'Unable to persist credentials'
-                // warnings that appear on Windows-hosted Functions.
-                ["GCM_CREDENTIAL_STORE"] = "none",
+                // Ensure credential managers do not prompt/engage in headless hosts.
+                ["GCM_INTERACTIVE"] = "Never",
             }
         };
 
