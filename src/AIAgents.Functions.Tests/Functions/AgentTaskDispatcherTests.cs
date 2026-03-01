@@ -173,6 +173,15 @@ public sealed class AgentTaskDispatcherTests
             It.Is<string>(m => m.Contains("InitializeCodebase no-clone", StringComparison.OrdinalIgnoreCase)),
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(
+            12345,
+            AIAgents.Core.Constants.CustomFieldNames.Paths.CurrentAIAgent,
+            string.Empty,
+            It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(
+            12345,
+            "Code Review",
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

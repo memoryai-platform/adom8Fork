@@ -153,10 +153,38 @@ public sealed class AgentTaskDispatcher
                 agentTask.AgentType,
                 agentTask.WorkItemId);
 
+            try
+            {
+                await _adoClient.UpdateWorkItemFieldAsync(
+                    agentTask.WorkItemId,
+                    CustomFieldNames.Paths.CurrentAIAgent,
+                    string.Empty,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to clear Current AI Agent while skipping {AgentType} for InitializeCodebase WI-{WorkItemId}",
+                    agentTask.AgentType,
+                    agentTask.WorkItemId);
+            }
+
+            try
+            {
+                await _adoClient.UpdateWorkItemStateAsync(agentTask.WorkItemId, "Code Review", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to move InitializeCodebase WI-{WorkItemId} to Code Review while skipping {AgentType}",
+                    agentTask.WorkItemId,
+                    agentTask.AgentType);
+            }
+
             await _activityLogger.LogAsync(
                 agentTask.AgentType.ToString(),
                 agentTask.WorkItemId,
-                $"Skipped — InitializeCodebase no-clone path bypasses {agentTask.AgentType}.",
+                $"Skipped — InitializeCodebase no-clone path bypasses {agentTask.AgentType}. Story moved to Code Review.",
                 cancellationToken: cancellationToken);
 
             return;
