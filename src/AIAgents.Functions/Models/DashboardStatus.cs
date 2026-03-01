@@ -10,6 +10,12 @@ public sealed class DashboardStatus
     [JsonPropertyName("adoProjectName")]
     public string? AdoProjectName { get; init; }
 
+    [JsonPropertyName("githubOwner")]
+    public string? GitHubOwner { get; init; }
+
+    [JsonPropertyName("githubRepo")]
+    public string? GitHubRepo { get; init; }
+
     [JsonPropertyName("currentWorkItem")]
     public CurrentWorkItemInfo? CurrentWorkItem { get; init; }
 

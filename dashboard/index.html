@@ -5077,6 +5077,7 @@
 
         function updateDashboard(data) {
             updateTopNavProjectName(data);
+            updateGitHubRepoContext(data);
 
             // Current Work Item
             updateWorkItem(data);
@@ -5158,6 +5159,13 @@
         let allStories = [];
         let currentSearchText = '';
         let currentStatusFilter = 'all';
+        let currentGitHubOwner = '';
+        let currentGitHubRepo = '';
+
+        function updateGitHubRepoContext(data) {
+            currentGitHubOwner = safeText(data?.githubOwner, '').trim();
+            currentGitHubRepo = safeText(data?.githubRepo, '').trim();
+        }
 
         /**
          * Updates the story agents display with new story data.
@@ -5487,9 +5495,14 @@
                 const agentAssignee = agentData?.additionalData?.agent || 'copilot';
                 const agentDisplayName = escapeHtml(safeText(agentAssignee, 'copilot').replace(/^./, (char) => char.toUpperCase()));
                 const issueNum = safeInteger(agentData?.additionalData?.issueNumber, 0);
-                const githubIssueUrl = issueNum > 0 ? `https://github.com/toddpick/adom8/issues/${issueNum}` : null;
+                const hasGitHubRepoContext = !!currentGitHubOwner && !!currentGitHubRepo;
+                const encodedOwner = encodeURIComponent(currentGitHubOwner);
+                const encodedRepo = encodeURIComponent(currentGitHubRepo);
+                const githubIssueUrl = issueNum > 0 && hasGitHubRepoContext
+                    ? `https://github.com/${encodedOwner}/${encodedRepo}/issues/${issueNum}`
+                    : null;
                 const githubAgentsUrl = name === 'Coding' && (isCopilotDelegated || isCopilotCompletedInferred)
-                    ? 'https://github.com/toddpick/adom8/agents'
+                    ? (hasGitHubRepoContext ? `https://github.com/${encodedOwner}/${encodedRepo}/agents` : null)
                     : null;
                 const badgeText = isCopilotDelegated
                     ? `${agentDisplayName} Working`

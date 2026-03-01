@@ -109,11 +109,38 @@ public sealed class GetCurrentStatus
             ?? Environment.GetEnvironmentVariable("AzureDevOps__Project")
             ?? Environment.GetEnvironmentVariable("AzureDevOps:Project");
 
+        var gitHubOwner = Environment.GetEnvironmentVariable("GITHUB_ORG")
+            ?? Environment.GetEnvironmentVariable("GitHub__Owner")
+            ?? Environment.GetEnvironmentVariable("GitHub:Owner");
+
+        var gitHubRepo = Environment.GetEnvironmentVariable("GITHUB_REPO")
+            ?? Environment.GetEnvironmentVariable("GitHub__Repo")
+            ?? Environment.GetEnvironmentVariable("GitHub:Repo");
+
+        if (string.IsNullOrWhiteSpace(gitHubOwner) || string.IsNullOrWhiteSpace(gitHubRepo))
+        {
+            var repositoryUrl = Environment.GetEnvironmentVariable("Git__RepositoryUrl")
+                ?? Environment.GetEnvironmentVariable("Git:RepositoryUrl");
+
+            if (!string.IsNullOrWhiteSpace(repositoryUrl) &&
+                TryParseGitHubRepo(repositoryUrl, out var parsedOwner, out var parsedRepo))
+            {
+                gitHubOwner ??= parsedOwner;
+                gitHubRepo ??= parsedRepo;
+            }
+        }
+
         var status = new DashboardStatus
         {
             AdoProjectName = string.IsNullOrWhiteSpace(adoProjectName)
                 ? null
                 : adoProjectName,
+            GitHubOwner = string.IsNullOrWhiteSpace(gitHubOwner)
+                ? null
+                : gitHubOwner,
+            GitHubRepo = string.IsNullOrWhiteSpace(gitHubRepo)
+                ? null
+                : gitHubRepo,
             CurrentWorkItem = currentWorkItem,
             Stories = storyStatuses,
             Stats = new DashboardStats
@@ -137,6 +164,51 @@ public sealed class GetCurrentStatus
         };
 
         return new OkObjectResult(status);
+    }
+
+    private static bool TryParseGitHubRepo(string repositoryUrl, out string owner, out string repo)
+    {
+        owner = string.Empty;
+        repo = string.Empty;
+
+        var trimmed = repositoryUrl.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            var segments = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2)
+            {
+                owner = segments[0];
+                repo = segments[1].EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+                    ? segments[1][..^4]
+                    : segments[1];
+                return !string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo);
+            }
+
+            return false;
+        }
+
+        // Handle scp-like format git@github.com:owner/repo.git
+        var colonIndex = trimmed.LastIndexOf(':');
+        if (colonIndex >= 0 && colonIndex < trimmed.Length - 1)
+        {
+            var pathPart = trimmed[(colonIndex + 1)..].Trim('/');
+            var segments = pathPart.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2)
+            {
+                owner = segments[0];
+                repo = segments[1].EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+                    ? segments[1][..^4]
+                    : segments[1];
+                return !string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo);
+            }
+        }
+
+        return false;
     }
 
     private static List<StoryStatus> BuildStoryStatuses(IReadOnlyList<ActivityEntry> activities)
