@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using AIAgents.Functions.Functions;
 using AIAgents.Functions.Models;
@@ -9,6 +10,7 @@ using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AIAgents.Functions.Tests.Functions;
@@ -75,7 +77,8 @@ public sealed class AgentTaskDispatcherTests
             _adoMock.Object,
                 _repositorySizingMock.Object,
             _telemetry,
-            new Mock<ISaasCallbackService>().Object);
+            new Mock<ISaasCallbackService>().Object,
+            Options.Create(new CopilotOptions()));
     }
 
     private static string Serialize(AgentTask task) => JsonSerializer.Serialize(task);
@@ -138,7 +141,7 @@ public sealed class AgentTaskDispatcherTests
     }
 
     [Fact]
-    public async Task Run_Level3_AllAgentsRun()
+    public async Task Run_Level3_GitHubOrchestratedStagesBypassLocalExecution()
     {
         var dispatcher = CreateDispatcher(autonomyLevel: 3);
 
@@ -148,8 +151,14 @@ public sealed class AgentTaskDispatcherTests
             _agentServiceMock.Invocations.Clear();
             var msg = Serialize(new AgentTask { WorkItemId = 12345, AgentType = agentType });
             await dispatcher.Run(msg, CancellationToken.None);
-            _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Once,
-                $"{agentType} should run at autonomy level 3");
+
+            var shouldRunLocally = agentType is AgentType.Planning or AgentType.Coding or AgentType.Deployment;
+            var expectedInvocations = shouldRunLocally ? Times.Once() : Times.Never();
+
+            _agentServiceMock.Verify(a => a.ExecuteAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), expectedInvocations,
+                shouldRunLocally
+                    ? $"{agentType} should run locally at autonomy level 3"
+                    : $"{agentType} should be bypassed by no-clone delegation policy");
         }
     }
 
@@ -170,18 +179,18 @@ public sealed class AgentTaskDispatcherTests
         _activityMock.Verify(a => a.LogAsync(
             "Review",
             12345,
-            It.Is<string>(m => m.Contains("InitializeCodebase no-clone", StringComparison.OrdinalIgnoreCase)),
+            It.Is<string>(m => m.Contains("no-clone delegation path bypasses local Review execution", StringComparison.OrdinalIgnoreCase)),
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Once);
         _adoMock.Verify(a => a.UpdateWorkItemFieldAsync(
             12345,
             AIAgents.Core.Constants.CustomFieldNames.Paths.CurrentAIAgent,
             string.Empty,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Never);
         _adoMock.Verify(a => a.UpdateWorkItemStateAsync(
             12345,
             "Code Review",
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AIAgents.Core.Constants;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Telemetry;
 using AIAgents.Functions.Models;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIAgents.Functions.Functions;
 
@@ -25,6 +27,7 @@ public sealed class OrchestratorWebhook
     private readonly IAzureDevOpsClient _adoClient;
     private readonly IInputValidator _inputValidator;
     private readonly TelemetryClient _telemetry;
+    private readonly CopilotOptions _copilotOptions;
 
     // Maps ADO work item states to the agent that processes them.
     // ONLY "AI Agent" is here — all other transitions are handled by direct
@@ -51,7 +54,8 @@ public sealed class OrchestratorWebhook
         IAgentTaskQueue taskQueue,
         IAzureDevOpsClient adoClient,
         IInputValidator inputValidator,
-        TelemetryClient telemetry)
+        TelemetryClient telemetry,
+        IOptions<CopilotOptions> copilotOptions)
     {
         _logger = logger;
         _activityLogger = activityLogger;
@@ -59,6 +63,7 @@ public sealed class OrchestratorWebhook
         _adoClient = adoClient;
         _inputValidator = inputValidator;
         _telemetry = telemetry;
+        _copilotOptions = copilotOptions.Value;
     }
 
     [Function("OrchestratorWebhook")]
@@ -195,6 +200,14 @@ public sealed class OrchestratorWebhook
                 "AI Agent trigger for WI-{WorkItemId} detected InitializeCodebase tag; routing directly to Coding",
                 workItemId);
             }
+
+        if (agentType == AgentType.Planning)
+        {
+            agentType = AgentType.Coding;
+            _logger.LogInformation(
+                "AI Agent trigger for WI-{WorkItemId} routed directly to Coding (GitHub orchestrator path)",
+                workItemId);
+        }
 
         // Enqueue the agent task
         var agentTask = new AgentTask

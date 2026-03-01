@@ -50,150 +50,92 @@ public sealed class DeploymentAgentService : IAgentService
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
-        string? repoPath = null;
         try
         {
-        _logger.LogInformation("Deployment agent starting for WI-{WorkItemId}", task.WorkItemId);
+            _logger.LogInformation("Deployment agent starting for WI-{WorkItemId}", task.WorkItemId);
 
-        var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
-        var branchName = $"feature/US-{task.WorkItemId}";
-        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+            var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
 
-        await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
-        var state = await context.LoadStateAsync(cancellationToken);
-        state.CurrentState = "AI Deployment";
-        state.Agents["Deployment"] = AgentStatus.InProgress();
-        await context.SaveStateAsync(state, cancellationToken);
-
-        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Deployment, cancellationToken); }
-        catch { /* field may not exist yet */ }
-
-        var autonomyLevel = workItem.AutonomyLevel;
-        var minimumScore = workItem.MinimumReviewScore;
-
-        // Extract review score from previous agent's state
-        var reviewScore = ExtractReviewScore(state);
-
-        // Extract PR ID from documentation agent's state
-        var prId = ExtractPullRequestId(state);
-
-        _logger.LogInformation(
-            "Deployment decision for WI-{WorkItemId}: autonomy={Level}, reviewScore={Score}, minScore={Min}, prId={PrId}",
-            task.WorkItemId, autonomyLevel, reviewScore, minimumScore, prId);
-
-        var decision = await MakeDeploymentDecisionAsync(
-            workItem, autonomyLevel, reviewScore, minimumScore, prId, cancellationToken);
-
-        // Update state
-        state.Agents["Deployment"] = AgentStatus.Completed();
-        state.Agents["Deployment"].AdditionalData = new Dictionary<string, object>
-        {
-            ["autonomyLevel"] = autonomyLevel,
-            ["reviewScore"] = reviewScore ?? -1,
-            ["decision"] = decision.Action,
-            ["reason"] = decision.Reason
-        };
-        state.CurrentState = decision.FinalState;
-        await context.SaveStateAsync(state, cancellationToken);
-
-        try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
-        catch { /* field may not exist yet */ }
-
-        // Update ADO work item state
-        await _adoClient.UpdateWorkItemStateAsync(workItem.Id, decision.FinalState, cancellationToken);
-
-        // Write all AI tracking fields to ADO custom fields (single batch API call)
-        var tokenUsage = state.TokenUsage;
-        try
-        {
-            var fieldUpdates = new Dictionary<string, object>
+            try
             {
-                [CustomFieldNames.Paths.TokensUsed] = tokenUsage.TotalTokens,
-                [CustomFieldNames.Paths.Cost] = $"${tokenUsage.TotalCost:F4}",
-                [CustomFieldNames.Paths.Complexity] = tokenUsage.Complexity,
-                [CustomFieldNames.Paths.LastAgent] = "Deployment",
-                [CustomFieldNames.Paths.DeploymentDecision] = decision.Action
-            };
+                await _adoClient.UpdateWorkItemFieldAsync(
+                    workItem.Id,
+                    CustomFieldNames.Paths.CurrentAIAgent,
+                    AIPipelineNames.CurrentAgentValues.Deployment,
+                    cancellationToken);
+            }
+            catch
+            {
+                // best effort
+            }
 
-            // Build per-agent model summary (e.g., "Planning: gpt-4o, Coding: claude-opus")
-            var modelParts = tokenUsage.Agents
-                .Where(kv => !string.IsNullOrEmpty(kv.Value.Model))
-                .OrderBy(kv => kv.Key)
-                .Select(kv => $"{kv.Key}: {kv.Value.Model}")
-                .ToList();
-            if (modelParts.Count > 0)
-                fieldUpdates[CustomFieldNames.Paths.Model] = string.Join(", ", modelParts);
+            var autonomyLevel = workItem.AutonomyLevel;
+            var minimumScore = workItem.MinimumReviewScore;
+            var reviewScore = workItem.AIReviewScore;
+            var prId = workItem.AIPRNumber;
 
-            // Add review score if available
-            if (reviewScore.HasValue)
-                fieldUpdates[CustomFieldNames.Paths.ReviewScore] = reviewScore.Value;
+            _logger.LogInformation(
+                "Deployment decision for WI-{WorkItemId}: autonomy={Level}, reviewScore={Score}, minScore={Min}, prId={PrId}",
+                task.WorkItemId, autonomyLevel, reviewScore, minimumScore, prId);
 
-            // Add critical issues count from review
-            var criticalCount = ExtractCriticalIssueCount(state);
-            if (criticalCount.HasValue)
-                fieldUpdates[CustomFieldNames.Paths.CriticalIssues] = criticalCount.Value;
+            var decision = await MakeDeploymentDecisionAsync(
+                workItem, autonomyLevel, reviewScore, minimumScore, prId, cancellationToken);
 
-            // Add files generated count from coding agent
-            var filesGenerated = ExtractFilesGenerated(state);
-            if (filesGenerated.HasValue)
-                fieldUpdates[CustomFieldNames.Paths.FilesGenerated] = filesGenerated.Value;
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, decision.FinalState, cancellationToken);
 
-            // Add tests generated count from testing agent
-            var testsGenerated = ExtractTestsGenerated(state);
-            if (testsGenerated.HasValue)
-                fieldUpdates[CustomFieldNames.Paths.TestsGenerated] = testsGenerated.Value;
+            try
+            {
+                await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken);
+            }
+            catch
+            {
+                // best effort
+            }
 
-            // Add PR number from documentation agent
-            if (prId.HasValue)
-                fieldUpdates[CustomFieldNames.Paths.PRNumber] = prId.Value;
+            try
+            {
+                var fieldUpdates = new Dictionary<string, object>
+                {
+                    [CustomFieldNames.Paths.LastAgent] = "Deployment",
+                    [CustomFieldNames.Paths.DeploymentDecision] = decision.Action
+                };
 
-            // Add processing time from state timestamps
-            var processingTime = (state.UpdatedAt - state.CreatedAt).TotalSeconds;
-            if (processingTime > 0)
-                fieldUpdates[CustomFieldNames.Paths.ProcessingTime] = Math.Round((decimal)processingTime, 1);
+                if (reviewScore.HasValue)
+                {
+                    fieldUpdates[CustomFieldNames.Paths.ReviewScore] = reviewScore.Value;
+                }
 
-            await _adoClient.UpdateWorkItemFieldsAsync(workItem.Id, fieldUpdates, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to update AI custom fields on WI-{WorkItemId} — some fields may not exist yet",
-                workItem.Id);
-        }
+                if (prId.HasValue)
+                {
+                    fieldUpdates[CustomFieldNames.Paths.PRNumber] = prId.Value;
+                }
 
-        // Build token summary for comment
-        var tokenSummary = BuildTokenSummary(tokenUsage);
+                await _adoClient.UpdateWorkItemFieldsAsync(workItem.Id, fieldUpdates, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to update deployment custom fields on WI-{WorkItemId}",
+                    workItem.Id);
+            }
 
-        // Post summary comment
-        await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-            $"<b>\ud83e\udd16 AI Deployment Agent</b><br/>" +
-            $"<b>Autonomy Level:</b> {autonomyLevel}<br/>" +
-            $"<b>Review Score:</b> {reviewScore?.ToString() ?? "N/A"}<br/>" +
-            $"<b>Decision:</b> {decision.Action}<br/>" +
-            $"<b>Reason:</b> {decision.Reason}<br/>" +
-            $"<b>Final State:</b> {decision.FinalState}<br/><br/>" +
-            tokenSummary,
-            cancellationToken);
+            await _adoClient.AddWorkItemCommentAsync(workItem.Id,
+                $"<b>🤖 AI Deployment Agent</b><br/>" +
+                $"<b>Autonomy Level:</b> {autonomyLevel}<br/>" +
+                $"<b>Review Score:</b> {reviewScore?.ToString() ?? "N/A"}<br/>" +
+                $"<b>Decision:</b> {decision.Action}<br/>" +
+                $"<b>Reason:</b> {decision.Reason}<br/>" +
+                $"<b>Final State:</b> {decision.FinalState}<br/>" +
+                (prId.HasValue ? $"<b>PR:</b> #{prId}<br/>" : ""),
+                cancellationToken);
 
-        await _activityLogger.LogAsync(
-            "Deployment", task.WorkItemId, decision.Action, cancellationToken: cancellationToken);
-
-        // Log token usage summary as a separate activity entry for dashboard aggregation
-        if (tokenUsage.TotalTokens > 0)
-        {
             await _activityLogger.LogAsync(
-                "TokenSummary", task.WorkItemId,
-                $"Pipeline total: {tokenUsage.TotalTokens:N0} tokens, ${tokenUsage.TotalCost:F4}, complexity: {tokenUsage.Complexity}",
-                tokenUsage.TotalTokens, tokenUsage.TotalCost,
-                cancellationToken: cancellationToken);
-        }
+                "Deployment", task.WorkItemId, decision.Action, cancellationToken: cancellationToken);
 
-        _logger.LogInformation(
-            "Deployment agent completed for WI-{WorkItemId}: {Action} → {State}",
-            task.WorkItemId, decision.Action, decision.FinalState);
+            _logger.LogInformation(
+                "Deployment agent completed for WI-{WorkItemId}: {Action} → {State}",
+                task.WorkItemId, decision.Action, decision.FinalState);
 
-            // Deployment agent doesn't call AI itself, so report 0 tokens
-            // (pipeline totals are in the TokenSummary activity entry)
             return AgentResult.Ok(0, 0m);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
@@ -211,14 +153,6 @@ public sealed class DeploymentAgentService : IAgentService
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Deployment agent for WI-{task.WorkItemId}: {ex.Message}", ex);
-        }
-        finally
-        {
-            if (repoPath is not null)
-            {
-                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
-            }
         }
     }
 

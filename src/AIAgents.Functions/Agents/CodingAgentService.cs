@@ -90,14 +90,25 @@ public sealed class CodingAgentService : IAgentService
             var preflightStrategy = ResolveStrategy(preflightState, workItem);
             var branchName = $"feature/US-{task.WorkItemId}";
 
-            if (IsInitializeCodebaseNoClonePath(workItem, preflightStrategy))
+            if (IsNoCloneDelegationPath(workItem, preflightStrategy))
             {
                 var noCloneStrategyName = preflightStrategy is CopilotCodingStrategy noCloneCopilotStrategy
                     ? $"GitHub @{noCloneCopilotStrategy.AgentAssignee}"
                     : "Agentic";
 
+                var isInitializeCodebaseStory = workItem.Tags.Any(tag =>
+                    string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+
+                var delegationPathLabel = isInitializeCodebaseStory
+                    ? "initialize no-clone path"
+                    : "global no-clone delegation path";
+
+                var noClonePlanSummary = isInitializeCodebaseStory
+                    ? "Initialize codebase documentation through GitHub Copilot with no local clone."
+                    : "No local repository clone mode is active. GitHub agent is orchestrating implementation and stage updates for this story.";
+
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                    $"Starting coding ({noCloneStrategyName} strategy, initialize no-clone path)", "info", cancellationToken);
+                    $"Starting coding ({noCloneStrategyName} strategy, {delegationPathLabel})", "info", cancellationToken);
 
                 try
                 {
@@ -118,9 +129,9 @@ public sealed class CodingAgentService : IAgentService
                     RepositoryPath = string.Empty,
                     State = preflightState,
                     WorkItem = workItem,
-                    PlanMarkdown = "Initialize codebase documentation through GitHub Copilot with no local clone.",
+                    PlanMarkdown = noClonePlanSummary,
                     CodingGuidelines = string.Empty,
-                    ExistingFilesSummary = "Repository not cloned locally for initialize flow.",
+                    ExistingFilesSummary = "Repository not cloned locally for no-clone delegation flow.",
                     BranchName = branchName,
                     CorrelationId = task.CorrelationId
                 };
@@ -132,7 +143,7 @@ public sealed class CodingAgentService : IAgentService
 
                     await _adoClient.AddWorkItemCommentAsync(workItem.Id,
                         $"<b>🤖 AI Coding Agent — Delegated to GitHub @{agentName}</b><br/>" +
-                        "Initialize Codebase no-clone path is active.<br/>" +
+                        $"{(isInitializeCodebaseStory ? "Initialize Codebase" : "Global") } no-clone delegation path is active.<br/>" +
                         "Local repository clone was intentionally skipped for this story.<br/>" +
                         (noCloneResult.CopilotMetrics?.IssueNumber > 0
                             ? $"GitHub Issue: <a href=\"https://github.com/{_githubOptions.Value.Owner}/{_githubOptions.Value.Repo}/issues/{noCloneResult.CopilotMetrics.IssueNumber}\">#{noCloneResult.CopilotMetrics.IssueNumber}</a><br/>"
@@ -144,11 +155,11 @@ public sealed class CodingAgentService : IAgentService
                     catch { }
 
                     await _activityLogger.LogAsync("Coding", task.WorkItemId,
-                        $"Delegated to @{agentName} (initialize no-clone path). Pipeline paused.",
+                        $"Delegated to @{agentName} ({delegationPathLabel}). Pipeline paused.",
                         "info", cancellationToken);
 
                     _logger.LogInformation(
-                        "Coding agent delegated WI-{WorkItemId} via initialize no-clone path to @{Agent}",
+                        "Coding agent delegated WI-{WorkItemId} via no-clone delegation path to @{Agent}",
                         task.WorkItemId,
                         agentName);
 
@@ -407,32 +418,11 @@ public sealed class CodingAgentService : IAgentService
             return CreateAgenticStrategy();
         }
 
-        // Mode = Always → every story goes to Copilot, no threshold check
-        if (string.Equals(_copilotOptions.Mode, "Always", StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogInformation(
-                "Routing WI-{WorkItemId} to Copilot strategy (Mode=Always)", workItem.Id);
-
-            return CreateCopilotStrategy();
-        }
-
-        // Mode = Auto (default) → route based on complexity threshold
-        var storyPoints = GetStoryPointsFromDecisions(state);
-
-        if (storyPoints >= _copilotOptions.ComplexityThreshold)
-        {
-            _logger.LogInformation(
-                "Routing WI-{WorkItemId} to Copilot strategy ({StoryPoints} SP ≥ {Threshold} threshold)",
-                workItem.Id, storyPoints, _copilotOptions.ComplexityThreshold);
-
-            return CreateCopilotStrategy();
-        }
-
         _logger.LogInformation(
-            "Routing WI-{WorkItemId} to agentic strategy ({StoryPoints} SP < {Threshold} threshold)",
-            workItem.Id, storyPoints, _copilotOptions.ComplexityThreshold);
+            "Routing WI-{WorkItemId} to Copilot strategy (global no-clone delegation policy)",
+            workItem.Id);
 
-        return CreateAgenticStrategy();
+        return CreateCopilotStrategy();
     }
 
     private AgenticCodingStrategy CreateAgenticStrategy() =>
@@ -441,15 +431,9 @@ public sealed class CodingAgentService : IAgentService
     private CopilotCodingStrategy CreateCopilotStrategy(string? agentOverride = null) =>
         new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger, agentOverride);
 
-    private static bool IsInitializeCodebaseNoClonePath(StoryWorkItem workItem, ICodingStrategy strategy)
+    private bool IsNoCloneDelegationPath(StoryWorkItem workItem, ICodingStrategy strategy)
     {
-        if (strategy is not CopilotCodingStrategy)
-        {
-            return false;
-        }
-
-        return workItem.Tags.Any(tag =>
-            string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+        return strategy is CopilotCodingStrategy;
     }
 
     /// <summary>

@@ -328,13 +328,11 @@ public sealed class CopilotBridgeWebhook
                 workItemId);
         }
 
-        // Copilot path: skip Testing and move directly to Review (or complete initialize stories without review enqueue).
+        // Copilot path: skip local Testing/Review/Documentation and move directly to Deployment.
         var currentAgentUpdated = false;
         try
         {
-            var nextAgentValue = isInitializeCodebaseStory
-                ? string.Empty
-                : AIPipelineNames.CurrentAgentValues.Review;
+            var nextAgentValue = AIPipelineNames.CurrentAgentValues.Deployment;
 
             await _adoClient.UpdateWorkItemFieldAsync(workItemId, CustomFieldNames.Paths.CurrentAIAgent, nextAgentValue, cancellationToken);
             currentAgentUpdated = true;
@@ -349,7 +347,7 @@ public sealed class CopilotBridgeWebhook
         try
         {
             await _activityLogger.LogAsync("Testing", workItemId,
-                "Testing skipped — GitHub Copilot coding session already validated changes",
+                "Local Testing skipped — GitHub orchestration path will own testing/review/documentation updates",
                 "info", cancellationToken);
         }
         catch (Exception ex)
@@ -368,8 +366,8 @@ public sealed class CopilotBridgeWebhook
                 $"PR: #{prNumber} | Files: {metrics.FilesChanged} | +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines<br/>" +
                 $"Duration: {metrics.DurationMinutes:F1} minutes | Commits: {metrics.CommitCount}<br/>" +
                 (isInitializeCodebaseStory
-                    ? "Testing skipped (validated by Copilot session) → initialize flow complete (Review enqueue skipped for no-clone path)"
-                    : "Testing skipped (validated by Copilot session) → handing off to Review agent"),
+                    ? "Testing skipped (validated by Copilot session) → handing off to Deployment agent"
+                    : "Testing skipped (validated by Copilot session) → handing off to Deployment agent"),
                 cancellationToken);
             completionCommentAdded = true;
         }
@@ -400,7 +398,7 @@ public sealed class CopilotBridgeWebhook
                         $"⚠️ <b>Copilot completion checkpoint enforcement blocked handoff</b><br/>" +
                         $"PR: #{prNumber}<br/>" +
                         $"Missing required updates: {missingLabel}<br/>" +
-                        $"Pipeline did not enqueue Review.",
+                        $"Pipeline did not enqueue Deployment.",
                         cancellationToken);
                 }
                 catch (Exception ex)
@@ -436,52 +434,14 @@ public sealed class CopilotBridgeWebhook
         var tokensForLog = 1;
         var costForLog = 0m; // No direct API cost — included in GitHub subscription
 
-        if (isInitializeCodebaseStory)
-        {
-            try
-            {
-                await _adoClient.UpdateWorkItemStateAsync(workItemId, "Code Review", cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to move InitializeCodebase story WI-{WorkItemId} to Code Review after Copilot reconciliation",
-                    workItemId);
-            }
-
-            try
-            {
-                await _activityLogger.LogAsync("Coding", workItemId,
-                    $"Copilot completed initialize flow for PR #{prNumber}. Review enqueue skipped to preserve no-clone path.",
-                    tokensForLog, costForLog, "info", cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Non-critical activity log failed for initialize no-clone completion on WI-{WorkItemId}",
-                    workItemId);
-            }
-
-            delegation.Status = "Completed";
-            delegation.CopilotPrNumber = prNumber;
-            delegation.CompletedAt = DateTime.UtcNow;
-            await _delegationService.UpdateAsync(delegation, cancellationToken);
-
-            _logger.LogInformation(
-                "Copilot bridge reconciled PR #{PrNumber} for initialize story WI-{WorkItemId} — review enqueue skipped (no-clone path preserved)",
-                prNumber,
-                workItemId);
-            return;
-        }
-
-        // Enqueue Review agent
+        // Enqueue Deployment agent
         var nextTask = new AgentTask
         {
             WorkItemId = workItemId,
-            AgentType = AgentType.Review,
+            AgentType = AgentType.Deployment,
             CorrelationId = delegation.CorrelationId,
             TriggerSource = nameof(CopilotBridgeWebhook),
-            ResumeFromStage = "Review",
+            ResumeFromStage = "Deployment",
             HandoffNote = $"Copilot reconciliation complete for PR #{prNumber}"
         };
         await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
@@ -494,7 +454,7 @@ public sealed class CopilotBridgeWebhook
         try
         {
             await _activityLogger.LogAsync("Coding", workItemId,
-                $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Testing skipped → Review. (1 premium credit)",
+                $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Local Testing/Review/Documentation skipped → Deployment. (1 premium credit)",
                 tokensForLog, costForLog, "info", cancellationToken);
         }
         catch (Exception ex)
@@ -505,7 +465,7 @@ public sealed class CopilotBridgeWebhook
         }
 
         _logger.LogInformation(
-            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, pipeline resumed (Testing skipped → Review)",
+            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, pipeline resumed (local Testing/Review/Documentation skipped → Deployment)",
             prNumber, workItemId, reconciledFiles.Count);
     }
 

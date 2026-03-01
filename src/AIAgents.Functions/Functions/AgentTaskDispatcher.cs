@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
@@ -9,6 +10,7 @@ using Microsoft.ApplicationInsights;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIAgents.Functions.Functions;
 
@@ -27,6 +29,7 @@ public sealed class AgentTaskDispatcher
     private readonly IRepositorySizingService _repositorySizingService;
     private readonly TelemetryClient _telemetry;
     private readonly ISaasCallbackService _saasCallback;
+    private readonly CopilotOptions _copilotOptions;
 
     public AgentTaskDispatcher(
         IServiceProvider serviceProvider,
@@ -35,7 +38,8 @@ public sealed class AgentTaskDispatcher
         IAzureDevOpsClient adoClient,
         IRepositorySizingService repositorySizingService,
         TelemetryClient telemetry,
-        ISaasCallbackService saasCallback)
+        ISaasCallbackService saasCallback,
+        IOptions<CopilotOptions> copilotOptions)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
@@ -44,6 +48,7 @@ public sealed class AgentTaskDispatcher
         _repositorySizingService = repositorySizingService;
         _telemetry = telemetry;
         _saasCallback = saasCallback;
+        _copilotOptions = copilotOptions.Value;
     }
 
     [Function("AgentTaskDispatcher")]
@@ -144,47 +149,19 @@ public sealed class AgentTaskDispatcher
             }
         }
 
-        var skipCloneCapacityCheck = IsInitializeNoClonePath(workItem, agentTask);
+        var skipCloneCapacityCheck = IsNoCloneDelegationPath(workItem, agentTask, _copilotOptions);
 
         if (skipCloneCapacityCheck && ShouldSkipForInitializeNoClone(agentTask.AgentType))
         {
             _logger.LogInformation(
-                "Skipping {AgentType} agent for WI-{WorkItemId}: InitializeCodebase no-clone path",
+                "Skipping {AgentType} agent for WI-{WorkItemId}: no-clone delegation path",
                 agentTask.AgentType,
                 agentTask.WorkItemId);
-
-            try
-            {
-                await _adoClient.UpdateWorkItemFieldAsync(
-                    agentTask.WorkItemId,
-                    CustomFieldNames.Paths.CurrentAIAgent,
-                    string.Empty,
-                    cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to clear Current AI Agent while skipping {AgentType} for InitializeCodebase WI-{WorkItemId}",
-                    agentTask.AgentType,
-                    agentTask.WorkItemId);
-            }
-
-            try
-            {
-                await _adoClient.UpdateWorkItemStateAsync(agentTask.WorkItemId, "Code Review", cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to move InitializeCodebase WI-{WorkItemId} to Code Review while skipping {AgentType}",
-                    agentTask.WorkItemId,
-                    agentTask.AgentType);
-            }
 
             await _activityLogger.LogAsync(
                 agentTask.AgentType.ToString(),
                 agentTask.WorkItemId,
-                $"Skipped — InitializeCodebase no-clone path bypasses {agentTask.AgentType}. Story moved to Code Review.",
+                $"Skipped — no-clone delegation path bypasses local {agentTask.AgentType} execution.",
                 cancellationToken: cancellationToken);
 
             return;
@@ -521,15 +498,9 @@ public sealed class AgentTaskDispatcher
         _ => false
     };
 
-    private static bool IsInitializeNoClonePath(StoryWorkItem? workItem, AgentTask task)
+    private static bool IsNoCloneDelegationPath(StoryWorkItem? workItem, AgentTask task, CopilotOptions copilotOptions)
     {
-        if (workItem is null)
-        {
-            return false;
-        }
-
-        return workItem.Tags.Any(tag =>
-            string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
+        return workItem is not null;
     }
 
     private static bool ShouldSkipForInitializeNoClone(AgentType agentType) => agentType switch
@@ -537,7 +508,6 @@ public sealed class AgentTaskDispatcher
         AgentType.Testing => true,
         AgentType.Review => true,
         AgentType.Documentation => true,
-        AgentType.Deployment => true,
         _ => false
     };
 
