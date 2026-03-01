@@ -96,7 +96,12 @@ Once the pipeline completes successfully:
 1. **Review the Summary**: Check the pipeline logs for the final summary, which includes the names of the created resources and the Key Vault URL.
 2. **Revoke Onboarding PAT**: You can now safely revoke the `ONBOARDING_PAT` you created in the prerequisites. The pipeline has automatically generated and securely stored a dedicated runtime PAT for the agent.
 3. **Copilot Webhook Secret (Auto-Managed)**: No manual secret creation is required. The pipeline auto-generates a secure webhook secret (unless you provide an override), stores it in Key Vault, and configures both the Function App and GitHub webhook to use the same secret.
-4. **Configure GitHub Copilot Permissions**: If you are using GitHub Copilot, ensure the agent has the necessary permissions on the repository (this cannot be automated via API).
+4. **Configure GitHub Copilot Permissions**:
+    - Ensure repository Copilot coding agent is enabled (**Repository Settings → Copilot → Coding agent**).
+    - Ensure your runtime GitHub token has required repo permissions (`Actions`, `Contents`, `Issues`, `Pull requests` = Read/Write; `Metadata` = Read).
+    - For org-owned repos, check **Organization Settings → Third-party access → Personal access tokens**:
+       - If **Require admin approval** is enabled, each fine-grained PAT must be explicitly approved before Copilot can start.
+       - This governance policy is a manual org-admin control and is not reliably enforced by the onboarding pipeline.
 5. **Register MCP Servers in GitHub Copilot (Required for MCP Tools)**:
    - Open GitHub repository settings → **Copilot** → **Coding agent** → **MCP configuration**.
    - Copy/paste `.adom8/mcp/mcp.template.json` into the MCP configuration box.

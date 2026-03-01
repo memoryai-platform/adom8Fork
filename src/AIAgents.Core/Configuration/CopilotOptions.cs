@@ -86,6 +86,13 @@ public sealed class CopilotOptions
     public string Model { get; init; } = "copilot";
 
     /// <summary>
+    /// Optional comma-separated GitHub usernames to co-assign on delegated issues.
+    /// Example: <c>"toddpick"</c> or <c>"toddpick,another-user"</c>.
+    /// These are added in addition to the selected agent assignee.
+    /// </summary>
+    public string? AdditionalAssignees { get; init; }
+
+    /// <summary>
     /// Enables strict Azure DevOps checkpoint enforcement for Copilot completion handoff.
     /// When enabled, the Copilot bridge verifies required work item updates before enqueueing Review.
     /// </summary>

@@ -709,7 +709,27 @@ The Coding agent supports a **hybrid strategy**: for complex stories it can dele
 
 - GitHub Copilot Business or Enterprise plan with the Copilot coding agent enabled
 - Repository must have Copilot coding agent enabled in **Settings → Copilot → Coding agent**
-- GitHub PAT must have `repo` scope (classic token) **or** `Issues: Read and Write` permission (fine-grained token) — the PAT needs to create Issues and assign them to `@copilot`
+- GitHub PAT must have `repo` scope (classic token) **or** the following fine-grained repo permissions:
+  - **Actions**: Read and write
+  - **Contents**: Read and write
+  - **Issues**: Read and write
+  - **Pull requests**: Read and write
+  - **Metadata**: Read
+- For org-owned repositories, verify PAT approval policy in **Organization Settings → Third-party access → Personal access tokens**:
+  - If **Require admin approval** is enabled, each new fine-grained PAT request must be approved before Copilot can start work.
+  - If your governance allows it, set default to **Do not require admin approval** to avoid blocked agent starts.
+
+**Copilot setup automation matrix:**
+
+- **Automatable (pipeline/API)**
+  - Function App Copilot settings (`Copilot__*`, webhook secret, runtime token wiring)
+  - GitHub webhook registration
+  - GitHub Actions repository/org policy enforcement via REST (`/actions/permissions`)
+  - Copilot seat assignment APIs (org-level Copilot user management)
+- **Manual (org/repo admin UI)**
+  - Copilot coding agent enablement scope for org/repo
+  - PAT governance defaults under **Third-party access** (approval requirements)
+  - Any enterprise-level Copilot policy overrides not exposed in your org API controls
 
 **Step 1: Add Copilot configuration settings:**
 

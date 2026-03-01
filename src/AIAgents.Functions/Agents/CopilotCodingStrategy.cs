@@ -29,6 +29,7 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     private readonly HttpClient _httpClient;
 
     private readonly string _agentAssignee;
+    private readonly IReadOnlyList<string> _additionalAssignees;
 
     /// <summary>The GitHub agent username this strategy will assign issues to.</summary>
     public string AgentAssignee => _agentAssignee;
@@ -45,6 +46,7 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         _delegationService = delegationService;
         _logger = logger;
         _agentAssignee = agentOverride ?? _copilotOptions.Model ?? "copilot";
+        _additionalAssignees = ParseAdditionalAssignees(_copilotOptions.AdditionalAssignees);
 
         _httpClient = new HttpClient
         {
@@ -246,13 +248,20 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     private async Task<int> CreateGitHubIssueAsync(CodingContext context, CancellationToken cancellationToken)
     {
         var issueBody = BuildIssueBody(context, _agentAssignee);
+        var assigneeCandidates = BuildAssigneeCandidates(_agentAssignee);
+        var primaryAssignee = assigneeCandidates.FirstOrDefault();
 
-        var requestBody = new
+        var requestBody = new Dictionary<string, object>
         {
-            title = $"[US-{context.WorkItemId}] {context.WorkItem.Title}",
-            body = issueBody,
-            labels = new[] { "copilot-agent" }
+            ["title"] = $"[US-{context.WorkItemId}] {context.WorkItem.Title}",
+            ["body"] = issueBody,
+            ["labels"] = new[] { "copilot-agent" }
         };
+
+        if (!string.IsNullOrWhiteSpace(primaryAssignee))
+        {
+            requestBody["assignees"] = new[] { primaryAssignee };
+        }
 
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -262,6 +271,28 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
             content, cancellationToken);
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode &&
+            response.StatusCode == HttpStatusCode.UnprocessableEntity &&
+            requestBody.ContainsKey("assignees") &&
+            ShouldRetryIssueCreateWithoutAssignees(responseBody))
+        {
+            _logger.LogWarning(
+                "GitHub issue create returned 422 with assignee payload for WI-{WorkItemId}; retrying without assignees. Body: {Body}",
+                context.WorkItemId,
+                responseBody);
+
+            requestBody.Remove("assignees");
+            var retryJson = JsonSerializer.Serialize(requestBody);
+            var retryContent = new StringContent(retryJson, Encoding.UTF8, "application/json");
+
+            response = await _httpClient.PostAsync(
+                $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues",
+                retryContent,
+                cancellationToken);
+
+            responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
 
         if (!response.IsSuccessStatusCode)
         {
@@ -285,45 +316,101 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
     /// </summary>
     private async Task AssignIssueToAgentAsync(int issueNumber, string baseBranch, CancellationToken cancellationToken)
     {
-        // Map our agent name to the custom_agent field.
-        // "copilot" (default) = no custom agent; "claude"/"codex" = partner agents.
+        // Compatibility ladder:
+        // 1) Try simple assignee payload first (this historically worked broadly).
+        // 2) If that fails, try newer agent_assignment payload for orgs where it is enabled.
+        // This avoids hard-failing on preview/feature-gated payload differences.
         var customAgent = string.Equals(_agentAssignee, "copilot", StringComparison.OrdinalIgnoreCase)
             ? ""
             : _agentAssignee;
 
-        // GitHub UI displays this as "Copilot", while legacy API examples often use
-        // the bot login. Try both for compatibility across org feature rollouts.
-        var assigneeCandidates = new[] { "copilot", "copilot-swe-agent[bot]" };
+        var assigneeCandidates = BuildAssigneeCandidates(_agentAssignee);
+
+        var assignmentAttempts = assigneeCandidates
+            .SelectMany(assignee => new[]
+            {
+                new { Assignee = assignee, IncludeAgentAssignment = false, UsePatch = false, Name = $"post-plain-{assignee}" },
+                new { Assignee = assignee, IncludeAgentAssignment = false, UsePatch = true, Name = $"patch-plain-{assignee}" },
+                new { Assignee = assignee, IncludeAgentAssignment = true, UsePatch = false, Name = $"post-agent-assignment-{assignee}" },
+                new { Assignee = assignee, IncludeAgentAssignment = true, UsePatch = true, Name = $"patch-agent-assignment-{assignee}" }
+            })
+            .ToList();
+
         HttpStatusCode? lastStatusCode = null;
         string? lastResponseBody = null;
 
-        foreach (var assignee in assigneeCandidates)
+        foreach (var attempt in assignmentAttempts)
         {
-            var requestBody = new Dictionary<string, object>
+            Dictionary<string, object> requestBody;
+
+            if (attempt.IncludeAgentAssignment)
             {
-                ["assignees"] = new[] { assignee },
-                ["agent_assignment"] = new Dictionary<string, string>
+                var agentAssignment = new Dictionary<string, string>
                 {
                     ["target_repo"] = $"{_githubOptions.Owner}/{_githubOptions.Repo}",
-                    ["base_branch"] = baseBranch,
-                    ["custom_instructions"] = "",
-                    ["custom_agent"] = customAgent,
-                    ["model"] = ""
+                    ["base_branch"] = baseBranch
+                };
+
+                if (!string.IsNullOrWhiteSpace(customAgent))
+                {
+                    agentAssignment["custom_agent"] = customAgent;
                 }
-            };
+
+                requestBody = new Dictionary<string, object>
+                {
+                    ["assignees"] = new[] { attempt.Assignee },
+                    ["agent_assignment"] = agentAssignment
+                };
+            }
+            else
+            {
+                requestBody = new Dictionary<string, object>
+                {
+                    ["assignees"] = new[] { attempt.Assignee }
+                };
+            }
 
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(
-                $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{issueNumber}/assignees",
-                content, cancellationToken);
+            HttpResponseMessage response;
+            if (attempt.UsePatch)
+            {
+                var patchRequest = new HttpRequestMessage(
+                    HttpMethod.Patch,
+                    $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{issueNumber}")
+                {
+                    Content = content
+                };
+
+                response = await _httpClient.SendAsync(patchRequest, cancellationToken);
+            }
+            else
+            {
+                response = await _httpClient.PostAsync(
+                    $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{issueNumber}/assignees",
+                    content,
+                    cancellationToken);
+            }
 
             if (response.IsSuccessStatusCode)
             {
+                var verified = await VerifyIssueAssignmentAsync(issueNumber, attempt.Assignee, cancellationToken);
+                if (!verified)
+                {
+                    _logger.LogWarning(
+                        "Assignment attempt returned success but issue #{IssueNumber} does not show expected agent assignee '{Assignee}' after {Attempt}. Continuing attempts.",
+                        issueNumber,
+                        attempt.Assignee,
+                        attempt.Name);
+                    continue;
+                }
+
+                await AssignAdditionalAssigneesAsync(issueNumber, cancellationToken);
+
                 _logger.LogInformation(
-                    "Successfully assigned Issue #{IssueNumber} to {Assignee} (agent={Agent}, base={BaseBranch})",
-                    issueNumber, assignee, _agentAssignee, baseBranch);
+                    "Successfully assigned Issue #{IssueNumber} using {Attempt} (assignee={Assignee}, agent={Agent}, base={BaseBranch})",
+                    issueNumber, attempt.Name, attempt.Assignee, _agentAssignee, baseBranch);
                 return;
             }
 
@@ -331,8 +418,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
             lastResponseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             _logger.LogWarning(
-                "Copilot assignment attempt failed for Issue #{IssueNumber} (assignee={Assignee}, agent={Agent}, status={StatusCode}): {Body}",
-                issueNumber, assignee, _agentAssignee, response.StatusCode, lastResponseBody);
+                "Copilot assignment attempt failed for Issue #{IssueNumber} using {Attempt} (assignee={Assignee}, agent={Agent}, status={StatusCode}): {Body}",
+                issueNumber, attempt.Name, attempt.Assignee, _agentAssignee, response.StatusCode, lastResponseBody);
         }
 
         _logger.LogWarning(
@@ -343,10 +430,161 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
             lastResponseBody ?? "(no response body)");
     }
 
+    private async Task<bool> VerifyIssueAssignmentAsync(
+        int issueNumber,
+        string expectedAssignee,
+        CancellationToken cancellationToken)
+    {
+        var response = await _httpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{issueNumber}",
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Could not verify issue assignment for Issue #{IssueNumber} (status={StatusCode})",
+                issueNumber,
+                response.StatusCode);
+            return false;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(body);
+
+        if (!doc.RootElement.TryGetProperty("assignees", out var assigneesElement) ||
+            assigneesElement.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var logins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var assignee in assigneesElement.EnumerateArray())
+        {
+            if (assignee.TryGetProperty("login", out var loginEl))
+            {
+                var login = loginEl.GetString();
+                if (!string.IsNullOrWhiteSpace(login))
+                {
+                    logins.Add(login);
+                }
+            }
+        }
+
+        return logins.Contains(expectedAssignee);
+    }
+
+    private async Task AssignAdditionalAssigneesAsync(int issueNumber, CancellationToken cancellationToken)
+    {
+        if (_additionalAssignees.Count == 0)
+        {
+            return;
+        }
+
+        var payload = new Dictionary<string, object>
+        {
+            ["assignees"] = _additionalAssignees
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/issues/{issueNumber}/assignees",
+            content,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning(
+                "Failed to assign additional users to Issue #{IssueNumber} (status={StatusCode}): {Body}",
+                issueNumber,
+                response.StatusCode,
+                body);
+            return;
+        }
+
+        _logger.LogInformation(
+            "Assigned additional users to Issue #{IssueNumber}: {Assignees}",
+            issueNumber,
+            string.Join(",", _additionalAssignees));
+    }
+
+    private static IReadOnlyList<string> BuildAssigneeCandidates(string? agentAssignee)
+    {
+        var normalized = NormalizeAgentAssignee(agentAssignee);
+
+        if (normalized == "claude")
+        {
+            return new[] { "claude", "claude[bot]", "copilot" };
+        }
+
+        if (normalized == "codex")
+        {
+            return new[] { "codex", "codex[bot]", "copilot" };
+        }
+
+        return new[] { "copilot", "Copilot", "copilot-swe-agent", "copilot-swe-agent[bot]" };
+    }
+
+    private static string NormalizeAgentAssignee(string? agentAssignee)
+    {
+        if (string.IsNullOrWhiteSpace(agentAssignee))
+        {
+            return "copilot";
+        }
+
+        var value = agentAssignee.Trim().ToLowerInvariant();
+        if (value.Contains("claude", StringComparison.Ordinal))
+        {
+            return "claude";
+        }
+
+        if (value.Contains("codex", StringComparison.Ordinal))
+        {
+            return "codex";
+        }
+
+        return "copilot";
+    }
+
+    private static bool ShouldRetryIssueCreateWithoutAssignees(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return true;
+        }
+
+        return responseBody.Contains("assignee", StringComparison.OrdinalIgnoreCase)
+               || responseBody.Contains("could not resolve to a user", StringComparison.OrdinalIgnoreCase)
+               || responseBody.Contains("invalid assignee", StringComparison.OrdinalIgnoreCase)
+               || responseBody.Contains("unprocessable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> ParseAdditionalAssignees(string? rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return Array.Empty<string>();
+        }
+
+        return rawValue
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private async Task PostKickoffCommentAsync(int issueNumber, CodingContext context, CancellationToken cancellationToken)
     {
+        var normalizedAssignee = NormalizeAgentAssignee(_agentAssignee);
+        var kickoffAgent = normalizedAssignee switch
+        {
+            "claude" => "claude",
+            "codex" => "codex",
+            _ => "copilot"
+        };
+
         var kickoffComment =
-            "@copilot Please start this implementation now. " +
+            $"@{kickoffAgent} Please start this implementation now. " +
             $"Use `{context.BranchName}` as the base branch and open a PR back to `{context.BranchName}` when complete.";
 
         var payload = new { body = kickoffComment };
