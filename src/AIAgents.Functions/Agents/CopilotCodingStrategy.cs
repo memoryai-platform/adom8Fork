@@ -622,23 +622,47 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
 
         sb.AppendLine("## Instructions");
         sb.AppendLine();
-        sb.AppendLine($"Implement the changes for this story. The base branch is `{context.BranchName}`.");
+        if (context.WorkItem.AutonomyLevel <= 1)
+        {
+            sb.AppendLine($"Perform planning-only analysis for this story. The base branch is `{context.BranchName}`.");
+        }
+        else
+        {
+            sb.AppendLine($"Implement the changes for this story. The base branch is `{context.BranchName}`.");
+        }
         sb.AppendLine("Create your working branch from this base and target your PR back to it.");
         sb.AppendLine();
         sb.AppendLine("1. Read `.agent/ORCHESTRATION_CONTRACT.md` FIRST. This file is authoritative for stage orchestration and Azure DevOps MCP updates.");
         sb.AppendLine("2. Read any other relevant `.agent/*` files needed for this story before implementing.");
         sb.AppendLine("3. Operate as orchestrator through Planning → Coding → Testing → Review → Documentation. Deployment is handled by Azure after you signal Deployment stage readiness.");
         sb.AppendLine("4. When implementation and documentation are complete, ensure the PR is marked Ready for Review (not draft).");
-        sb.AppendLine("5. Record a review score and compare it against the minimum score below. If review score is below minimum, move the story to Needs Revision per orchestration contract.");
+        sb.AppendLine("5. Compute Story Readiness Score and compare it against the minimum score below. If readiness score is below minimum, move the story to Needs Revision per orchestration contract. If score meets/exceeds minimum and Autonomy Level > 1, continue to Coding.");
+        sb.AppendLine("6. Priority order is strict: Job #1 keep Azure DevOps board/fields/state accurate and current; Job #2 perform planning/coding work.");
+        sb.AppendLine("7. No task is complete until you set ADO fields/state and add completion comment, then re-read and print final values.");
         sb.AppendLine();
         sb.AppendLine($"> **ADO Work Item:** US-{context.WorkItemId}");
         sb.AppendLine($"> **Title:** {context.WorkItem.Title}");
+        sb.AppendLine($"> **AI Autonomy Level:** {context.WorkItem.AutonomyLevel}");
+        sb.AppendLine("> **Autonomy Normalization:** Treat either numeric or text labels as equivalent (1/Plan Only, 2/Code Only, 3/Review & Pause, 4/Auto-Merge, 5/Full Autonomy).");
         sb.AppendLine($"> **AI Minimum Review Score:** {context.WorkItem.MinimumReviewScore}");
         if (!string.IsNullOrWhiteSpace(agentName))
         {
             sb.AppendLine($"> **Assigned Agent:** @{agentName}");
         }
         sb.AppendLine();
+
+        if (context.WorkItem.AutonomyLevel <= 1)
+        {
+            sb.AppendLine("## Autonomy Level 1 Guardrail");
+            sb.AppendLine();
+            sb.AppendLine("This story is autonomy level 1 (plan-only). Do not implement code changes.");
+            sb.AppendLine("Do a full deep analysis of the complete story and dependencies first.");
+            sb.AppendLine("Post one consolidated Needs Revision comment with all blockers and clarifying questions.");
+            sb.AppendLine("If no blockers remain after analysis, include the exact line: `No further info needed.` before presenting your brief proposed plan.");
+            sb.AppendLine("In that comment include a brief 3-5 bullet plan and markdown sections: Outcome, ADO Updates Applied, Evidence, Final ADO Values.");
+            sb.AppendLine("Then route the work item to Needs Revision.");
+            sb.AppendLine();
+        }
 
         if (!string.IsNullOrWhiteSpace(context.WorkItem.Description))
         {

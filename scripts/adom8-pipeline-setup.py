@@ -482,16 +482,25 @@ This repository was bootstrapped by the ADOm8 onboarding pipeline with MCP guida
 ## GitHub Copilot Coding Agent quick setup
 
 1. Open GitHub repository settings → Copilot → Coding agent → MCP configuration.
-2. Copy the contents of `.adom8/mcp/mcp.template.json` into that panel.
-3. Save and run a coding session.
+2. Create GitHub environment `copilot` and add environment secret `COPILOT_MCP_AZURE_DEVOPS_PAT`.
+3. Copy the contents of `.adom8/mcp/mcp.template.json` into that panel.
+4. Save and run a coding session.
 
 The generated template is schema-valid for GitHub Copilot Coding Agent MCP config.
 
 ## ADO MCP authentication
 
-- The generated `ado` MCP server is configured for PAT auth mode.
-- Create secret `COPILOT_MCP_AZURE_DEVOPS_PAT` in GitHub/Copilot secret store before starting sessions.
+- The generated `ado` MCP server is configured with `--authentication envvar`.
+- It maps `ADO_MCP_AUTH_TOKEN` to `COPILOT_MCP_AZURE_DEVOPS_PAT`.
 - This pipeline can also sync a repository secret with the same name when `COPILOT_MCP_AZURE_DEVOPS_PAT` is provided as a pipeline secret variable.
+
+## Coding Agent network policy (if firewall is enabled)
+
+Allowlist the Azure DevOps domains used by MCP tool calls:
+
+- `dev.azure.com`
+- `vssps.dev.azure.com`
+- `vsrm.dev.azure.com`
 
 ## Phase 1 ADOm8 stage bridge endpoints
 
@@ -531,19 +540,24 @@ Use `mcp.template.json` as a starting point in your MCP client and provide crede
                     "args": [
                         "-y",
                         "@azure-devops/mcp",
-                        args.ado_org,
-                        "-a",
-                        "pat"
+                        org_name,
+                        "--authentication",
+                        "envvar",
+                        "-d",
+                        "core",
+                        "-d",
+                        "work-items"
                     ],
                     "tools": ["*"],
                     "env": {
-                        "AZURE_DEVOPS_EXT_PAT": "COPILOT_MCP_AZURE_DEVOPS_PAT"
+                        "ADO_MCP_AUTH_TOKEN": "COPILOT_MCP_AZURE_DEVOPS_PAT"
                     }
                 }
             },
             "notes": [
                 "Schema-valid MCP template for GitHub Copilot Coding Agent.",
-                "For ADO MCP server auth, create Copilot environment secret COPILOT_MCP_AZURE_DEVOPS_PAT.",
+                "For ADO MCP server auth, create Copilot environment secret COPILOT_MCP_AZURE_DEVOPS_PAT and map to ADO_MCP_AUTH_TOKEN.",
+                "If Coding Agent internet firewall is enabled, allowlist dev.azure.com, vssps.dev.azure.com, vsrm.dev.azure.com.",
                 f"ADOm8 stage bridge REST endpoints (non-MCP): {function_base_url}/mcp/set-stage|add-comment|stage-event?code=<FUNCTION_KEY>"
             ]
         }, indent=2)

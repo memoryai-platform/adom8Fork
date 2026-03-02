@@ -80,6 +80,32 @@ public sealed class CodingAgentService : IAgentService
 
             var workItem = await _adoClient.GetWorkItemAsync(task.WorkItemId, cancellationToken);
 
+            if (workItem.AutonomyLevel <= 1)
+            {
+                var shortReason = "Autonomy level 1 is plan-only. Coding execution was blocked and no code changes were made.";
+                await _adoClient.AddWorkItemCommentAsync(workItem.Id,
+                    "<b>🤖 AI Coding Agent — Skipped</b><br/>" +
+                    "Autonomy level 1 allows planning only.<br/>" +
+                    "No code changes were made.<br/>" +
+                    "Moved to Needs Revision so missing details/questions can be resolved before implementation.",
+                    cancellationToken);
+
+                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
+                catch { /* field may not exist yet */ }
+
+                await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
+
+                await _activityLogger.LogAsync("Coding", task.WorkItemId,
+                    $"Skipped — {shortReason}", "warning", cancellationToken);
+
+                _logger.LogWarning(
+                    "Coding agent skipped WI-{WorkItemId}: autonomy level {AutonomyLevel} blocks coding",
+                    task.WorkItemId,
+                    workItem.AutonomyLevel);
+
+                return AgentResult.Ok(0, 0m);
+            }
+
             var preflightState = new StoryState
             {
                 WorkItemId = task.WorkItemId,

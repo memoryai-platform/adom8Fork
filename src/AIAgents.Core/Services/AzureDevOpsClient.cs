@@ -607,8 +607,10 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         if (string.IsNullOrWhiteSpace(value))
             return 3;
 
+        var normalized = value.Trim();
+
         // Try parsing leading integer (handles "3 - Review & Pause" and plain "3")
-        var span = value.AsSpan().TrimStart();
+        var span = normalized.AsSpan().TrimStart();
         var end = 0;
         while (end < span.Length && char.IsDigit(span[end])) end++;
 
@@ -616,8 +618,31 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
             return level;
 
         // Fallback: try parsing as double (legacy integer field returned as JSON number)
-        if (double.TryParse(value, out var d) && d >= 1 && d <= 5)
+        if (double.TryParse(normalized, out var d) && d >= 1 && d <= 5)
             return (int)d;
+
+        // Fallback: textual labels from legacy/custom text fields
+        var lowered = normalized.ToLowerInvariant();
+        if (lowered.Contains("plan only", StringComparison.Ordinal)
+            || (lowered.Contains("plan", StringComparison.Ordinal) && lowered.Contains("only", StringComparison.Ordinal)))
+            return 1;
+
+        if (lowered.Contains("code only", StringComparison.Ordinal)
+            || (lowered.Contains("code", StringComparison.Ordinal) && lowered.Contains("only", StringComparison.Ordinal)))
+            return 2;
+
+        if (lowered.Contains("review", StringComparison.Ordinal)
+            || lowered.Contains("pause", StringComparison.Ordinal))
+            return 3;
+
+        if (lowered.Contains("auto-merge", StringComparison.Ordinal)
+            || lowered.Contains("auto merge", StringComparison.Ordinal))
+            return 4;
+
+        if (lowered.Contains("full autonomy", StringComparison.Ordinal)
+            || lowered.Contains("fully autonomous", StringComparison.Ordinal)
+            || lowered.Contains("full auto", StringComparison.Ordinal))
+            return 5;
 
         return 3; // Default
     }

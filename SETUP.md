@@ -106,10 +106,31 @@ Once the pipeline completes successfully:
        - This governance policy is a manual org-admin control and is not reliably enforced by the onboarding pipeline.
 5. **Register MCP Servers in GitHub Copilot (Required for MCP Tools)**:
    - Open GitHub repository settings → **Copilot** → **Coding agent** → **MCP configuration**.
-   - Copy/paste `.adom8/mcp/mcp.template.json` into the MCP configuration box.
-   - If you enable the optional `ado` MCP server, ensure secret `COPILOT_MCP_AZURE_DEVOPS_PAT` is available in Copilot session secret context.
-   - Onboarding auto-syncs a repository secret with this name; value comes from `COPILOT_MCP_AZURE_DEVOPS_PAT` when supplied, otherwise falls back to `ONBOARDING_PAT`.
-   - This UI registration step is manual and required; pipeline bootstrap prepares the config file but cannot populate the GitHub MCP textbox via API.
+    - Create a GitHub environment named **`copilot`** and add environment secret **`COPILOT_MCP_AZURE_DEVOPS_PAT`** (required for ADO MCP in offloaded Coding Agent sessions).
+    - Copy/paste `.adom8/mcp/mcp.template.json` into the MCP configuration box.
+    - Ensure the `ado` server uses **envvar auth** and maps `ADO_MCP_AUTH_TOKEN` to `COPILOT_MCP_AZURE_DEVOPS_PAT`, for example:
+
+       ```json
+       {
+          "mcpServers": {
+             "ado": {
+                "type": "local",
+                "command": "npx",
+                "args": ["-y", "@azure-devops/mcp", "<ado-org-name>", "--authentication", "envvar", "-d", "core", "-d", "work-items"],
+                "tools": ["*"],
+                "env": {
+                   "ADO_MCP_AUTH_TOKEN": "COPILOT_MCP_AZURE_DEVOPS_PAT"
+                }
+             }
+          }
+       }
+       ```
+
+       Notes:
+       - Use **organization name only** (`contoso`), not full URL (`https://dev.azure.com/contoso`) for `@azure-devops/mcp` args.
+       - If Coding Agent internet firewall is enabled, add allowlist entries: `dev.azure.com`, `vssps.dev.azure.com`, `vsrm.dev.azure.com`.
+    - Onboarding auto-syncs repository secret naming (`COPILOT_MCP_AZURE_DEVOPS_PAT`) from pipeline input when supplied; UI wiring to Copilot environment + MCP textbox remains manual.
+    - This UI registration step is manual and required; pipeline bootstrap prepares files but cannot populate the GitHub MCP textbox via API.
 6. **Access the Dashboard**: Your dashboard is available at the Static Web App URL (found in the pipeline summary). Use the `AdoDashboardKey` you provided to log in. The Static Web App resource name is derived from your `AZURE_DEVOPS_PROJECT`, but Azure still generates the default `*.azurestaticapps.net` hostname. Configure a custom domain in the Azure Portal if you want a friendly URL.
 7. **Default Field Values (Auto-Enforced)**: The pipeline now enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
 8. **Start Using ADOm8**: Visit [adom8.dev/get-started](https://adom8.dev/get-started) for instructions on creating your first story and triggering the AI agent.
@@ -127,6 +148,9 @@ Once the pipeline completes successfully:
 - Installing MCP clients/tools on developer machines.
 - Interactive sign-in/authorization flows inside MCP clients.
 - Organization/admin approvals that require UI confirmation in GitHub or Azure DevOps.
+- Creating/updating GitHub **copilot** environment secrets for Coding Agent MCP servers.
+- Updating GitHub **Copilot → Coding agent → MCP configuration** JSON in repository settings.
+- Coding Agent internet firewall allowlist entries when outbound rules are restricted.
 
 Use the generated `.adom8/mcp/*` files as your baseline and complete local client wiring manually.
 

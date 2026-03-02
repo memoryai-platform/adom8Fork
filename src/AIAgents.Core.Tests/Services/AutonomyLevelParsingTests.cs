@@ -53,10 +53,21 @@ public sealed class AutonomyLevelParsingTests
     [InlineData("99")]
     [InlineData("-1")]
     [InlineData("abc")]
-    [InlineData("Plan Only")]
     public void ParseInvalidValues_ReturnsDefault3(string value)
     {
         Assert.Equal(3, AzureDevOpsClient.ParseAutonomyLevel(value));
+    }
+
+    [Theory]
+    [InlineData("Plan Only", 1)]
+    [InlineData("Code Only", 2)]
+    [InlineData("Review & Pause", 3)]
+    [InlineData("Auto-Merge", 4)]
+    [InlineData("Full Autonomy", 5)]
+    [InlineData("fully autonomous", 5)]
+    public void ParseTextLabels_ReturnsCorrectLevel(string value, int expected)
+    {
+        Assert.Equal(expected, AzureDevOpsClient.ParseAutonomyLevel(value));
     }
 
     [Fact]

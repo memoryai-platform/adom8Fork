@@ -260,6 +260,34 @@ public sealed class CodingAgentServiceTests
         Assert.True(result.Success);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_AutonomyLevel1_SkipsCodingAndMovesToNeedsRevision()
+    {
+        var wi = MockAIResponses.SampleWorkItem(autonomyLevel: 1);
+        _adoMock.Setup(a => a.GetWorkItemAsync(wi.Id, It.IsAny<CancellationToken>())).ReturnsAsync(wi);
+
+        var service = CreateService(new CopilotOptions { Enabled = true, Mode = "Always" });
+        var result = await service.ExecuteAsync(new AgentTask { WorkItemId = wi.Id, AgentType = AgentType.Coding });
+
+        Assert.True(result.Success);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(wi.Id, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(
+            wi.Id,
+            It.Is<string>(comment =>
+                comment.Contains("Autonomy level 1", StringComparison.OrdinalIgnoreCase) &&
+                comment.Contains("No code changes were made", StringComparison.OrdinalIgnoreCase) &&
+                comment.Contains("Needs Revision", StringComparison.OrdinalIgnoreCase)),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        _gitMock.Verify(g => g.EnsureBranchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Never);
+        _aiClientMock.Verify(a => a.CompleteWithToolsAsync(
+            It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<IReadOnlyList<ToolDefinition>>(),
+            It.IsAny<Func<ToolCall, CancellationToken, Task<string>>>(),
+            It.IsAny<AgenticOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // ========== PROMPT BUILDING TESTS ==========
 
     [Fact]

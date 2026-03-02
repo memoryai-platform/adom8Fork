@@ -777,6 +777,46 @@ Generate a webhook secret with: `openssl rand -hex 32` (or `python -c "import se
 
 > **Tip:** Get your function key from the Azure Portal: Function App → Functions → CopilotBridgeWebhook → Function Keys, or via `az functionapp function keys list --name <APP> --resource-group ai-agents-rg --function-name CopilotBridgeWebhook`.
 
+**Step 2b (Optional but Recommended): Enable ADO MCP tools in GitHub Copilot Coding Agent**
+
+If you plan to run offloaded GitHub Agent sessions that update ADO directly (for example: move work item state, set `AI Last Agent`, add comments), configure ADO MCP in GitHub Copilot Coding Agent:
+
+1. GitHub repo → **Settings → Environments** → create environment `copilot`.
+2. Add environment secret `COPILOT_MCP_AZURE_DEVOPS_PAT` (value = your ADO PAT).
+3. GitHub repo → **Settings → Copilot → Coding agent** → **MCP configuration**.
+4. Use an `ado` server block that explicitly uses envvar auth:
+
+```json
+{
+  "mcpServers": {
+    "ado": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure-devops/mcp",
+        "<ado-org-name>",
+        "--authentication",
+        "envvar",
+        "-d",
+        "core",
+        "-d",
+        "work-items"
+      ],
+      "tools": ["*"],
+      "env": {
+        "ADO_MCP_AUTH_TOKEN": "COPILOT_MCP_AZURE_DEVOPS_PAT"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Use org name only (e.g., `my-credit-plan`), not full URL (`https://dev.azure.com/my-credit-plan`) in args.
+- If Coding Agent internet firewall is enabled, add allowlist entries: `dev.azure.com`, `vssps.dev.azure.com`, `vsrm.dev.azure.com`.
+- Start a **new** Agent session after changing MCP config or Copilot environment secrets.
+
 **Step 3: Verify the integration:**
 
 1. Create a user story in ADO with high story points (≥ your threshold)

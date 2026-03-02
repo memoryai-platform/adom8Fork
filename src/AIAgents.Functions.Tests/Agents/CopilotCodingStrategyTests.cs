@@ -16,12 +16,14 @@ public sealed class CopilotCodingStrategyTests
         string branchName = "feature/US-12345",
         string? description = "As a user, I want to register with my email.",
         string? acceptanceCriteria = "- Users can register\n- Emails validated",
-        string codingGuidelines = "Use C# conventions. Follow SOLID principles.")
+        string codingGuidelines = "Use C# conventions. Follow SOLID principles.",
+        int autonomyLevel = 3)
     {
         var wi = MockAIResponses.SampleWorkItem(
             id: workItemId,
             description: description,
-            acceptanceCriteria: acceptanceCriteria);
+            acceptanceCriteria: acceptanceCriteria,
+            autonomyLevel: autonomyLevel);
 
         return new CodingContext
         {
@@ -168,6 +170,16 @@ public sealed class CopilotCodingStrategyTests
     }
 
     [Fact]
+    public void BuildIssueBody_ContainsAdoFirstCompletionProtocol()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains("Job #1 keep Azure DevOps board/fields/state accurate and current", body);
+        Assert.Contains("No task is complete until you set ADO fields/state and add completion comment, then re-read and print final values", body);
+    }
+
+    [Fact]
     public void BuildIssueBody_ContainsOrchestrationContractInstructions()
     {
         var context = CreateContext();
@@ -184,6 +196,50 @@ public sealed class CopilotCodingStrategyTests
         var body = CopilotCodingStrategy.BuildIssueBody(context);
 
         Assert.Contains($"AI Minimum Review Score:** {context.WorkItem.MinimumReviewScore}", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ContainsAutonomyLevel()
+    {
+        var context = CreateContext(autonomyLevel: 4);
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains("AI Autonomy Level:** 4", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ContainsAutonomyNormalizationGuidance()
+    {
+        var context = CreateContext(autonomyLevel: 3);
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains("Autonomy Normalization", body);
+        Assert.Contains("1/Plan Only", body);
+        Assert.Contains("5/Full Autonomy", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_AutonomyLevel1_IncludesPlanningOnlyGuardrail()
+    {
+        var context = CreateContext(autonomyLevel: 1);
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains("## Autonomy Level 1 Guardrail", body);
+        Assert.Contains("Do not implement code changes", body);
+        Assert.Contains("full deep analysis", body);
+        Assert.Contains("consolidated Needs Revision comment", body);
+        Assert.Contains("No further info needed.", body);
+        Assert.Contains("before presenting your brief proposed plan", body);
+        Assert.Contains("Needs Revision", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ContainsAutonomyGateForContinueToCoding()
+    {
+        var context = CreateContext(autonomyLevel: 3);
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains("If score meets/exceeds minimum and Autonomy Level > 1, continue to Coding", body);
     }
 
     // ========== AGENT NAME TESTS ==========

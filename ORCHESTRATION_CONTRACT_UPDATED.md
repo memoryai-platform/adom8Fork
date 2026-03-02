@@ -168,6 +168,13 @@ Skipping a stage is only permitted with explicit repository-owner approval. Each
 
 This repository uses `AI Minimum Review Score` as a **Planning readiness threshold**.
 
+`AI Autonomy Level` may appear as either numeric values or text labels and must be treated equivalently:
+- `1` / `Plan Only`
+- `2` / `Code Only`
+- `3` / `Review & Pause`
+- `4` / `Auto-Merge`
+- `5` / `Full Autonomy`
+
 ### Score range
 - Integer from `0` to `100`.
 
@@ -183,11 +190,27 @@ This repository uses `AI Minimum Review Score` as a **Planning readiness thresho
 2. Compute `Story Readiness Score`.
 3. If `Story Readiness Score < AI Minimum Review Score`:
    - Move work item to `Needs Revision`
-   - Add full blocker/question list
+   - Post one consolidated `Needs Revision` comment with all blockers, missing details, and clarifying questions
    - Do not start Coding
-4. If score meets/exceeds minimum:
+4. If autonomy is level `1` (`Plan Only`):
+   - Perform a full deep analysis of the entire story (description, acceptance criteria, comments, dependencies) before deciding readiness
+   - Do not implement code changes
+   - Post one consolidated `Needs Revision` comment with all blocking questions and a brief proposed plan (3-5 bullets)
+   - If no blockers remain after analysis, include the exact line: `No further info needed.` before presenting your brief proposed plan.
+   - Move work item to `Needs Revision`
+5. If score meets/exceeds minimum and Autonomy Level > 1:
    - Continue to Coding
    - Post questions discovered and assumptions/choices used to proceed
+
+### ADO Board Priority Rule (non-negotiable)
+1. **Job #1:** Keep Azure DevOps board and fields up to date (`System.State`, `Custom.CurrentAIAgent`, `Custom.LastAgent`, stage evidence comments/events).
+2. **Job #2:** Perform planning/coding/review work.
+3. **Completion protocol:** **No task is complete until you set ADO fields/state and add completion comment, then re-read and print final values.**
+4. For completion comments, use readable markdown sections and bullets:
+   - `## Outcome`
+   - `## ADO Updates Applied`
+   - `## Evidence`
+   - `## Final ADO Values` (state + agent fields after re-read)
 
 ---
 

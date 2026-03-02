@@ -101,8 +101,25 @@ Click **Run**. The pipeline will execute the following stages:
 5. **Register MCP Servers in GitHub Copilot (Required for MCP tools)**:
    - Open GitHub repository settings → **Copilot** → **Coding agent** → **MCP configuration**.
    - Copy/paste `.adom8/mcp/mcp.template.json` from your repo.
-   - Ensure secret `COPILOT_MCP_AZURE_DEVOPS_PAT` is available in Copilot session secret context.
-   - Onboarding auto-syncs this secret name in the repo; value comes from `COPILOT_MCP_AZURE_DEVOPS_PAT` when provided, otherwise `ONBOARDING_PAT` is used.
+    - Create a GitHub environment named **`copilot`** and add environment secret **`COPILOT_MCP_AZURE_DEVOPS_PAT`**.
+    - Ensure the `ado` server in MCP config uses `--authentication envvar` and maps:
+
+       ```json
+       "env": {
+          "ADO_MCP_AUTH_TOKEN": "COPILOT_MCP_AZURE_DEVOPS_PAT"
+       }
+       ```
+
+    - Recommended `ado` args pattern:
+
+       ```json
+       ["-y", "@azure-devops/mcp", "<ado-org-name>", "--authentication", "envvar", "-d", "core", "-d", "work-items"]
+       ```
+
+       Notes:
+       - Use org name only (e.g., `my-credit-plan`), not full URL.
+       - If Coding Agent internet firewall is enabled, allowlist: `dev.azure.com`, `vssps.dev.azure.com`, `vsrm.dev.azure.com`.
+    - Onboarding auto-syncs repository secret naming; value comes from `COPILOT_MCP_AZURE_DEVOPS_PAT` when provided, otherwise `ONBOARDING_PAT` is used.
 6. **Static Web App URL Note**: The Static Web App resource name is derived from your ADO project name, but Azure still assigns the default `*.azurestaticapps.net` hostname. Use a custom domain if you want a friendly URL.
 7. **Default Field Values (Auto-Enforced)**: The pipeline enforces `Custom.AutonomyLevel` as a picklist (`1-5`) with default `3 - Review & Pause`, and sets `Custom.AIMinimumReviewScore` default to `85` for User Story work items.
 

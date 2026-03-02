@@ -113,7 +113,9 @@ public sealed class OrchestratorWebhook
         // Determine the new state — ONLY from an explicit state change, never the current state.
         // Reading current state from revision fields caused infinite loops: any ADO update
         // (comment, field change) while WI was in a mapped state would re-trigger the agent.
-        var newState = payload.Resource.Fields?.State?.NewValue;
+        var stateChange = payload.Resource.Fields?.State;
+        var newState = stateChange?.NewValue;
+        var oldState = stateChange?.OldValue;
 
         if (string.IsNullOrEmpty(newState) || !s_stateToAgent.TryGetValue(newState, out var agentType))
         {
@@ -178,7 +180,11 @@ public sealed class OrchestratorWebhook
                 workItemId);
         }
 
-        if (agentType == AgentType.Planning &&
+        var shouldResumeFromCurrentAgent =
+            agentType == AgentType.Planning &&
+            string.Equals(oldState, AIPipelineNames.ProcessingState, StringComparison.OrdinalIgnoreCase);
+
+        if (shouldResumeFromCurrentAgent &&
             !string.IsNullOrWhiteSpace(currentAIAgentValue) &&
             s_currentAgentToAgentType.TryGetValue(currentAIAgentValue.Trim(), out var requestedAgentType))
         {
@@ -188,6 +194,15 @@ public sealed class OrchestratorWebhook
                 workItemId,
                 agentType,
                 currentAIAgentValue);
+        }
+        else if (agentType == AgentType.Planning && !string.IsNullOrWhiteSpace(currentAIAgentValue))
+        {
+            _logger.LogInformation(
+                "Ignoring stale Current AI Agent='{CurrentAIAgent}' for WI-{WorkItemId} because state transitioned from '{OldState}' to '{NewState}'",
+                currentAIAgentValue,
+                workItemId,
+                oldState ?? "(unknown)",
+                newState ?? "(unknown)");
         }
 
         if (agentType == AgentType.Planning)
@@ -207,9 +222,8 @@ public sealed class OrchestratorWebhook
                     workItemId);
             }
 
-            agentType = AgentType.Coding;
             _logger.LogInformation(
-                "AI Agent trigger for WI-{WorkItemId} seeded Planning visibility and routed to Coding (GitHub orchestrator path)",
+                "AI Agent trigger for WI-{WorkItemId} seeded Planning visibility and will enqueue Planning",
                 workItemId);
         }
 
