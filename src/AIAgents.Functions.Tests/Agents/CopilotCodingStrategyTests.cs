@@ -163,6 +163,27 @@ public sealed class CopilotCodingStrategyTests
         Assert.Contains("Follow the implementation plan", body);
         Assert.Contains("Match existing code style", body);
         Assert.Contains("Ensure correct syntax", body);
+        Assert.Contains("Do NOT perform deployment directly", body);
+        Assert.Contains("Ready for Review", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ContainsOrchestrationContractInstructions()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains(".agent/ORCHESTRATION_CONTRACT.md", body);
+        Assert.Contains("Planning → Coding → Testing → Review → Documentation", body);
+    }
+
+    [Fact]
+    public void BuildIssueBody_ContainsDynamicMinimumReviewScore()
+    {
+        var context = CreateContext();
+        var body = CopilotCodingStrategy.BuildIssueBody(context);
+
+        Assert.Contains($"AI Minimum Review Score:** {context.WorkItem.MinimumReviewScore}", body);
     }
 
     // ========== AGENT NAME TESTS ==========

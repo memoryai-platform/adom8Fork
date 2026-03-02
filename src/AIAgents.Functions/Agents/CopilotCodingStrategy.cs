@@ -585,7 +585,9 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
 
         var kickoffComment =
             $"@{kickoffAgent} Please start this implementation now. " +
-            $"Use `{context.BranchName}` as the base branch and open a PR back to `{context.BranchName}` when complete.";
+            $"Use `{context.BranchName}` as the base branch and open a PR back to `{context.BranchName}` when complete. " +
+            "Before making changes, read `.agent/ORCHESTRATION_CONTRACT.md` and follow it as the authoritative stage protocol. " +
+            "Complete Planning through Documentation, then mark the PR Ready for Review and signal Deployment via MCP stage update.";
 
         var payload = new { body = kickoffComment };
         var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -623,8 +625,15 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         sb.AppendLine($"Implement the changes for this story. The base branch is `{context.BranchName}`.");
         sb.AppendLine("Create your working branch from this base and target your PR back to it.");
         sb.AppendLine();
+        sb.AppendLine("1. Read `.agent/ORCHESTRATION_CONTRACT.md` FIRST. This file is authoritative for stage orchestration and Azure DevOps MCP updates.");
+        sb.AppendLine("2. Read any other relevant `.agent/*` files needed for this story before implementing.");
+        sb.AppendLine("3. Operate as orchestrator through Planning → Coding → Testing → Review → Documentation. Deployment is handled by Azure after you signal Deployment stage readiness.");
+        sb.AppendLine("4. When implementation and documentation are complete, ensure the PR is marked Ready for Review (not draft).");
+        sb.AppendLine("5. Record a review score and compare it against the minimum score below. If review score is below minimum, move the story to Needs Revision per orchestration contract.");
+        sb.AppendLine();
         sb.AppendLine($"> **ADO Work Item:** US-{context.WorkItemId}");
         sb.AppendLine($"> **Title:** {context.WorkItem.Title}");
+        sb.AppendLine($"> **AI Minimum Review Score:** {context.WorkItem.MinimumReviewScore}");
         if (!string.IsNullOrWhiteSpace(agentName))
         {
             sb.AppendLine($"> **Assigned Agent:** @{agentName}");
@@ -699,6 +708,8 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
         sb.AppendLine("- Match existing code style and conventions");
         sb.AppendLine("- Do NOT modify test files, CI/CD workflows, or infrastructure (Terraform)");
         sb.AppendLine("- Ensure correct syntax, imports, and compilation");
+        sb.AppendLine("- Keep the PR in draft while implementing, then mark Ready for Review when Documentation stage is complete");
+        sb.AppendLine("- Do NOT perform deployment directly; signal Deployment stage readiness via MCP and hand off to Azure Deployment agent");
         sb.AppendLine($"- Target branch for your PR: `{context.BranchName}`");
 
         return sb.ToString();

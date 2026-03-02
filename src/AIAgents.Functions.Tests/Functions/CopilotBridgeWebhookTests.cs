@@ -76,7 +76,8 @@ public sealed class CopilotBridgeWebhookTests
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile(
             action: "opened",
-            prTitle: "Feature implementation");
+            prTitle: "Feature implementation",
+            isDraft: false);
 
         Assert.False(result);
     }
@@ -86,7 +87,8 @@ public sealed class CopilotBridgeWebhookTests
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile(
             action: "edited",
-            prTitle: "Feature implementation");
+            prTitle: "Feature implementation",
+            isDraft: false);
 
         Assert.True(result);
     }
@@ -96,7 +98,8 @@ public sealed class CopilotBridgeWebhookTests
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile(
             action: "synchronize",
-            prTitle: "[WIP] Feature implementation");
+            prTitle: "[WIP] Feature implementation",
+            isDraft: false);
 
         Assert.False(result);
     }
@@ -106,9 +109,21 @@ public sealed class CopilotBridgeWebhookTests
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile(
             action: "ready_for_review",
-            prTitle: "Feature implementation");
+            prTitle: "Feature implementation",
+            isDraft: false);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public void IsReadyToReconcile_DraftPr_False()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile(
+            action: "edited",
+            prTitle: "Feature implementation",
+            isDraft: true);
+
+        Assert.False(result);
     }
 
     // ========== CHECKPOINT ENFORCEMENT TESTS ==========

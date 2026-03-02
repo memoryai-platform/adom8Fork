@@ -131,22 +131,23 @@ public sealed class CopilotBridgeWebhook
         var prTitle = pr.GetProperty("title").GetString() ?? "";
         var prBody = pr.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() ?? "" : "";
         var copilotBranch = pr.GetProperty("head").GetProperty("ref").GetString() ?? "";
+        var isDraft = pr.TryGetProperty("draft", out var draftProp) && draftProp.ValueKind == JsonValueKind.True;
         var baseBranch = pr.TryGetProperty("base", out var baseProp)
             ? baseProp.TryGetProperty("ref", out var baseRef) ? baseRef.GetString() ?? "" : ""
             : "";
 
         // ── Update gating ──
         var notWip = !prTitle.Contains("[WIP]", StringComparison.OrdinalIgnoreCase);
-        var isReady = IsReadyToReconcile(action, prTitle);
+        var isReady = IsReadyToReconcile(action, prTitle, isDraft);
 
         _logger.LogInformation(
-            "PR #{PrNumber} action={Action}: wip={HasWip}, ready={IsReady}",
-            prNumber, action, !notWip, isReady);
+            "PR #{PrNumber} action={Action}: wip={HasWip}, draft={IsDraft}, ready={IsReady}",
+            prNumber, action, !notWip, isDraft, isReady);
 
         if (!isReady)
         {
             _logger.LogInformation(
-                "PR #{PrNumber} is not ready — waiting for update action and non-[WIP] title",
+                "PR #{PrNumber} is not ready — waiting for update action, non-[WIP] title, and non-draft state",
                 prNumber);
             var waitResponse = req.CreateResponse(HttpStatusCode.OK);
             await waitResponse.WriteStringAsync(
@@ -385,6 +386,43 @@ public sealed class CopilotBridgeWebhook
             if (!passed)
             {
                 var missingLabel = string.Join(", ", missing);
+                var onlyCurrentAiAgentMissing = missing.Count == 1
+                    && string.Equals(missing[0], CheckpointCurrentAiAgent, StringComparison.OrdinalIgnoreCase);
+
+                if (onlyCurrentAiAgentMissing)
+                {
+                    var warningMessage = $"Copilot handoff proceeding for US-{workItemId} with warning: missing optional checkpoint update {CheckpointCurrentAiAgent}.";
+
+                    try
+                    {
+                        await _adoClient.AddWorkItemCommentAsync(workItemId,
+                            $"⚠️ <b>Copilot completion checkpoint warning</b><br/>" +
+                            $"PR: #{prNumber}<br/>" +
+                            $"Missing update: {CheckpointCurrentAiAgent}<br/>" +
+                            "Handoff will continue. Verify Current AI Agent field permissions/configuration.",
+                            cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Failed to post non-blocking checkpoint warning comment for WI-{WorkItemId}",
+                            workItemId);
+                    }
+
+                    await _activityLogger.LogAsync(
+                        "Coding",
+                        workItemId,
+                        warningMessage,
+                        "warning",
+                        cancellationToken);
+
+                    _logger.LogWarning(
+                        "Copilot checkpoint warning for WI-{WorkItemId}: {Missing}. Continuing handoff.",
+                        workItemId,
+                        missingLabel);
+                }
+                else
+                {
                 var failMessage = $"Checkpoint enforcement blocked Copilot handoff for US-{workItemId}. Missing required updates: {missingLabel}.";
 
                 delegation.Status = _copilotOptions.CheckpointFailHard ? "Failed" : "Pending";
@@ -426,6 +464,7 @@ public sealed class CopilotBridgeWebhook
                 }
 
                 return;
+                }
             }
         }
 
@@ -433,18 +472,6 @@ public sealed class CopilotBridgeWebhook
         // cost 1 GitHub premium request regardless of output size.
         var tokensForLog = 1;
         var costForLog = 0m; // No direct API cost — included in GitHub subscription
-
-        // Enqueue Deployment agent
-        var nextTask = new AgentTask
-        {
-            WorkItemId = workItemId,
-            AgentType = AgentType.Deployment,
-            CorrelationId = delegation.CorrelationId,
-            TriggerSource = nameof(CopilotBridgeWebhook),
-            ResumeFromStage = "Deployment",
-            HandoffNote = $"Copilot reconciliation complete for PR #{prNumber}"
-        };
-        await _taskQueue.EnqueueAsync(nextTask, cancellationToken);
 
         delegation.Status = "Completed";
         delegation.CopilotPrNumber = prNumber;
@@ -454,7 +481,7 @@ public sealed class CopilotBridgeWebhook
         try
         {
             await _activityLogger.LogAsync("Coding", workItemId,
-                $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Local Testing/Review/Documentation skipped → Deployment. (1 premium credit)",
+                $"Copilot coding agent completed successfully — {metrics.FilesChanged} files, +{metrics.LinesAdded}/-{metrics.LinesDeleted} lines, {metrics.DurationMinutes:F1}m, {metrics.CommitCount} commits. Awaiting MCP stage signal for Deployment handoff. (1 premium credit)",
                 tokensForLog, costForLog, "info", cancellationToken);
         }
         catch (Exception ex)
@@ -465,7 +492,7 @@ public sealed class CopilotBridgeWebhook
         }
 
         _logger.LogInformation(
-            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, pipeline resumed (local Testing/Review/Documentation skipped → Deployment)",
+            "Copilot bridge reconciled PR #{PrNumber} for WI-{WorkItemId} — {Files} files, awaiting MCP Deployment signal",
             prNumber, workItemId, reconciledFiles.Count);
     }
 
@@ -479,7 +506,7 @@ public sealed class CopilotBridgeWebhook
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
 
-    internal static bool IsReadyToReconcile(string action, string prTitle)
+    internal static bool IsReadyToReconcile(string action, string prTitle, bool isDraft)
     {
         if (string.IsNullOrWhiteSpace(action))
         {
@@ -487,6 +514,11 @@ public sealed class CopilotBridgeWebhook
         }
 
         if (string.Equals(action, "opened", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (isDraft)
         {
             return false;
         }

@@ -125,13 +125,10 @@ public sealed class OrchestratorWebhook
 
         // Validate work item content before queuing
         string? currentAIAgentValue = null;
-        var isInitializeCodebaseStory = false;
         try
         {
             var workItem = await _adoClient.GetWorkItemAsync(workItemId, cancellationToken);
             currentAIAgentValue = workItem.CurrentAIAgent;
-            isInitializeCodebaseStory = workItem.Tags.Any(tag =>
-                string.Equals(tag, AIPipelineNames.InitializeCodebaseTag, StringComparison.OrdinalIgnoreCase));
             var validation = _inputValidator.ValidateWorkItem(workItem);
 
             if (!validation.IsValid)
@@ -193,19 +190,26 @@ public sealed class OrchestratorWebhook
                 currentAIAgentValue);
         }
 
-            if (agentType == AgentType.Planning && isInitializeCodebaseStory)
-            {
-                agentType = AgentType.Coding;
-                _logger.LogInformation(
-                "AI Agent trigger for WI-{WorkItemId} detected InitializeCodebase tag; routing directly to Coding",
-                workItemId);
-            }
-
         if (agentType == AgentType.Planning)
         {
+            try
+            {
+                await _adoClient.UpdateWorkItemFieldAsync(
+                    workItemId,
+                    CustomFieldNames.Paths.CurrentAIAgent,
+                    AIPipelineNames.CurrentAgentValues.Planning,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to seed Current AI Agent=Planning for WI-{WorkItemId}",
+                    workItemId);
+            }
+
             agentType = AgentType.Coding;
             _logger.LogInformation(
-                "AI Agent trigger for WI-{WorkItemId} routed directly to Coding (GitHub orchestrator path)",
+                "AI Agent trigger for WI-{WorkItemId} seeded Planning visibility and routed to Coding (GitHub orchestrator path)",
                 workItemId);
         }
 

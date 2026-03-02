@@ -110,19 +110,6 @@ public sealed class CodingAgentService : IAgentService
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
                     $"Starting coding ({noCloneStrategyName} strategy, {delegationPathLabel})", "info", cancellationToken);
 
-                try
-                {
-                    await _adoClient.UpdateWorkItemFieldAsync(
-                        workItem.Id,
-                        CustomFieldNames.Paths.CurrentAIAgent,
-                        AIPipelineNames.CurrentAgentValues.Coding,
-                        cancellationToken);
-                }
-                catch
-                {
-                    // best effort
-                }
-
                 var noCloneContext = new CodingContext
                 {
                     WorkItemId = task.WorkItemId,
