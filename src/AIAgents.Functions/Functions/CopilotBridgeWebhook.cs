@@ -33,7 +33,7 @@ namespace AIAgents.Functions.Functions;
 public sealed class CopilotBridgeWebhook
 {
     private const string CheckpointLastAgent = "LastAgent";
-    private const string CheckpointCurrentAiAgent = "CurrentAIAgent";
+    private const string CheckpointCurrentAiAgent = "AICurrentAgent";
     private const string CheckpointCompletionComment = "CompletionComment";
 
     private readonly CopilotOptions _copilotOptions;

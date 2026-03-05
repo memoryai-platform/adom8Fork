@@ -19,7 +19,7 @@ public static class CustomFieldNames
     /// Controls how far the pipeline runs automatically (1-5).
     /// Stored as Picklist(integer).
     /// </summary>
-    public const string AutonomyLevel = "Custom.AutonomyLevel";
+    public const string AutonomyLevel = "Custom.AIAutonomyLevel";
     
     /// <summary>
     /// Minimum review score (0-100) required for auto-merge at Levels 4-5.
@@ -116,7 +116,7 @@ public static class CustomFieldNames
     /// Name of the AI agent currently working this story.
     /// Kept blank when no AI agent is actively processing.
     /// </summary>
-    public const string CurrentAIAgent = "Custom.CurrentAIAgent";
+    public const string CurrentAIAgent = "Custom.AICurrentAgent";
     
     /// <summary>
     /// Number of critical issues found during code review.

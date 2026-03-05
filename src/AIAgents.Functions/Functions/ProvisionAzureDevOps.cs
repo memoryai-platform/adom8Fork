@@ -37,16 +37,16 @@ public sealed class ProvisionAzureDevOps
 
     private const string CurrentAgentPicklistName = "ADOm8 Current AI Agent";
     private const string AutonomyLevelPicklistName = "ADOm8 AI Autonomy Level";
-    private const string DefaultAutonomyLevel = "3";
+    private const string DefaultAutonomyLevel = "3 - Review & Pause";
     private const int DefaultMinimumReviewScore = 85;
 
     private static readonly string[] AutonomyLevelPicklistValues =
     [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
+        "1 - Plan Only",
+        "2 - Code Only",
+        "3 - Review & Pause",
+        "4 - Auto-Merge",
+        "5 - Full Autonomy"
     ];
 
     private static readonly string[] RequiredStates =
@@ -75,27 +75,27 @@ public sealed class ProvisionAzureDevOps
     private static readonly FieldDefinition[] RequiredFields =
     [
         new("AI Minimum Review Score", "Custom.AIMinimumReviewScore", "integer"),
-
-        new("AI Model Tier", "Custom.AIModelTier", "string"),
-        new("AI Planning Model", "Custom.AIPlanningModel", "string"),
-        new("AI Coding Model", "Custom.AICodingModel", "string"),
-        new("AI Testing Model", "Custom.AITestingModel", "string"),
-        new("AI Review Model", "Custom.AIReviewModel", "string"),
-        new("AI Documentation Model", "Custom.AIDocumentationModel", "string"),
-        new("AI Coding Provider", "Custom.AICodingProvider", "string"),
-
-        new("AI Tokens Used", "Custom.AITokensUsed", "integer"),
-        new("AI Cost", "Custom.AICost", "string"),
-        new("AI Complexity", "Custom.AIComplexity", "string"),
-        new("AI Model", "Custom.AIModel", "string"),
-        new("AI Review Score", "Custom.AIReviewScore", "integer"),
-        new("AI Processing Time", "Custom.AIProcessingTime", "integer"),
-        new("AI Files Generated", "Custom.AIFilesGenerated", "integer"),
-        new("AI Tests Generated", "Custom.AITestsGenerated", "integer"),
-        new("AI PR Number", "Custom.AIPRNumber", "integer"),
         new("AI Last Agent", "Custom.AILastAgent", "string"),
-        new("AI Critical Issues", "Custom.AICriticalIssues", "integer"),
-        new("AI Deployment Decision", "Custom.AIDeploymentDecision", "string")
+
+        // TODO: POC — remaining fields commented out for future enhancement
+        // new("AI Model Tier", "Custom.AIModelTier", "string"),
+        // new("AI Planning Model", "Custom.AIPlanningModel", "string"),
+        // new("AI Coding Model", "Custom.AICodingModel", "string"),
+        // new("AI Testing Model", "Custom.AITestingModel", "string"),
+        // new("AI Review Model", "Custom.AIReviewModel", "string"),
+        // new("AI Documentation Model", "Custom.AIDocumentationModel", "string"),
+        // new("AI Coding Provider", "Custom.AICodingProvider", "string"),
+        // new("AI Tokens Used", "Custom.AITokensUsed", "integer"),
+        // new("AI Cost", "Custom.AICost", "string"),
+        // new("AI Complexity", "Custom.AIComplexity", "string"),
+        // new("AI Model", "Custom.AIModel", "string"),
+        // new("AI Review Score", "Custom.AIReviewScore", "integer"),
+        // new("AI Processing Time", "Custom.AIProcessingTime", "integer"),
+        // new("AI Files Generated", "Custom.AIFilesGenerated", "integer"),
+        // new("AI Tests Generated", "Custom.AITestsGenerated", "integer"),
+        // new("AI PR Number", "Custom.AIPRNumber", "integer"),
+        // new("AI Critical Issues", "Custom.AICriticalIssues", "integer"),
+        // new("AI Deployment Decision", "Custom.AIDeploymentDecision", "string")
     ];
 
     private readonly IHttpClientFactory _httpClientFactory;
@@ -284,7 +284,7 @@ public sealed class ProvisionAzureDevOps
                     if (!currentAgentFieldStatus.IsPicklist && !currentAgentPicklistEnforced)
                     {
                         warnings.Add("Current AI Agent exists as a plain text field (textbox). Configure it as a picklist on User Story so the form renders a dropdown.");
-                        additionalManualSteps.Add("In Organization Settings → Boards → Process → User Story → Fields → Current AI Agent, configure allowed values: Planning Agent, Coding Agent, Testing Agent, Review Agent, Documentation Agent, Deployment Agent (default blank). If your process does not allow converting this field to picklist, recreate it as Picklist (string) with reference name Custom.CurrentAIAgent.");
+                        additionalManualSteps.Add("In Organization Settings → Boards → Process → User Story → Fields → AI Current Agent, configure allowed values: Planning Agent, Coding Agent, Testing Agent, Review Agent, Documentation Agent, Deployment Agent (default blank). If your process does not allow converting this field to picklist, recreate it as Picklist (string) with reference name Custom.AICurrentAgent.");
                     }
                 }
             }
@@ -313,7 +313,7 @@ public sealed class ProvisionAzureDevOps
                     else
                     {
                         warnings.Add("Autonomy/Review defaults could not be fully enforced. See warnings for API details.");
-                        additionalManualSteps.Add("In Organization Settings → Process → your inherited process → User Story → Fields, ensure 'AI Autonomy Level' (reference name Custom.AutonomyLevel) exists as Picklist (string) with values 1-5 and default 3.");
+                        additionalManualSteps.Add("In Organization Settings → Process → your inherited process → User Story → Fields, ensure 'AI Autonomy Level' (reference name Custom.AIAutonomyLevel) exists as Picklist (string) with values 1-5 and default '3 - Review & Pause'.");
                     }
                 }
             }
@@ -777,7 +777,7 @@ public sealed class ProvisionAzureDevOps
         var payload = new JsonObject
         {
             ["referenceName"] = CustomFieldNames.CurrentAIAgent,
-            ["name"] = "Current AI Agent",
+            ["name"] = "AI Current Agent",
             ["description"] = "Active AI owner for this story (blank means no AI agent currently working)",
             ["type"] = "picklistString",
             ["required"] = false,
@@ -907,7 +907,7 @@ public sealed class ProvisionAzureDevOps
 
         if (!ensuredAutonomyBaseField)
         {
-            warnings.Add("Could not ensure global AI Autonomy Level base field as picklist. If Custom.AutonomyLevel exists as textbox/string, delete and recreate it as Picklist (string).");
+            warnings.Add("Could not ensure global AI Autonomy Level base field as picklist. If Custom.AIAutonomyLevel exists as textbox/string, delete and recreate it as Picklist (string).");
             return false;
         }
 
@@ -1346,7 +1346,7 @@ public sealed class ProvisionAzureDevOps
 
         var fallbackCreated = await TryCreateFieldAsync(
             client,
-            new FieldDefinition("Current AI Agent", CustomFieldNames.CurrentAIAgent, "string"),
+            new FieldDefinition("AI Current Agent", CustomFieldNames.CurrentAIAgent, "string"),
             cancellationToken);
 
         if (!fallbackCreated)
