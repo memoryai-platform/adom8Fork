@@ -33,7 +33,7 @@ public sealed class CodingAgentService : IAgentService
 {
     private readonly IAIClientFactory _aiClientFactory;
     private readonly IAzureDevOpsClient _adoClient;
-    private readonly IGitOperations _gitOps;
+    private readonly IGitHubApiContextService _githubContext;
     private readonly IStoryContextFactory _contextFactory;
     private readonly ICodebaseContextProvider _codebaseContext;
     private readonly ILogger<CodingAgentService> _logger;
@@ -43,11 +43,12 @@ public sealed class CodingAgentService : IAgentService
     private readonly ICopilotDelegationService _delegationService;
     private readonly IOptions<GitHubOptions> _githubOptions;
     private readonly IOptions<CopilotOptions> _copilotOptionsAccessor;
+    private readonly IHttpClientFactory? _httpClientFactory;
 
     public CodingAgentService(
         IAIClientFactory aiClientFactory,
         IAzureDevOpsClient adoClient,
-        IGitOperations gitOps,
+        IGitHubApiContextService githubContext,
         IStoryContextFactory contextFactory,
         ICodebaseContextProvider codebaseContext,
         ILogger<CodingAgentService> logger,
@@ -55,11 +56,12 @@ public sealed class CodingAgentService : IAgentService
         IActivityLogger activityLogger,
         IOptions<CopilotOptions> copilotOptions,
         ICopilotDelegationService delegationService,
-        IOptions<GitHubOptions> githubOptions)
+        IOptions<GitHubOptions> githubOptions,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _aiClientFactory = aiClientFactory;
         _adoClient = adoClient;
-        _gitOps = gitOps;
+        _githubContext = githubContext;
         _contextFactory = contextFactory;
         _codebaseContext = codebaseContext;
         _logger = logger;
@@ -69,11 +71,11 @@ public sealed class CodingAgentService : IAgentService
         _copilotOptionsAccessor = copilotOptions;
         _delegationService = delegationService;
         _githubOptions = githubOptions;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
-        string? repoPath = null;
         try
         {
             _logger.LogInformation("Coding agent starting for WI-{WorkItemId}", task.WorkItemId);
@@ -180,12 +182,11 @@ public sealed class CodingAgentService : IAgentService
                 }
             }
 
-            repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
+            // Get repository file tree via GitHub API — no local clone
+            var existingFilesForContext = await _githubContext.GetFileTreeAsync(branchName, cancellationToken);
+            var supportingArtifacts = await _adoClient.DownloadSupportingArtifactsAsync(task.WorkItemId, string.Empty, cancellationToken);
 
-            // Materialize work-item supporting files so coding agents can inspect local documents and visuals
-            var supportingArtifacts = await _adoClient.DownloadSupportingArtifactsAsync(task.WorkItemId, repoPath, cancellationToken);
-
-            await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
+            await using var context = _contextFactory.Create(task.WorkItemId, string.Empty);
             var state = await context.LoadStateAsync(cancellationToken);
             state.CurrentState = "AI Code";
             state.Agents["Coding"] = AgentStatus.InProgress();
@@ -198,21 +199,20 @@ public sealed class CodingAgentService : IAgentService
             var plan = await context.ReadArtifactAsync("PLAN.md", cancellationToken)
                 ?? "No plan found. Generate code based on the story description.";
 
-            // Get existing file structure for context
-            var existingFiles = await _gitOps.ListFilesAsync(repoPath, cancellationToken);
-            var fileListSummary = string.Join("\n", existingFiles.Take(100));
-            if (existingFiles.Count > 100)
-                fileListSummary += $"\n... and {existingFiles.Count - 100} more files";
+            // Build file summary from pre-fetched tree
+            var fileListSummary = string.Join("\n", existingFilesForContext.Take(100));
+            if (existingFilesForContext.Count > 100)
+                fileListSummary += $"\n... and {existingFilesForContext.Count - 100} more files";
 
-            // Load any additional codebase context
+            // Load any additional codebase context via GitHub API
             var codebaseCtx = await _codebaseContext.LoadRelevantContextAsync(
-                repoPath, workItem.Title, workItem.Description, cancellationToken);
+                branchName, workItem.Title, workItem.Description, cancellationToken);
 
             // Build the coding context shared by all strategies
             var codingContext = new CodingContext
             {
                 WorkItemId = task.WorkItemId,
-                RepositoryPath = repoPath,
+                RepositoryPath = string.Empty,
                 State = state,
                 WorkItem = workItem,
                 PlanMarkdown = plan,
@@ -243,11 +243,6 @@ public sealed class CodingAgentService : IAgentService
                 await context.SaveStateAsync(state, cancellationToken);
 
                 var agentName = (strategy as CopilotCodingStrategy)?.AgentAssignee ?? "copilot";
-
-                // Commit state.json so it's visible on the branch
-                await _gitOps.CommitAndPushAsync(repoPath,
-                    $"[AI Coding] US-{workItem.Id}: Delegated to @{agentName} (Issue #{result.CopilotMetrics?.IssueNumber})",
-                    cancellationToken);
 
                 await _adoClient.AddWorkItemCommentAsync(workItem.Id,
                     $"<b>🤖 AI Coding Agent — Delegated to GitHub @{agentName}</b><br/>" +
@@ -289,14 +284,6 @@ public sealed class CodingAgentService : IAgentService
                 await _activityLogger.LogAsync("Coding", task.WorkItemId,
                     $"Warning: agentic loop produced no file changes ({result.AgenticMetrics?.Rounds} rounds, {result.AgenticMetrics?.ToolCalls} tool calls) — proceeding to testing anyway",
                     "warning", cancellationToken);
-            }
-
-            // Commit all changes
-            if (filesModified > 0)
-            {
-                await _gitOps.CommitAndPushAsync(repoPath,
-                    $"[AI Coding] US-{workItem.Id}: Implemented via agentic loop ({filesModified} file(s), {result.AgenticMetrics?.Rounds} rounds)",
-                    cancellationToken);
             }
 
             // Post summary to ADO
@@ -359,14 +346,6 @@ public sealed class CodingAgentService : IAgentService
         catch (Exception ex)
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Coding agent for WI-{task.WorkItemId}: {ex.Message}", ex);
-        }
-        finally
-        {
-            if (repoPath is not null)
-            {
-                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
-            }
         }
     }
 
@@ -439,10 +418,11 @@ public sealed class CodingAgentService : IAgentService
     }
 
     private AgenticCodingStrategy CreateAgenticStrategy() =>
-        new(_aiClientFactory, _gitOps, _codebaseContext, _logger);
+        new(_aiClientFactory, _githubContext, _codebaseContext, _logger);
 
     private CopilotCodingStrategy CreateCopilotStrategy(string? agentOverride = null) =>
-        new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger, agentOverride);
+        new(_githubOptions, _copilotOptionsAccessor, _delegationService, _logger, agentOverride,
+            _httpClientFactory?.CreateClient("GitHub"));
 
     private bool IsNoCloneDelegationPath(StoryWorkItem workItem, ICodingStrategy strategy)
     {

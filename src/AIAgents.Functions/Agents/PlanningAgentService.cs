@@ -2,12 +2,14 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIAgents.Functions.Agents;
 
@@ -15,6 +17,7 @@ namespace AIAgents.Functions.Agents;
 /// Planning agent: analyzes the story, creates an implementation plan,
 /// and renders it using the PLAN.template.md Scriban template.
 /// Transitions: Story Planning → AI Code (enqueues Coding agent).
+/// Uses GitHub REST API exclusively — no local git clone.
 /// </summary>
 public sealed class PlanningAgentService : IAgentService
 {
@@ -25,36 +28,41 @@ public sealed class PlanningAgentService : IAgentService
 
     private readonly IAIClientFactory _aiClientFactory;
     private readonly IAzureDevOpsClient _adoClient;
-    private readonly IGitOperations _gitOps;
+    private readonly IGitHubApiContextService _githubContext;
     private readonly IStoryContextFactory _contextFactory;
     private readonly ITemplateEngine _templateEngine;
     private readonly ICodebaseContextProvider _codebaseContext;
     private readonly ILogger<PlanningAgentService> _logger;
     private readonly IAgentTaskQueue _taskQueue;
+    private readonly GitHubOptions? _githubOptions;
+    private readonly HttpClient? _gitHubHttpClient;
 
     public PlanningAgentService(
         IAIClientFactory aiClientFactory,
         IAzureDevOpsClient adoClient,
-        IGitOperations gitOps,
+        IGitHubApiContextService githubContext,
         IStoryContextFactory contextFactory,
         ITemplateEngine templateEngine,
         ICodebaseContextProvider codebaseContext,
         ILogger<PlanningAgentService> logger,
-        IAgentTaskQueue taskQueue)
+        IAgentTaskQueue taskQueue,
+        IOptions<GitHubOptions>? githubOptions = null,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _aiClientFactory = aiClientFactory;
         _adoClient = adoClient;
-        _gitOps = gitOps;
+        _githubContext = githubContext;
         _contextFactory = contextFactory;
         _templateEngine = templateEngine;
         _codebaseContext = codebaseContext;
         _logger = logger;
         _taskQueue = taskQueue;
+        _githubOptions = githubOptions?.Value;
+        _gitHubHttpClient = httpClientFactory?.CreateClient("GitHub");
     }
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
-        string? repoPath = null;
         try
         {
         _logger.LogInformation("Planning agent starting for WI-{WorkItemId}", task.WorkItemId);
@@ -65,20 +73,18 @@ public sealed class PlanningAgentService : IAgentService
         // 1b. Resolve AI client with per-story model overrides
         var aiClient = _aiClientFactory.GetClientForAgent("Planning", workItem.GetModelOverrides());
 
-        // 2. Ensure branch and get repo path
+        // 2. Get repository context via GitHub API — no local clone needed
         var branchName = $"feature/US-{task.WorkItemId}";
-        repoPath = await _gitOps.EnsureBranchAsync(branchName, cancellationToken);
-
-        // 2b. Materialize supporting files (images/documents) into the story workspace/repo
-        var supportingArtifacts = await _adoClient.DownloadSupportingArtifactsAsync(task.WorkItemId, repoPath, cancellationToken);
-
-        // 3. Get existing code context
-        var existingFiles = await _gitOps.ListFilesAsync(repoPath, cancellationToken);
+        await EnsureBranchExistsAsync(branchName, cancellationToken);
+        var existingFiles = await _githubContext.GetFileTreeAsync(branchName, cancellationToken);
         var fileListSummary = string.Join("\n", existingFiles.Take(100));
-        var targetedFileContext = await BuildTargetedFileContextAsync(repoPath, existingFiles, workItem, cancellationToken);
+        var targetedFileContext = await BuildTargetedFileContextAsync(branchName, existingFiles, workItem, cancellationToken);
 
-        // 4. Create story context
-        await using var context = _contextFactory.Create(task.WorkItemId, repoPath);
+        // 2b. Supporting artifacts are tracked in ADO only — no local materialization needed
+        var supportingArtifacts = await _adoClient.DownloadSupportingArtifactsAsync(task.WorkItemId, string.Empty, cancellationToken);
+
+        // 4. Create story context (Table Storage, not local disk)
+        await using var context = _contextFactory.Create(task.WorkItemId, string.Empty);
         var state = await context.LoadStateAsync(cancellationToken);
         state.CurrentState = "Story Planning";
         state.CurrentStage = "Planning";
@@ -172,7 +178,7 @@ If unverified external dependencies are detected, add a warning note in the tech
 
 {targetedFileContext}
 
-{await _codebaseContext.LoadRelevantContextAsync(repoPath, workItem.Title, workItem.Description, cancellationToken)}
+{await _codebaseContext.LoadRelevantContextAsync(branchName, workItem.Title, workItem.Description, cancellationToken)}
 
 Analyze this story and create a comprehensive implementation plan.";
 
@@ -209,9 +215,8 @@ Analyze this story and create a comprehensive implementation plan.";
 
         var renderedPlan = await _templateEngine.RenderAsync("PLAN.template.md", templateModel, cancellationToken);
 
-        // 8. Save artifacts
+        // 8. Save artifacts to Table Storage
         await context.WriteArtifactAsync("PLAN.md", renderedPlan, cancellationToken);
-        await _gitOps.WriteFileAsync(repoPath, $".ado/stories/US-{workItem.Id}/PLAN.md", renderedPlan, cancellationToken);
 
         // 9. Render and save tasks
         var tasksModel = new Dictionary<string, object?>
@@ -226,9 +231,16 @@ Analyze this story and create a comprehensive implementation plan.";
         await context.WriteArtifactAsync("ACCEPTANCE_TRACE.json", JsonSerializer.Serialize(acceptanceTrace, s_artifactJsonOptions), cancellationToken);
         await context.WriteArtifactAsync("INITIALIZATION_BUNDLE.json", JsonSerializer.Serialize(initializationBundle, s_artifactJsonOptions), cancellationToken);
 
-        // 10. Commit and push
-        await _gitOps.CommitAndPushAsync(repoPath,
-            $"[AI Planning] US-{workItem.Id}: {workItem.Title}", cancellationToken);
+        // 10. Commit plan files to GitHub via API (atomic, no local clone)
+        await _githubContext.WriteFilesAsync(
+            branchName,
+            new Dictionary<string, string>
+            {
+                [$".ado/stories/US-{workItem.Id}/PLAN.md"] = renderedPlan,
+                [$".ado/stories/US-{workItem.Id}/TASKS.md"] = renderedTasks
+            },
+            $"[AI Planning] US-{workItem.Id}: {workItem.Title}",
+            cancellationToken);
 
         // 12. Triage gate — check readiness
         var readiness = planResult.Readiness;
@@ -391,14 +403,86 @@ Analyze this story and create a comprehensive implementation plan.";
         {
             return AgentResult.Fail(ErrorCategory.Code, $"Unexpected error in Planning agent for WI-{task.WorkItemId}: {ex.Message}", ex);
         }
-        finally
+    }
+
+    private async Task EnsureBranchExistsAsync(string branchName, CancellationToken cancellationToken)
+    {
+        if (_gitHubHttpClient is null || _githubOptions is null)
         {
-            if (repoPath is not null)
-            {
-                try { await _gitOps.CleanupRepoAsync(repoPath, cancellationToken); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to clean up repo at {Path}", repoPath); }
-            }
+            _logger.LogDebug("Skipping branch existence check for {BranchName}: GitHub client/options not available", branchName);
+            return;
         }
+
+        var encodedBranch = Uri.EscapeDataString(branchName);
+        var branchRefResponse = await _gitHubHttpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{encodedBranch}",
+            cancellationToken);
+
+        if (branchRefResponse.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        if (branchRefResponse.StatusCode != HttpStatusCode.NotFound)
+        {
+            var body = await branchRefResponse.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Failed to verify feature branch '{branchName}' existence: {(int)branchRefResponse.StatusCode} {branchRefResponse.StatusCode}. {body}",
+                null,
+                branchRefResponse.StatusCode);
+        }
+
+        var baseBranch = string.IsNullOrWhiteSpace(_githubOptions.BaseBranch)
+            ? "main"
+            : _githubOptions.BaseBranch;
+
+        var baseRefResponse = await _gitHubHttpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{Uri.EscapeDataString(baseBranch)}",
+            cancellationToken);
+
+        if (!baseRefResponse.IsSuccessStatusCode)
+        {
+            var baseBody = await baseRefResponse.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Failed to resolve base branch '{baseBranch}' while creating '{branchName}': {(int)baseRefResponse.StatusCode} {baseRefResponse.StatusCode}. {baseBody}",
+                null,
+                baseRefResponse.StatusCode);
+        }
+
+        var baseRefContent = await baseRefResponse.Content.ReadAsStringAsync(cancellationToken);
+        using var baseRefDoc = JsonDocument.Parse(baseRefContent);
+        var baseSha = baseRefDoc.RootElement
+            .GetProperty("object")
+            .GetProperty("sha")
+            .GetString();
+
+        if (string.IsNullOrWhiteSpace(baseSha))
+        {
+            throw new InvalidOperationException($"Could not resolve commit SHA for base branch '{baseBranch}'.");
+        }
+
+        var createPayload = JsonSerializer.Serialize(new
+        {
+            @ref = $"refs/heads/{branchName}",
+            sha = baseSha
+        });
+
+        var createResponse = await _gitHubHttpClient.PostAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/refs",
+            new StringContent(createPayload, Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+        if (createResponse.IsSuccessStatusCode || createResponse.StatusCode == HttpStatusCode.UnprocessableEntity)
+        {
+            _logger.LogInformation("Ensured feature branch {BranchName} exists (base: {BaseBranch})", branchName, baseBranch);
+            return;
+        }
+
+        var createBody = await createResponse.Content.ReadAsStringAsync(cancellationToken);
+        throw new HttpRequestException(
+            $"Failed to create branch '{branchName}' from '{baseBranch}': {(int)createResponse.StatusCode} {createResponse.StatusCode}. {createBody}",
+            null,
+            createResponse.StatusCode);
     }
 
     internal static PlanningResult ParsePlanningResult(string aiResponse)
@@ -530,7 +614,7 @@ Analyze this story and create a comprehensive implementation plan.";
     }
 
     private async Task<string> BuildTargetedFileContextAsync(
-        string repoPath,
+        string branchName,
         IReadOnlyList<string> existingFiles,
         StoryWorkItem workItem,
         CancellationToken ct)
@@ -547,6 +631,7 @@ Analyze this story and create a comprehensive implementation plan.";
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
         var keywords = GetTargetedKeywords(storyText);
+        var fileContents = await _githubContext.GetFileContentsAsync(branchName, candidates, ct);
         var sb = new StringBuilder();
         sb.AppendLine("## Targeted File Excerpts");
         sb.AppendLine("The following excerpts are from likely-affected files and should be used for implementation analysis.");
@@ -555,8 +640,7 @@ Analyze this story and create a comprehensive implementation plan.";
 
         foreach (var path in candidates)
         {
-            var content = await _gitOps.ReadFileAsync(repoPath, path, ct);
-            if (string.IsNullOrWhiteSpace(content))
+            if (!fileContents.TryGetValue(path, out var content) || string.IsNullOrWhiteSpace(content))
                 continue;
 
             var snippet = ExtractKeywordSnippets(content, keywords, contextLines: 10, maxChars: 3200);
