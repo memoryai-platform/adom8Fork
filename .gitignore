@@ -67,9 +67,11 @@ desktop.ini
 
 # Publish output
 publish/
+publish-output/
 publish.zip
 deploy.zip
 publish_deploy/
+publish_output_extracted/
 
 # Artifacts
 .artifacts/
