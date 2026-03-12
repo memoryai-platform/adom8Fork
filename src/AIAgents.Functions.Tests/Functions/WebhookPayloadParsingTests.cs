@@ -13,12 +13,12 @@ public sealed class WebhookPayloadParsingTests
     /// <summary>
     /// Maps ADO work item states to expected agent types.
     /// This mirrors the static dictionary in OrchestratorWebhook.
-    /// Only "AI Agent" is mapped — all other transitions are handled
-    /// by direct EnqueueAsync calls within each agent (prevents double-dispatch).
+    /// "AI Agent" and "Planning" are mapped to Planning for fresh and reply triggers.
     /// </summary>
     private static readonly Dictionary<string, AgentType> s_expectedMapping = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["AI Agent"] = AgentType.Planning
+        ["AI Agent"] = AgentType.Planning,
+        ["Planning"] = AgentType.Planning
     };
 
     // ── Payload deserialization ──
@@ -116,10 +116,41 @@ public sealed class WebhookPayloadParsingTests
         Assert.Equal("AI Code", payload.Resource.Revision.Fields["System.State"].GetString());
     }
 
+    [Fact]
+    public void Deserialize_CommentAddedPayload_DetectsCommentEvent()
+    {
+        var json = """
+        {
+            "eventType": "workitem.commented",
+            "resource": {
+                "workItemId": 12345,
+                "commentVersionRef": {
+                    "commentId": 9,
+                    "url": "https://dev.azure.com/org/project/_apis/wit/workItems/12345/comments/9"
+                },
+                "revision": {
+                    "id": 12345,
+                    "fields": {
+                        "System.State": "Planning"
+                    }
+                }
+            }
+        }
+        """;
+
+        var payload = JsonSerializer.Deserialize<ServiceHookPayload>(json)!;
+
+        Assert.True(payload.IsCommentAddedEvent());
+        Assert.Equal("Planning", payload.GetCurrentState());
+        Assert.Equal(9, payload.Resource!.CommentVersionRef!.CommentId);
+    }
+
+
     // ── State-to-agent mapping ──
 
     [Theory]
     [InlineData("AI Agent", AgentType.Planning)]
+    [InlineData("Planning", AgentType.Planning)]
     public void StateMapping_KnownStates_MapToCorrectAgents(string state, AgentType expectedAgent)
     {
         Assert.True(s_expectedMapping.TryGetValue(state, out var agent));

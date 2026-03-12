@@ -34,7 +34,8 @@ public sealed class OrchestratorWebhook
     // both the webhook AND the agent enqueue the next step, causing exponential reruns.
     private static readonly Dictionary<string, AgentType> s_stateToAgent = new(StringComparer.OrdinalIgnoreCase)
     {
-        [AIPipelineNames.ProcessingState] = AgentType.Planning
+        [AIPipelineNames.ProcessingState] = AgentType.Planning,
+        ["Planning"] = AgentType.Planning
     };
 
     private static readonly Dictionary<string, AgentType> s_currentAgentToAgentType = new(StringComparer.OrdinalIgnoreCase)
@@ -47,6 +48,30 @@ public sealed class OrchestratorWebhook
         [AIPipelineNames.CurrentAgentValues.Deployment] = AgentType.Deployment,
         ["Deploy Agent"] = AgentType.Deployment
     };
+
+    internal static (bool IsFreshTrigger, bool IsPlanningReplyTrigger, string? MappedState) EvaluateTrigger(
+        ServiceHookPayload payload,
+        string? oldState,
+        string? newState,
+        string? currentState)
+    {
+        var isFreshTrigger =
+            payload.IsWorkItemUpdatedEvent() &&
+            string.Equals(newState, AIPipelineNames.ProcessingState, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(oldState, AIPipelineNames.ProcessingState, StringComparison.OrdinalIgnoreCase);
+
+        var hasStablePlanningState =
+            (string.Equals(newState, "Planning", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(oldState, "Planning", StringComparison.OrdinalIgnoreCase))
+            || (string.IsNullOrWhiteSpace(newState)
+                && string.IsNullOrWhiteSpace(oldState)
+                && string.Equals(currentState, "Planning", StringComparison.OrdinalIgnoreCase));
+
+        var isPlanningReplyTrigger = payload.IsCommentAddedEvent() && hasStablePlanningState;
+        var mappedState = isPlanningReplyTrigger ? "Planning" : newState;
+
+        return (isFreshTrigger, isPlanningReplyTrigger, mappedState);
+    }
 
     public OrchestratorWebhook(
         ILogger<OrchestratorWebhook> logger,
@@ -110,12 +135,11 @@ public sealed class OrchestratorWebhook
             return new BadRequestObjectResult(new { error = "Could not determine work item ID" });
         }
 
-        // Determine the new state — ONLY from an explicit state change, never the current state.
-        // Reading current state from revision fields caused infinite loops: any ADO update
-        // (comment, field change) while WI was in a mapped state would re-trigger the agent.
         var stateChange = payload.Resource.Fields?.State;
         var newState = stateChange?.NewValue;
         var oldState = stateChange?.OldValue;
+        var currentState = payload.GetCurrentState();
+        var (isFreshTrigger, isPlanningReplyTrigger, mappedState) = EvaluateTrigger(payload, oldState, newState, currentState);
 
         if (string.Equals(newState, "Needs Revision", StringComparison.OrdinalIgnoreCase)
             || string.Equals(newState, "Agent Failed", StringComparison.OrdinalIgnoreCase))
@@ -136,12 +160,28 @@ public sealed class OrchestratorWebhook
             });
         }
 
-        if (string.IsNullOrEmpty(newState) || !s_stateToAgent.TryGetValue(newState, out var agentType))
+        if (!isFreshTrigger && !isPlanningReplyTrigger)
         {
             _logger.LogInformation(
-                "State '{NewState}' for WI-{WorkItemId} does not map to any agent, skipping",
-                newState, workItemId);
-            return new OkObjectResult(new { status = "skipped", reason = $"State '{newState}' is not an agent trigger" });
+                "WI-{WorkItemId} is not a valid AI agent trigger (event={EventType}, oldState='{OldState}', newState='{NewState}')",
+                workItemId,
+                payload.EventType,
+                oldState,
+                newState);
+            return new OkObjectResult(new
+            {
+                status = "skipped",
+                reason = "Event is not a fresh AI Agent transition or Planning reply trigger"
+            });
+        }
+
+        if (string.IsNullOrEmpty(mappedState) || !s_stateToAgent.TryGetValue(mappedState, out var agentType))
+        {
+            _logger.LogInformation(
+                "State '{MappedState}' for WI-{WorkItemId} does not map to any agent, skipping",
+                mappedState,
+                workItemId);
+            return new OkObjectResult(new { status = "skipped", reason = $"State '{mappedState}' is not an agent trigger" });
         }
 
         // Validate work item content before queuing
@@ -201,6 +241,7 @@ public sealed class OrchestratorWebhook
         }
 
         var shouldResumeFromCurrentAgent =
+            isFreshTrigger &&
             agentType == AgentType.Planning &&
             string.Equals(oldState, AIPipelineNames.ProcessingState, StringComparison.OrdinalIgnoreCase);
 
@@ -253,8 +294,12 @@ public sealed class OrchestratorWebhook
             WorkItemId = workItemId,
             AgentType = agentType,
             TriggerSource = nameof(OrchestratorWebhook),
-            ResumeFromStage = newState,
-            HandoffNote = $"State transition webhook: {newState}"
+            ResumeFromStage = mappedState,
+            HandoffNote = isPlanningReplyTrigger
+                ? "Planning reply trigger from work item discussion comment"
+                : $"State transition webhook: {newState}",
+            IsPlanningReplyTrigger = isPlanningReplyTrigger,
+            IncludeCommentHistory = isPlanningReplyTrigger
         };
 
         await _taskQueue.EnqueueAsync(agentTask, cancellationToken);

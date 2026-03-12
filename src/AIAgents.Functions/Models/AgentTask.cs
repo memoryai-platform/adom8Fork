@@ -49,4 +49,16 @@ public sealed record AgentTask
     /// </summary>
     [JsonPropertyName("handoffNote")]
     public string? HandoffNote { get; init; }
+
+    /// <summary>
+    /// True when the Planning agent was triggered by a user reply/comment while the story was already in Planning.
+    /// </summary>
+    [JsonPropertyName("isPlanningReplyTrigger")]
+    public bool IsPlanningReplyTrigger { get; init; }
+
+    /// <summary>
+    /// True when prompt generation should include prior discussion/comment history.
+    /// </summary>
+    [JsonPropertyName("includeCommentHistory")]
+    public bool IncludeCommentHistory { get; init; }
 }
