@@ -52,6 +52,33 @@ public interface IAzureDevOpsClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a child User Story with full planning payload and autonomy level.
+    /// </summary>
+    Task<int> CreateChildWorkItemAsync(
+        string title,
+        string description,
+        string acceptanceCriteria,
+        string state,
+        int autonomyLevel,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Links parent and child work items.
+    /// </summary>
+    Task AddParentChildLinkAsync(int parentWorkItemId, int childWorkItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds predecessor/successor dependency link between two stories.
+    /// predecessor -> successor.
+    /// </summary>
+    Task AddPredecessorSuccessorLinkAsync(int predecessorWorkItemId, int successorWorkItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns predecessor/successor related work item ids for the given work item.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetDependencyLinkedWorkItemIdsAsync(int workItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Downloads supporting artifacts (images and documents) referenced by a work item into the local repository workspace.
     /// Files are materialized under the story folder so coding agents can inspect them directly.
     /// </summary>

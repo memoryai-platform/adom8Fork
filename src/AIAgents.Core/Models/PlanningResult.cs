@@ -23,6 +23,20 @@ public sealed record PlanningResult
     /// When null, the story is assumed ready (backward compatibility).
     /// </summary>
     public PlanningReadiness? Readiness { get; init; }
+
+    /// <summary>
+    /// Optional child-story decomposition output from Planning.
+    /// When populated, decomposition spawning creates child stories and dependency links.
+    /// </summary>
+    public IReadOnlyList<FeatureDecompositionItem> FeatureDecomposition { get; init; } = [];
+}
+
+public sealed record FeatureDecompositionItem
+{
+    public required string Title { get; init; }
+    public string Description { get; init; } = string.Empty;
+    public string AcceptanceCriteria { get; init; } = string.Empty;
+    public IReadOnlyList<int> PredecessorIndexes { get; init; } = [];
 }
 
 /// <summary>

@@ -113,6 +113,7 @@ var host = new HostBuilder()
 
         // Agent task queue — abstracts Azure Storage Queue for testability
         services.AddSingleton<IAgentTaskQueue, AgentTaskQueue>();
+        services.AddSingleton<IWorkItemDecompositionService, WorkItemDecompositionService>();
 
         // GitHub API context service — provides file tree, content, and write operations
         // without cloning the repository to local disk.

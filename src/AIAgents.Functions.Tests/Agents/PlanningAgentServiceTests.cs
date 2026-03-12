@@ -26,6 +26,7 @@ public sealed class PlanningAgentServiceTests
     private readonly Mock<ITemplateEngine> _templateMock;
     private readonly Mock<ICodebaseContextProvider> _codebaseMock;
     private readonly Mock<IAgentTaskQueue> _taskQueueMock;
+    private readonly Mock<IWorkItemDecompositionService> _decompositionServiceMock;
 
     private StoryState _capturedState = null!;
 
@@ -40,6 +41,7 @@ public sealed class PlanningAgentServiceTests
         _templateMock = new Mock<ITemplateEngine>();
         _codebaseMock = new Mock<ICodebaseContextProvider>();
         _taskQueueMock = new Mock<IAgentTaskQueue>();
+        _decompositionServiceMock = new Mock<IWorkItemDecompositionService>();
 
         _aiFactoryMock.Setup(f => f.GetClientForAgent("Planning", It.IsAny<StoryModelOverrides?>())).Returns(_aiClientMock.Object);
         _contextFactoryMock.Setup(f => f.Create(It.IsAny<int>(), It.IsAny<string>())).Returns(_contextMock.Object);
@@ -55,7 +57,8 @@ public sealed class PlanningAgentServiceTests
             _templateMock.Object,
             _codebaseMock.Object,
             NullLogger<PlanningAgentService>.Instance,
-            _taskQueueMock.Object);
+            _taskQueueMock.Object,
+            _decompositionServiceMock.Object);
     }
 
     private void SetupHappyPath(StoryWorkItem? workItem = null, string? aiResponse = null)
@@ -567,5 +570,38 @@ public sealed class PlanningAgentServiceTests
         // Should find TBD in title, TODO and "need to decide" in description
         Assert.Contains("Title", result);
         Assert.Contains("Description", result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithFeatureDecomposition_InvokesSpawnService()
+    {
+        var aiResponse = """
+{
+  "readiness": { "proceed": true, "readinessScore": 90, "blockers": [], "questions": [], "researchNeeded": [], "suggestedBreakdown": [], "reason": "ready" },
+  "problemAnalysis": "ok",
+  "technicalApproach": "ok",
+  "affectedFiles": ["src/Program.cs"],
+  "complexity": 5,
+  "architecture": "arc",
+  "subTasks": ["one"],
+  "dependencies": [],
+  "risks": [],
+  "assumptions": [],
+  "testingStrategy": "unit",
+  "featureDecomposition": [
+    { "title": "Child 1", "description": "desc", "acceptanceCriteria": "ac", "predecessors": [] }
+  ]
+}
+""";
+        SetupHappyPath(aiResponse: aiResponse);
+        var service = CreateService();
+
+        await service.ExecuteAsync(new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning, CorrelationId = "corr-9" });
+
+        _decompositionServiceMock.Verify(x => x.SpawnDecompositionAsync(
+            It.Is<StoryWorkItem>(w => w.Id == 12345),
+            It.Is<PlanningResult>(r => r.FeatureDecomposition.Count == 1),
+            "corr-9",
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

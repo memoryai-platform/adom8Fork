@@ -244,7 +244,177 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         return workItemId;
     }
 
-    public async Task<WorkItemSupportingArtifacts> DownloadSupportingArtifactsAsync(
+    
+    public async Task<int> CreateChildWorkItemAsync(
+        string title,
+        string description,
+        string acceptanceCriteria,
+        string state,
+        int autonomyLevel,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating child work item: '{Title}' with state '{State}'", title, state);
+
+        var patchDocument = new JsonPatchDocument
+        {
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = "/fields/System.Title",
+                Value = title
+            },
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = "/fields/System.Description",
+                Value = description
+            },
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = "/fields/Microsoft.VSTS.Common.AcceptanceCriteria",
+                Value = acceptanceCriteria
+            },
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = "/fields/System.State",
+                Value = state
+            },
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = CustomFieldNames.Paths.AutonomyLevel,
+                Value = autonomyLevel.ToString()
+            },
+            new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = CustomFieldNames.Paths.MinimumReviewScore,
+                Value = 85
+            }
+        };
+
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var workItem = await client.CreateWorkItemAsync(
+            patchDocument,
+            _options.Project,
+            "User Story",
+            cancellationToken: cancellationToken);
+
+        return workItem.Id ?? 0;
+    }
+
+    public async Task AddParentChildLinkAsync(int parentWorkItemId, int childWorkItemId, CancellationToken cancellationToken = default)
+    {
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var parentUrl = GetWorkItemApiUrl(parentWorkItemId);
+        var childUrl = GetWorkItemApiUrl(childWorkItemId);
+
+        await client.UpdateWorkItemAsync(
+            new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "System.LinkTypes.Hierarchy-Forward",
+                        url = childUrl,
+                        attributes = new { comment = "Added by decomposition" }
+                    }
+                }
+            },
+            parentWorkItemId,
+            cancellationToken: cancellationToken);
+
+        await client.UpdateWorkItemAsync(
+            new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "System.LinkTypes.Hierarchy-Reverse",
+                        url = parentUrl,
+                        attributes = new { comment = "Added by decomposition" }
+                    }
+                }
+            },
+            childWorkItemId,
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task AddPredecessorSuccessorLinkAsync(int predecessorWorkItemId, int successorWorkItemId, CancellationToken cancellationToken = default)
+    {
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var predecessorUrl = GetWorkItemApiUrl(predecessorWorkItemId);
+        var successorUrl = GetWorkItemApiUrl(successorWorkItemId);
+
+        await client.UpdateWorkItemAsync(
+            new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "System.LinkTypes.Dependency-Forward",
+                        url = successorUrl,
+                        attributes = new { comment = "Added by decomposition" }
+                    }
+                }
+            },
+            predecessorWorkItemId,
+            cancellationToken: cancellationToken);
+
+        await client.UpdateWorkItemAsync(
+            new JsonPatchDocument
+            {
+                new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "System.LinkTypes.Dependency-Reverse",
+                        url = predecessorUrl,
+                        attributes = new { comment = "Added by decomposition" }
+                    }
+                }
+            },
+            successorWorkItemId,
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<int>> GetDependencyLinkedWorkItemIdsAsync(int workItemId, CancellationToken cancellationToken = default)
+    {
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var workItem = await client.GetWorkItemAsync(workItemId, expand: WorkItemExpand.Relations, cancellationToken: cancellationToken);
+        if (workItem.Relations is null)
+            return [];
+
+        var ids = new List<int>();
+        foreach (var relation in workItem.Relations)
+        {
+            if (!string.Equals(relation.Rel, "System.LinkTypes.Dependency-Forward", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(relation.Rel, "System.LinkTypes.Dependency-Reverse", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryParseWorkItemIdFromRelationUrl(relation.Url, out var relatedId))
+                ids.Add(relatedId);
+        }
+
+        return ids.Distinct().ToList();
+    }
+
+public async Task<WorkItemSupportingArtifacts> DownloadSupportingArtifactsAsync(
         int workItemId,
         string repositoryPath,
         CancellationToken cancellationToken = default)
@@ -342,6 +512,20 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         {
             _connection.Value.Dispose();
         }
+    }
+
+
+    private string GetWorkItemApiUrl(int workItemId)
+        => $"{_options.OrganizationUrl}/{_options.Project}/_apis/wit/workItems/{workItemId}";
+
+    private static bool TryParseWorkItemIdFromRelationUrl(string? relationUrl, out int workItemId)
+    {
+        workItemId = 0;
+        if (string.IsNullOrWhiteSpace(relationUrl))
+            return false;
+
+        var match = Regex.Match(relationUrl, @"/workItems/(?<id>\d+)", RegexOptions.IgnoreCase);
+        return match.Success && int.TryParse(match.Groups["id"].Value, out workItemId);
     }
 
     private static StoryWorkItem MapToStoryWorkItem(WorkItem workItem)

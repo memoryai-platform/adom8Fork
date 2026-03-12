@@ -34,6 +34,7 @@ public sealed class PlanningAgentService : IAgentService
     private readonly ICodebaseContextProvider _codebaseContext;
     private readonly ILogger<PlanningAgentService> _logger;
     private readonly IAgentTaskQueue _taskQueue;
+    private readonly IWorkItemDecompositionService _decompositionService;
     private readonly GitHubOptions? _githubOptions;
     private readonly HttpClient? _gitHubHttpClient;
 
@@ -46,6 +47,7 @@ public sealed class PlanningAgentService : IAgentService
         ICodebaseContextProvider codebaseContext,
         ILogger<PlanningAgentService> logger,
         IAgentTaskQueue taskQueue,
+        IWorkItemDecompositionService decompositionService,
         IOptions<GitHubOptions>? githubOptions = null,
         IHttpClientFactory? httpClientFactory = null)
     {
@@ -57,6 +59,7 @@ public sealed class PlanningAgentService : IAgentService
         _codebaseContext = codebaseContext;
         _logger = logger;
         _taskQueue = taskQueue;
+        _decompositionService = decompositionService;
         _githubOptions = githubOptions?.Value;
         _gitHubHttpClient = httpClientFactory?.CreateClient("GitHub");
     }
@@ -157,9 +160,18 @@ Respond ONLY with valid JSON matching this structure:
   ""dependencies"": [""string""],
   ""risks"": [""string""],
   ""assumptions"": [""string""],
-  ""testingStrategy"": ""string""
+  ""testingStrategy"": ""string"",
+  ""featureDecomposition"": [
+    {
+      ""title"": ""string"",
+      ""description"": ""string"",
+      ""acceptanceCriteria"": ""string"",
+      ""predecessors"": [0]
+    }
+  ]
 }
 
+featureDecomposition is optional. Use it when the story should be split into executable child stories; predecessors contains zero-based indexes into the same array.
 ALWAYS include the full plan even when proceed=false — the analyst needs the analysis to fix the story.
 If unverified external dependencies are detected, add a warning note in the technicalApproach field.";
 
@@ -331,6 +343,11 @@ Analyze this story and create a comprehensive implementation plan.";
 
             _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to Needs Revision", task.WorkItemId);
             return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
+        }
+
+        if (planResult.FeatureDecomposition.Count > 0)
+        {
+            await _decompositionService.SpawnDecompositionAsync(workItem, planResult, task.CorrelationId, cancellationToken);
         }
 
         // 13. Story IS ready — proceed to coding
@@ -532,7 +549,8 @@ Analyze this story and create a comprehensive implementation plan.";
                 Risks = GetStringArray(root, "risks"),
                 Assumptions = GetStringArray(root, "assumptions"),
                 TestingStrategy = root.GetProperty("testingStrategy").GetString() ?? "",
-                Readiness = readiness
+                Readiness = readiness,
+                FeatureDecomposition = ParseFeatureDecomposition(root)
             };
         }
         catch (JsonException)
@@ -549,9 +567,47 @@ Analyze this story and create a comprehensive implementation plan.";
                 Dependencies = [],
                 Risks = ["AI response could not be parsed as structured JSON"],
                 Assumptions = [],
-                TestingStrategy = "Unit and integration tests recommended"
+                TestingStrategy = "Unit and integration tests recommended",
+                FeatureDecomposition = []
             };
         }
+    }
+
+    private static IReadOnlyList<FeatureDecompositionItem> ParseFeatureDecomposition(JsonElement root)
+    {
+        if (!root.TryGetProperty("featureDecomposition", out var decompositionEl) || decompositionEl.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var items = new List<FeatureDecompositionItem>();
+        foreach (var childEl in decompositionEl.EnumerateArray())
+        {
+            if (childEl.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var title = childEl.TryGetProperty("title", out var titleEl) ? titleEl.GetString() : null;
+            if (string.IsNullOrWhiteSpace(title))
+                continue;
+
+            var predecessors = new List<int>();
+            if (childEl.TryGetProperty("predecessors", out var predEl) && predEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var p in predEl.EnumerateArray())
+                {
+                    if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var idx))
+                        predecessors.Add(idx);
+                }
+            }
+
+            items.Add(new FeatureDecompositionItem
+            {
+                Title = title,
+                Description = childEl.TryGetProperty("description", out var descEl) ? descEl.GetString() ?? string.Empty : string.Empty,
+                AcceptanceCriteria = childEl.TryGetProperty("acceptanceCriteria", out var acEl) ? acEl.GetString() ?? string.Empty : string.Empty,
+                PredecessorIndexes = predecessors
+            });
+        }
+
+        return items;
     }
 
     private static List<string> GetStringArray(JsonElement root, string propertyName)
