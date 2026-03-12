@@ -111,6 +111,54 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         await client.UpdateWorkItemAsync(patchDocument, workItemId, cancellationToken: cancellationToken);
     }
 
+
+    public async Task<IReadOnlyList<string>> GetWorkItemCommentsAsync(int workItemId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Fetching comments for work item {WorkItemId}", workItemId);
+
+        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{_options.Pat}"));
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
+
+        var orgUrl = _options.OrganizationUrl.TrimEnd('/');
+        var project = Uri.EscapeDataString(_options.Project);
+        var response = await client.GetAsync(
+            $"{orgUrl}/{project}/_apis/wit/workItems/{workItemId}/comments?$top=200&api-version=7.1-preview.3",
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Failed to fetch comments for WI-{workItemId}: {(int)response.StatusCode} {response.StatusCode}. {body}",
+                null,
+                response.StatusCode);
+        }
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(content);
+
+        if (!doc.RootElement.TryGetProperty("comments", out var commentsEl) || commentsEl.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var comments = new List<string>();
+        foreach (var commentEl in commentsEl.EnumerateArray())
+        {
+            if (commentEl.TryGetProperty("text", out var textEl))
+            {
+                var text = textEl.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    comments.Add(text.Trim());
+                }
+            }
+        }
+
+        return comments;
+    }
+
     public async Task UpdateWorkItemFieldAsync(
         int workItemId,
         string fieldPath,

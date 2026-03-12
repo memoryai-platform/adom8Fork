@@ -58,15 +58,17 @@ public sealed class PlanningAgentServiceTests
             _taskQueueMock.Object);
     }
 
-    private void SetupHappyPath(StoryWorkItem? workItem = null, string? aiResponse = null)
+    private void SetupHappyPath(StoryWorkItem? workItem = null, string? aiResponse = null, StoryState? state = null)
     {
         var wi = workItem ?? MockAIResponses.SampleWorkItem();
-        var state = MockAIResponses.SampleState(wi.Id);
+        var storyState = state ?? MockAIResponses.SampleState(wi.Id);
 
         _adoMock.Setup(a => a.GetWorkItemAsync(wi.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(wi);
         _adoMock.Setup(a => a.DownloadSupportingArtifactsAsync(wi.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new WorkItemSupportingArtifacts());
+        _adoMock.Setup(a => a.GetWorkItemCommentsAsync(wi.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<string> { "Previous planning note", "Analyst follow-up" });
 
         _githubContextMock.Setup(g => g.GetFileTreeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<string> { "src/Program.cs", "README.md" });
@@ -76,7 +78,7 @@ public sealed class PlanningAgentServiceTests
             .Returns(Task.CompletedTask);
 
         _contextMock.Setup(c => c.LoadStateAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(state);
+            .ReturnsAsync(storyState);
         _contextMock.Setup(c => c.SaveStateAsync(It.IsAny<StoryState>(), It.IsAny<CancellationToken>()))
             .Callback<StoryState, CancellationToken>((s, _) => _capturedState = s)
             .Returns(Task.CompletedTask);
@@ -310,7 +312,7 @@ public sealed class PlanningAgentServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_RejectedStory_MovesToNeedsRevision()
+    public async Task ExecuteAsync_RejectedStory_MovesToPlanning()
     {
         SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
         var service = CreateService();
@@ -318,8 +320,8 @@ public sealed class PlanningAgentServiceTests
 
         await service.ExecuteAsync(task);
 
-        Assert.Equal("Needs Revision", _capturedState.CurrentState);
-        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal("Planning", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Planning", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -335,7 +337,7 @@ public sealed class PlanningAgentServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_RejectedStory_PostsRejectComment()
+    public async Task ExecuteAsync_RejectedStory_PostsPlanningRoundComment()
     {
         SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
         var service = CreateService();
@@ -344,36 +346,69 @@ public sealed class PlanningAgentServiceTests
         await service.ExecuteAsync(task);
 
         _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
-            It.Is<string>(c => c.Contains("Story Not Ready for Coding") && c.Contains("Blockers")),
+            It.Is<string>(c => c.Contains("Clarification Round 1/3") &&
+                              c.Contains("Questions newly asked this round") &&
+                              c.Contains("Remaining blockers")),
             It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_RejectedStory_PostsMovedToNeedsRevisionComment()
-    {
-        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
-        var service = CreateService();
-        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
-
-        await service.ExecuteAsync(task);
-
         _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
             It.Is<string>(c => c.Contains("Moved to Needs Revision. Reason:")),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task ExecuteAsync_RejectedStory_PostsShortReasonFromFirstBlocker()
+    public async Task ExecuteAsync_RejectedStory_IterativeRoundMarksAnsweredQuestions()
     {
-        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse);
+        var existingState = MockAIResponses.SampleState(12345);
+        existingState.Agents["Planning"] = AgentStatus.InProgress();
+        existingState.Agents["Planning"].AdditionalData = new Dictionary<string, object>
+        {
+            ["planningRound"] = 1,
+            ["pendingQuestions"] = new List<string>
+            {
+                "What specific UI changes are expected?",
+                "Should this support mobile devices?",
+                "Is localization required?"
+            }
+        };
+
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse, state: existingState);
         var service = CreateService();
         var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
 
         await service.ExecuteAsync(task);
 
         _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
-            It.Is<string>(c => c.Contains("Moved to Needs Revision. Reason:") &&
-                              c.Contains("No acceptance criteria provided")),
+            It.Is<string>(c => c.Contains("Clarification Round 2/3") &&
+                              c.Contains("Questions marked answered from prior rounds") &&
+                              c.Contains("Is localization required?")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectedStory_MaxRoundEscalatesToNeedsRevision()
+    {
+        var existingState = MockAIResponses.SampleState(12345);
+        existingState.Agents["Planning"] = AgentStatus.InProgress();
+        existingState.Agents["Planning"].AdditionalData = new Dictionary<string, object>
+        {
+            ["planningRound"] = 2,
+            ["pendingQuestions"] = new List<string>
+            {
+                "What specific UI changes are expected?",
+                "Should this support mobile devices?"
+            }
+        };
+
+        SetupHappyPath(aiResponse: MockAIResponses.RejectedPlanningResponse, state: existingState);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("Needs Revision", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Escalation after Round 3/3") && c.Contains("Unresolved questions")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -387,7 +422,7 @@ public sealed class PlanningAgentServiceTests
         await service.ExecuteAsync(task);
 
         Assert.Contains(_capturedState.Decisions, d =>
-            d.Agent == "Planning" && d.DecisionText.Contains("rejected by triage gate"));
+            d.Agent == "Planning" && d.DecisionText.Contains("Awaiting clarification after planning round 1"));
     }
 
     [Fact]
@@ -403,6 +438,25 @@ public sealed class PlanningAgentServiceTests
         _taskQueueMock.Verify(q => q.EnqueueAsync(
             It.Is<AgentTask>(t => t.AgentType == AgentType.Coding),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReadyStory_IncludesTranscriptInPrompt()
+    {
+        SetupHappyPath();
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        _aiClientMock.Verify(a => a.CompleteAsync(
+            It.IsAny<string>(),
+            It.Is<string>(prompt => prompt.Contains("## Planning Conversation History") &&
+                                     prompt.Contains("Previous planning note") &&
+                                     prompt.Contains("Analyst follow-up")),
+            It.IsAny<AICompletionOptions?>(),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -466,7 +520,7 @@ public sealed class PlanningAgentServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithResearchNeeded_IncludesInComment()
+    public async Task ExecuteAsync_WithResearchNeeded_IncludesStructuredPlanningSections()
     {
         SetupHappyPath(aiResponse: MockAIResponses.PlanningResponseWithResearchNeeded);
         var service = CreateService();
@@ -475,14 +529,14 @@ public sealed class PlanningAgentServiceTests
         await service.ExecuteAsync(task);
 
         _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
-            It.Is<string>(c => c.Contains("Research Needed") && 
-                              c.Contains("Unverified External API Assumptions") &&
-                              c.Contains("🔍")),
+            It.Is<string>(c => c.Contains("Questions newly asked this round") &&
+                              c.Contains("Questions marked answered from prior rounds") &&
+                              c.Contains("Remaining blockers")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithResearchNeeded_MovesToNeedsRevision()
+    public async Task ExecuteAsync_WithResearchNeeded_StaysInPlanning()
     {
         SetupHappyPath(aiResponse: MockAIResponses.PlanningResponseWithResearchNeeded);
         var service = CreateService();
@@ -490,8 +544,8 @@ public sealed class PlanningAgentServiceTests
 
         await service.ExecuteAsync(task);
 
-        Assert.Equal("Needs Revision", _capturedState.CurrentState);
-        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal("Planning", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Planning", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ========== PLACEHOLDER DETECTION TESTS ==========

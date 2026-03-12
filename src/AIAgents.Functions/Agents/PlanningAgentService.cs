@@ -110,6 +110,7 @@ public sealed class PlanningAgentService : IAgentService
 
         // 5. Detect placeholder text before calling AI
         var placeholderWarning = DetectPlaceholders(workItem);
+        var planningConversationHistory = await LoadPlanningConversationHistoryAsync(workItem.Id, cancellationToken);
 
         // 6. Call AI for planning analysis with triage gate
         var systemPrompt = @"You are a senior software architect analyzing Azure DevOps user stories.
@@ -180,6 +181,9 @@ If unverified external dependencies are detected, add a warning note in the tech
 
 {await _codebaseContext.LoadRelevantContextAsync(branchName, workItem.Title, workItem.Description, cancellationToken)}
 
+## Planning Conversation History
+{planningConversationHistory}
+
 Analyze this story and create a comprehensive implementation plan.";
 
         var aiResult = await aiClient.CompleteAsync(systemPrompt, userPrompt,
@@ -246,68 +250,99 @@ Analyze this story and create a comprehensive implementation plan.";
         var readiness = planResult.Readiness;
         if (readiness is not null && !readiness.Proceed)
         {
-            // Story is NOT ready — send back with feedback
-            _logger.LogInformation(
-                "Planning agent REJECTED WI-{WorkItemId}: score={Score}, blockers={Blockers}",
-                task.WorkItemId, readiness.ReadinessScore, readiness.Blockers.Count);
+            var planningAgentStatus = state.Agents.TryGetValue("Planning", out var existingPlanningStatus)
+                ? existingPlanningStatus
+                : AgentStatus.InProgress();
 
-            var blockerList = readiness.Blockers.Count > 0
-                ? string.Join("<br/>", readiness.Blockers.Select(b => $"❌ {b}"))
-                : "None";
-            var questionList = readiness.Questions.Count > 0
-                ? string.Join("<br/>", readiness.Questions.Select(q => $"❓ {q}"))
-                : "None";
-            var researchList = readiness.ResearchNeeded.Count > 0
-                ? string.Join("<br/>", readiness.ResearchNeeded.Select(r => $"🔍 {r}"))
-                : "";
-            var breakdownList = readiness.SuggestedBreakdown.Count > 0
-                ? string.Join("<br/>", readiness.SuggestedBreakdown.Select(s => $"📋 {s}"))
-                : "";
+            planningAgentStatus.AdditionalData ??= new Dictionary<string, object>();
+            var planningRound = GetPlanningRound(planningAgentStatus.AdditionalData) + 1;
+            var priorRoundQuestions = GetTrackedQuestions(planningAgentStatus.AdditionalData);
+            var currentRoundQuestions = readiness.Questions
+                .Where(question => !string.IsNullOrWhiteSpace(question))
+                .Select(question => question.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var questionsAnsweredThisRound = priorRoundQuestions
+                .Where(previousQuestion => !currentRoundQuestions.Contains(previousQuestion, StringComparer.OrdinalIgnoreCase))
+                .ToList();
 
-            var rejectComment = $"<b>🚫 AI Planning Agent — Story Not Ready for Coding</b><br/>" +
-                $"<b>Readiness Score:</b> {readiness.ReadinessScore}/100<br/>" +
-                $"<b>Reason:</b> {System.Net.WebUtility.HtmlEncode(readiness.Reason)}<br/><br/>" +
-                $"<b>Blockers:</b><br/>{blockerList}<br/><br/>" +
-                $"<b>Questions to Answer:</b><br/>{questionList}";
+            planningAgentStatus.AdditionalData["planningRound"] = planningRound;
+            planningAgentStatus.AdditionalData["pendingQuestions"] = currentRoundQuestions;
+            planningAgentStatus.AdditionalData["readinessScore"] = readiness.ReadinessScore;
+            planningAgentStatus.AdditionalData["triageResult"] = planningRound >= 3 ? "escalated" : "needs_clarification";
+            state.Agents["Planning"] = planningAgentStatus;
 
-            if (readiness.ResearchNeeded.Count > 0)
-                rejectComment += $"<br/><br/><b>Research Needed (Unverified External API Assumptions):</b><br/>{researchList}";
-
-            if (readiness.SuggestedBreakdown.Count > 0)
-                rejectComment += $"<br/><br/><b>Suggested Breakdown:</b><br/>{breakdownList}";
-
-            rejectComment += $"<br/><br/><b>Complexity Estimate:</b> {planResult.Complexity} story points" +
-                $"<br/><b>Risks:</b> {string.Join(", ", planResult.Risks)}" +
-                $"<br/><br/><i>Please address the blockers and questions above, then move the story back to 'AI Agent' to re-trigger the pipeline.</i>";
-
-            await _adoClient.AddWorkItemCommentAsync(workItem.Id, rejectComment, cancellationToken);
-
-            var shortReason = readiness.Blockers.FirstOrDefault()
-                              ?? readiness.Reason
-                              ?? "Requirements clarification is needed before coding can proceed.";
-            await _adoClient.AddWorkItemCommentAsync(
-                workItem.Id,
-                $"Moved to Needs Revision. Reason: {System.Net.WebUtility.HtmlEncode(shortReason)}",
-                cancellationToken);
-
-            // Update state — mark planning as completed with rejection info
-            state.Agents["Planning"] = AgentStatus.Completed();
-            state.Agents["Planning"].AdditionalData = new Dictionary<string, object>
+            if (planningRound >= 3)
             {
-                ["triageResult"] = "rejected",
-                ["readinessScore"] = readiness.ReadinessScore,
-                ["blockerCount"] = readiness.Blockers.Count
-            };
-            state.CurrentState = "Needs Revision";
+                var escalationComment = BuildPlanningEscalationComment(
+                    planningRound,
+                    readiness,
+                    questionsAnsweredThisRound,
+                    currentRoundQuestions);
+
+                await _adoClient.AddWorkItemCommentAsync(workItem.Id, escalationComment, cancellationToken);
+
+                var shortReason = readiness.Blockers.FirstOrDefault()
+                                  ?? readiness.Reason
+                                  ?? "Requirements clarification is needed before coding can proceed.";
+                await _adoClient.AddWorkItemCommentAsync(
+                    workItem.Id,
+                    $"Moved to Needs Revision. Reason: {WebUtility.HtmlEncode(shortReason)}",
+                    cancellationToken);
+
+                state.CurrentState = "Needs Revision";
+                state.CurrentStage = "Planning";
+                state.LastActivityUtc = DateTime.UtcNow;
+                state.Blockers = readiness.Blockers
+                    .Concat(currentRoundQuestions.Select(question => $"Clarification required: {question}"))
+                    .ToList();
+                state.HandoffRef = new StoryHandoffReference
+                {
+                    Source = "PlanningAgentService",
+                    Stage = "Needs Revision",
+                    CorrelationId = task.CorrelationId,
+                    Details = readiness.Reason
+                };
+                state.AcceptanceTrace = acceptanceTrace;
+                state.Decisions.Add(new Decision
+                {
+                    Agent = "Planning",
+                    DecisionText = $"Story escalated after planning round {planningRound} (score: {readiness.ReadinessScore}/100)",
+                    Rationale = readiness.Reason ?? "Story failed planning triage gate checks after repeated clarification rounds."
+                });
+                await context.SaveStateAsync(state, cancellationToken);
+
+                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
+                catch { /* field may not exist yet */ }
+
+                try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
+                catch { /* field may not exist yet */ }
+
+                await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
+
+                _logger.LogInformation("Planning agent escalated WI-{WorkItemId} to Needs Revision after round {Round}", task.WorkItemId, planningRound);
+                return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
+            }
+
+            var planningComment = BuildPlanningRoundComment(
+                planningRound,
+                readiness,
+                currentRoundQuestions,
+                questionsAnsweredThisRound,
+                planResult);
+
+            await _adoClient.AddWorkItemCommentAsync(workItem.Id, planningComment, cancellationToken);
+
+            state.CurrentState = "Planning";
             state.CurrentStage = "Planning";
             state.LastActivityUtc = DateTime.UtcNow;
             state.Blockers = readiness.Blockers
-                .Concat(readiness.Questions.Select(question => $"Clarification required: {question}"))
+                .Concat(currentRoundQuestions.Select(question => $"Clarification required: {question}"))
                 .ToList();
             state.HandoffRef = new StoryHandoffReference
             {
                 Source = "PlanningAgentService",
-                Stage = "Needs Revision",
+                Stage = "Planning",
                 CorrelationId = task.CorrelationId,
                 Details = readiness.Reason
             };
@@ -315,21 +350,14 @@ Analyze this story and create a comprehensive implementation plan.";
             state.Decisions.Add(new Decision
             {
                 Agent = "Planning",
-                DecisionText = $"Story rejected by triage gate (score: {readiness.ReadinessScore}/100)",
-                Rationale = readiness.Reason ?? "Story failed planning triage gate checks."
+                DecisionText = $"Awaiting clarification after planning round {planningRound} (score: {readiness.ReadinessScore}/100)",
+                Rationale = readiness.Reason ?? "Story requires analyst clarification before coding."
             });
             await context.SaveStateAsync(state, cancellationToken);
 
-            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
-            catch { /* field may not exist yet */ }
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Planning", cancellationToken);
 
-            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
-            catch { /* field may not exist yet */ }
-
-            // Move story to Needs Revision — do NOT enqueue Coding agent
-            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
-
-            _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to Needs Revision", task.WorkItemId);
+            _logger.LogInformation("Planning agent requested clarification for WI-{WorkItemId}, round {Round}", task.WorkItemId, planningRound);
             return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
 
@@ -485,6 +513,131 @@ Analyze this story and create a comprehensive implementation plan.";
             createResponse.StatusCode);
     }
 
+    private async Task<string> LoadPlanningConversationHistoryAsync(int workItemId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var comments = await _adoClient.GetWorkItemCommentsAsync(workItemId, cancellationToken);
+            if (comments.Count == 0)
+            {
+                return "No prior planning comments found.";
+            }
+
+            var transcript = comments
+                .Select((comment, index) => $"[{index + 1}] {comment}")
+                .ToList();
+
+            return string.Join("\n\n", transcript);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to load planning transcript for WI-{WorkItemId}; continuing without transcript.", workItemId);
+            return "Planning transcript unavailable.";
+        }
+    }
+
+    private static int GetPlanningRound(Dictionary<string, object> additionalData)
+    {
+        if (!additionalData.TryGetValue("planningRound", out var value) || value is null)
+        {
+            return 0;
+        }
+
+        return value switch
+        {
+            int round => round,
+            long round => (int)round,
+            JsonElement { ValueKind: JsonValueKind.Number } el when el.TryGetInt32(out var parsed) => parsed,
+            _ => int.TryParse(value.ToString(), out var parsed) ? parsed : 0
+        };
+    }
+
+    private static List<string> GetTrackedQuestions(Dictionary<string, object> additionalData)
+    {
+        if (!additionalData.TryGetValue("pendingQuestions", out var value) || value is null)
+        {
+            return new List<string>();
+        }
+
+        if (value is IEnumerable<string> questions)
+        {
+            return questions
+                .Where(question => !string.IsNullOrWhiteSpace(question))
+                .Select(question => question.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        if (value is JsonElement { ValueKind: JsonValueKind.Array } arrayEl)
+        {
+            return arrayEl.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Select(item => item!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        return new List<string>();
+    }
+
+    private static string BuildPlanningRoundComment(
+        int planningRound,
+        PlanningReadiness readiness,
+        IReadOnlyList<string> newQuestions,
+        IReadOnlyList<string> answeredQuestions,
+        PlanningResult planResult)
+    {
+        var newQuestionList = newQuestions.Count > 0
+            ? string.Join("<br/>", newQuestions.Select(question => $"❓ {WebUtility.HtmlEncode(question)}"))
+            : "None";
+        var answeredQuestionList = answeredQuestions.Count > 0
+            ? string.Join("<br/>", answeredQuestions.Select(question => $"✅ {WebUtility.HtmlEncode(question)}"))
+            : "None";
+
+        var blockers = readiness.Blockers
+            .Concat(newQuestions.Select(question => $"Clarification required: {question}"))
+            .ToList();
+        var blockerList = blockers.Count > 0
+            ? string.Join("<br/>", blockers.Select(blocker => $"⛔ {WebUtility.HtmlEncode(blocker)}"))
+            : "None";
+
+        return $"<b>🧭 AI Planning Agent — Clarification Round {planningRound}/3</b><br/>" +
+               $"<b>Readiness Score:</b> {readiness.ReadinessScore}/100<br/>" +
+               $"<b>Reason:</b> {WebUtility.HtmlEncode(readiness.Reason)}<br/><br/>" +
+               $"<b>Questions newly asked this round:</b><br/>{newQuestionList}<br/><br/>" +
+               $"<b>Questions marked answered from prior rounds:</b><br/>{answeredQuestionList}<br/><br/>" +
+               $"<b>Remaining blockers:</b><br/>{blockerList}<br/><br/>" +
+               $"<b>Complexity Estimate:</b> {planResult.Complexity} story points<br/>" +
+               "<i>Story stays in Planning while responses are gathered.</i>";
+    }
+
+    private static string BuildPlanningEscalationComment(
+        int planningRound,
+        PlanningReadiness readiness,
+        IReadOnlyList<string> answeredQuestions,
+        IReadOnlyList<string> unansweredQuestions)
+    {
+        var answeredQuestionList = answeredQuestions.Count > 0
+            ? string.Join("<br/>", answeredQuestions.Select(question => $"✅ {WebUtility.HtmlEncode(question)}"))
+            : "None";
+        var unresolvedQuestionList = unansweredQuestions.Count > 0
+            ? string.Join("<br/>", unansweredQuestions.Select(question => $"❓ {WebUtility.HtmlEncode(question)}"))
+            : "None";
+        var blockerList = readiness.Blockers.Count > 0
+            ? string.Join("<br/>", readiness.Blockers.Select(blocker => $"⛔ {WebUtility.HtmlEncode(blocker)}"))
+            : "None";
+
+        return $"<b>🚫 AI Planning Agent — Escalation after Round {planningRound}/3</b><br/>" +
+               $"<b>Readiness Score:</b> {readiness.ReadinessScore}/100<br/>" +
+               $"<b>Reason:</b> {WebUtility.HtmlEncode(readiness.Reason)}<br/><br/>" +
+               $"<b>Questions marked answered from prior rounds:</b><br/>{answeredQuestionList}<br/><br/>" +
+               $"<b>Unresolved questions:</b><br/>{unresolvedQuestionList}<br/><br/>" +
+               $"<b>Remaining blockers:</b><br/>{blockerList}<br/><br/>" +
+               "<i>Escalating to Needs Revision after three clarification rounds.</i>";
+    }
+
     internal static PlanningResult ParsePlanningResult(string aiResponse)
     {
         // Strip markdown code fences if present
@@ -557,7 +710,7 @@ Analyze this story and create a comprehensive implementation plan.";
     private static List<string> GetStringArray(JsonElement root, string propertyName)
     {
         if (!root.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Array)
-            return [];
+            return new List<string>();
 
         return prop.EnumerateArray()
             .Where(e => e.ValueKind == JsonValueKind.String)
@@ -849,7 +1002,7 @@ Analyze this story and create a comprehensive implementation plan.";
     {
         if (string.IsNullOrWhiteSpace(acceptanceCriteria))
         {
-            return [];
+            return new List<string>();
         }
 
         var text = WebUtility.HtmlDecode(Regex.Replace(acceptanceCriteria, "<[^>]+>", "\n"));
@@ -872,7 +1025,7 @@ Analyze this story and create a comprehensive implementation plan.";
 
         if (criteriaTokens.Count == 0)
         {
-            return [];
+            return new List<string>();
         }
 
         return subTasks

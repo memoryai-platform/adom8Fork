@@ -24,6 +24,11 @@ public interface IAzureDevOpsClient
     Task AddWorkItemCommentAsync(int workItemId, string comment, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the work item comment transcript ordered from oldest to newest.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetWorkItemCommentsAsync(int workItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Updates a work item field with a JSON patch operation.
     /// </summary>
     Task UpdateWorkItemFieldAsync(
