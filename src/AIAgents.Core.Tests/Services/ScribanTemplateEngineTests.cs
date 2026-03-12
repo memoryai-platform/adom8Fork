@@ -62,6 +62,15 @@ public sealed class ScribanTemplateEngineTests
             ["WORK_ITEM_ID"] = "US-100",
             ["TITLE"] = "Test Tasks",
             ["SUBTASKS"] = new List<string> { "Create model", "Implement service", "Write tests" },
+            ["TASK_DETAILS"] = new List<Dictionary<string, object?>>
+            {
+                new()
+                {
+                    ["Title"] = "Implement service",
+                    ["DependsOnTaskIndexes"] = new List<int> { 1 },
+                    ["DependsOnStoryIds"] = new List<string> { "US-88" }
+                }
+            },
             ["TIMESTAMP"] = "2026-01-01T00:00:00Z"
         };
 
@@ -71,6 +80,7 @@ public sealed class ScribanTemplateEngineTests
         Assert.Contains("Create model", result);
         Assert.Contains("Implement service", result);
         Assert.Contains("Write tests", result);
+        Assert.Contains("**DependsOn:** Task 1, US-88", result);
     }
 
     [Fact]
@@ -206,4 +216,29 @@ public sealed class ScribanTemplateEngineTests
         var result = await _engine.RenderAsync("PLAN.template.md", model);
         Assert.NotNull(result);
     }
+    [Fact]
+    public async Task RenderAsync_TasksTemplate_WithoutDependencies_DoesNotRenderDependsOn()
+    {
+        var model = new Dictionary<string, object?>
+        {
+            ["WORK_ITEM_ID"] = "US-101",
+            ["TITLE"] = "Test Tasks No Dependencies",
+            ["SUBTASKS"] = new List<string> { "Create model", "Implement service" },
+            ["TASK_DETAILS"] = new List<Dictionary<string, object?>>
+            {
+                new()
+                {
+                    ["Title"] = "Implement service",
+                    ["DependsOnTaskIndexes"] = new List<int>(),
+                    ["DependsOnStoryIds"] = new List<string>()
+                }
+            },
+            ["TIMESTAMP"] = "2026-01-01T00:00:00Z"
+        };
+
+        var result = await _engine.RenderAsync("TASKS.template.md", model);
+
+        Assert.DoesNotContain("**DependsOn:**", result);
+    }
+
 }

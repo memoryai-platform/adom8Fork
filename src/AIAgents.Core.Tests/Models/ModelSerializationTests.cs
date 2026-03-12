@@ -225,6 +225,7 @@ public sealed class ModelSerializationTests
             Complexity = 8,
             Architecture = "Clean",
             SubTasks = ["Task 1"],
+            TaskDetails = [new PlanningTask { Title = "Task 1" }],
             Dependencies = ["Dep 1"],
             Risks = ["Risk 1"],
             Assumptions = ["Assume 1"],

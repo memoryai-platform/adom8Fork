@@ -154,6 +154,13 @@ Respond ONLY with valid JSON matching this structure:
   ""complexity"": number (1-13 fibonacci scale),
   ""architecture"": ""string"",
   ""subTasks"": [""string""],
+  ""taskDetails"": [
+    {
+      ""title"": ""string"",
+      ""dependsOnTaskIndexes"": [1],
+      ""dependsOnStoryIds"": [""US-123""]
+    }
+  ],
   ""dependencies"": [""string""],
   ""risks"": [""string""],
   ""assumptions"": [""string""],
@@ -161,7 +168,14 @@ Respond ONLY with valid JSON matching this structure:
 }
 
 ALWAYS include the full plan even when proceed=false — the analyst needs the analysis to fix the story.
-If unverified external dependencies are detected, add a warning note in the technicalApproach field.";
+If unverified external dependencies are detected, add a warning note in the technicalApproach field.
+
+TASK DEPENDENCY REQUIREMENTS:
+- In decomposition mode and story mode, emit dependency-bearing task structures via taskDetails whenever dependencies exist.
+- taskDetails must align 1:1 with subTasks by title/order when possible.
+- Use dependsOnTaskIndexes for dependencies on other tasks in this same plan (1-based indexes).
+- Use dependsOnStoryIds for sibling story dependencies (e.g., US-123, US-456) when cross-story dependencies are known.
+- If no dependencies exist for a task, emit empty arrays for that task's dependency fields.";
 
         var userPrompt = $@"## Story Details
 **ID:** {workItem.Id}
@@ -224,6 +238,7 @@ Analyze this story and create a comprehensive implementation plan.";
             ["WORK_ITEM_ID"] = $"US-{workItem.Id}",
             ["TITLE"] = workItem.Title,
             ["SUBTASKS"] = planResult.SubTasks,
+            ["TASK_DETAILS"] = planResult.TaskDetails,
             ["TIMESTAMP"] = DateTime.UtcNow.ToString("O")
         };
         var renderedTasks = await _templateEngine.RenderAsync("TASKS.template.md", tasksModel, cancellationToken);
@@ -528,6 +543,7 @@ Analyze this story and create a comprehensive implementation plan.";
                 Complexity = root.TryGetProperty("complexity", out var c) ? c.GetInt32() : 5,
                 Architecture = root.GetProperty("architecture").GetString() ?? "",
                 SubTasks = GetStringArray(root, "subTasks"),
+                TaskDetails = GetTaskDetails(root),
                 Dependencies = GetStringArray(root, "dependencies"),
                 Risks = GetStringArray(root, "risks"),
                 Assumptions = GetStringArray(root, "assumptions"),
@@ -546,12 +562,51 @@ Analyze this story and create a comprehensive implementation plan.";
                 Complexity = 5,
                 Architecture = "To be determined",
                 SubTasks = ["Review AI analysis", "Implement changes", "Write tests"],
+                TaskDetails = [],
                 Dependencies = [],
                 Risks = ["AI response could not be parsed as structured JSON"],
                 Assumptions = [],
                 TestingStrategy = "Unit and integration tests recommended"
             };
         }
+    }
+
+
+    private static List<PlanningTask> GetTaskDetails(JsonElement root)
+    {
+        if (!root.TryGetProperty("taskDetails", out var prop) || prop.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var tasks = new List<PlanningTask>();
+        foreach (var item in prop.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var title = item.TryGetProperty("title", out var titleEl) ? titleEl.GetString() : null;
+            if (string.IsNullOrWhiteSpace(title))
+                continue;
+
+            tasks.Add(new PlanningTask
+            {
+                Title = title!,
+                DependsOnTaskIndexes = GetIntArray(item, "dependsOnTaskIndexes"),
+                DependsOnStoryIds = GetStringArray(item, "dependsOnStoryIds")
+            });
+        }
+
+        return tasks;
+    }
+
+    private static List<int> GetIntArray(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Array)
+            return [];
+
+        return prop.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out _))
+            .Select(e => e.GetInt32())
+            .ToList();
     }
 
     private static List<string> GetStringArray(JsonElement root, string propertyName)

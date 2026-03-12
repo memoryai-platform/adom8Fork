@@ -429,6 +429,10 @@ public sealed class PlanningAgentServiceTests
         Assert.NotNull(result.Readiness);
         Assert.True(result.Readiness.Proceed);
         Assert.Equal(92, result.Readiness.ReadinessScore);
+        Assert.Equal(4, result.TaskDetails.Count);
+        Assert.Equal("Implement RegistrationService", result.TaskDetails[1].Title);
+        Assert.Equal(new[] { 1 }, result.TaskDetails[1].DependsOnTaskIndexes);
+        Assert.Equal(new[] { "US-777" }, result.TaskDetails[2].DependsOnStoryIds);
     }
 
     [Fact]
@@ -450,6 +454,7 @@ public sealed class PlanningAgentServiceTests
         var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.PlanningResponseNoReadiness);
 
         Assert.Null(result.Readiness);
+        Assert.Empty(result.TaskDetails);
     }
 
     [Fact]

@@ -114,6 +114,13 @@ public static class MockAIResponses
         complexity = 8,
         architecture = "Clean architecture with service layer pattern",
         subTasks = new[] { "Create User model", "Implement RegistrationService", "Add AuthController endpoint", "Create email verification flow" },
+        taskDetails = new object[]
+        {
+            new { title = "Create User model", dependsOnTaskIndexes = Array.Empty<int>(), dependsOnStoryIds = Array.Empty<string>() },
+            new { title = "Implement RegistrationService", dependsOnTaskIndexes = new[] { 1 }, dependsOnStoryIds = Array.Empty<string>() },
+            new { title = "Add AuthController endpoint", dependsOnTaskIndexes = new[] { 2 }, dependsOnStoryIds = new[] { "US-777" } },
+            new { title = "Create email verification flow", dependsOnTaskIndexes = new[] { 2, 3 }, dependsOnStoryIds = Array.Empty<string>() }
+        },
         dependencies = new[] { "SMTP service", "Database migrations" },
         risks = new[] { "Email delivery reliability", "Token expiration handling" },
         assumptions = new[] { "SMTP server is available", "Database supports the schema" },

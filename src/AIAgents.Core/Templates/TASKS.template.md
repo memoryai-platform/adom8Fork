@@ -8,6 +8,17 @@
 
 {{ for task in SUBTASKS }}
 ### {{ for.index + 1 }}. {{ task }}
+{{ task_detail = null }}
+{{ if TASK_DETAILS }}
+{{ for detail in TASK_DETAILS }}
+{{ if detail.Title == task }}
+{{ task_detail = detail }}
+{{ end }}
+{{ end }}
+{{ end }}
+{{ if task_detail && (task_detail.DependsOnTaskIndexes.size > 0 || task_detail.DependsOnStoryIds.size > 0) }}
+**DependsOn:** {{ first = true }}{{ for idx in task_detail.DependsOnTaskIndexes }}{{ if !first }}, {{ end }}Task {{ idx }}{{ first = false }}{{ end }}{{ for story_id in task_detail.DependsOnStoryIds }}{{ if !first }}, {{ end }}{{ story_id }}{{ first = false }}{{ end }}
+{{ end }}
 
 **Status:** To Do
 

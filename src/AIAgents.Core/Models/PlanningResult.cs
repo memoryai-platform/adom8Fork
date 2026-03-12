@@ -13,6 +13,7 @@ public sealed record PlanningResult
     public required int Complexity { get; init; }
     public required string Architecture { get; init; }
     public required IReadOnlyList<string> SubTasks { get; init; }
+    public required IReadOnlyList<PlanningTask> TaskDetails { get; init; }
     public required IReadOnlyList<string> Dependencies { get; init; }
     public required IReadOnlyList<string> Risks { get; init; }
     public required IReadOnlyList<string> Assumptions { get; init; }
@@ -23,6 +24,16 @@ public sealed record PlanningResult
     /// When null, the story is assumed ready (backward compatibility).
     /// </summary>
     public PlanningReadiness? Readiness { get; init; }
+}
+
+/// <summary>
+/// Detailed planning task structure with optional dependency metadata.
+/// </summary>
+public sealed record PlanningTask
+{
+    public required string Title { get; init; }
+    public IReadOnlyList<int> DependsOnTaskIndexes { get; init; } = [];
+    public IReadOnlyList<string> DependsOnStoryIds { get; init; } = [];
 }
 
 /// <summary>
