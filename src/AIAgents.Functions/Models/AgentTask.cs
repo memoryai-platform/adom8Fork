@@ -49,4 +49,10 @@ public sealed record AgentTask
     /// </summary>
     [JsonPropertyName("handoffNote")]
     public string? HandoffNote { get; init; }
+
+    /// <summary>
+    /// Enables feature decomposition behavior in the Planning agent.
+    /// </summary>
+    [JsonPropertyName("planningFeatureMode")]
+    public bool PlanningFeatureMode { get; init; }
 }

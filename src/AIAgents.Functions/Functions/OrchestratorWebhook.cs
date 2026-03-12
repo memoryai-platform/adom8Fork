@@ -225,8 +225,11 @@ public sealed class OrchestratorWebhook
                 newState ?? "(unknown)");
         }
 
+        var planningFeatureMode = false;
         if (agentType == AgentType.Planning)
         {
+            planningFeatureMode = IsFeatureWorkItem(workItem);
+
             try
             {
                 await _adoClient.UpdateWorkItemFieldAsync(
@@ -243,8 +246,9 @@ public sealed class OrchestratorWebhook
             }
 
             _logger.LogInformation(
-                "AI Agent trigger for WI-{WorkItemId} seeded Planning visibility and will enqueue Planning",
-                workItemId);
+                "AI Agent trigger for WI-{WorkItemId} seeded Planning visibility and will enqueue Planning (featureMode={PlanningFeatureMode})",
+                workItemId,
+                planningFeatureMode);
         }
 
         // Enqueue the agent task
@@ -254,7 +258,8 @@ public sealed class OrchestratorWebhook
             AgentType = agentType,
             TriggerSource = nameof(OrchestratorWebhook),
             ResumeFromStage = newState,
-            HandoffNote = $"State transition webhook: {newState}"
+            HandoffNote = $"State transition webhook: {newState}",
+            PlanningFeatureMode = planningFeatureMode
         };
 
         await _taskQueue.EnqueueAsync(agentTask, cancellationToken);
@@ -277,4 +282,14 @@ public sealed class OrchestratorWebhook
             correlationId = agentTask.CorrelationId
         });
     }
+    internal static bool IsFeatureWorkItem(StoryWorkItem? workItem)
+    {
+        if (workItem is null || string.IsNullOrWhiteSpace(workItem.WorkItemType))
+        {
+            return false;
+        }
+
+        return string.Equals(workItem.WorkItemType, "Feature", StringComparison.OrdinalIgnoreCase);
+    }
+
 }

@@ -28,6 +28,8 @@ public sealed class PlanningAgentServiceTests
     private readonly Mock<IAgentTaskQueue> _taskQueueMock;
 
     private StoryState _capturedState = null!;
+    private readonly List<string> _writtenArtifacts = new();
+    private IReadOnlyDictionary<string, string>? _writtenFiles;
 
     public PlanningAgentServiceTests()
     {
@@ -73,12 +75,20 @@ public sealed class PlanningAgentServiceTests
         _githubContextMock.Setup(g => g.GetFileContentsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, string?> { ["src/Program.cs"] = "<button id=\"provision-btn\"></button>\n<button id=\"function-key-btn\"></button>\n<span id=\"codebase-badge\"></span>" });
         _githubContextMock.Setup(g => g.WriteFilesAsync(It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, IReadOnlyDictionary<string, string>, string, CancellationToken>((_, files, _, _) => _writtenFiles = files)
             .Returns(Task.CompletedTask);
+
+        _writtenArtifacts.Clear();
+        _writtenFiles = null;
 
         _contextMock.Setup(c => c.LoadStateAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(state);
         _contextMock.Setup(c => c.SaveStateAsync(It.IsAny<StoryState>(), It.IsAny<CancellationToken>()))
             .Callback<StoryState, CancellationToken>((s, _) => _capturedState = s)
+            .Returns(Task.CompletedTask);
+
+        _contextMock.Setup(c => c.WriteArtifactAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((path, _, _) => _writtenArtifacts.Add(path))
             .Returns(Task.CompletedTask);
 
         var response = aiResponse ?? MockAIResponses.ValidPlanningResponse;
@@ -419,6 +429,37 @@ public sealed class PlanningAgentServiceTests
         _taskQueueMock.Verify(q => q.EnqueueAsync(
             It.Is<AgentTask>(t => t.AgentType == AgentType.Coding),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+
+    [Fact]
+    public async Task ExecuteAsync_FeatureMode_WritesFeaturePlanArtifactsAndDoesNotEnqueueCoding()
+    {
+        var featureWorkItem = MockAIResponses.SampleWorkItem() with { WorkItemType = "Feature" };
+        SetupHappyPath(featureWorkItem, MockAIResponses.FeaturePlanningResponse);
+        var service = CreateService();
+        var task = new AgentTask { WorkItemId = featureWorkItem.Id, AgentType = AgentType.Planning, PlanningFeatureMode = true };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Contains("FEATURE_PLAN.md", _writtenArtifacts);
+        Assert.Contains("TASKS.md", _writtenArtifacts);
+        Assert.NotNull(_writtenFiles);
+        Assert.Contains($".ado/features/F-{featureWorkItem.Id}/FEATURE_PLAN.md", _writtenFiles!.Keys);
+        Assert.DoesNotContain($".ado/stories/US-{featureWorkItem.Id}/PLAN.md", _writtenFiles.Keys);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(It.Is<AgentTask>(t => t.AgentType == AgentType.Coding), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void ParsePlanningResult_FeatureDecomposition_ParsesChildStories()
+    {
+        var result = PlanningAgentService.ParsePlanningResult(MockAIResponses.FeaturePlanningResponse);
+
+        Assert.NotNull(result.Decomposition);
+        Assert.Equal(2, result.Decomposition!.ChildStories.Count);
+        Assert.Equal("Implement API authorization policies", result.Decomposition.ChildStories[0].Title);
+        Assert.Equal(2, result.Decomposition.ChildStories[0].AcceptanceCriteria.Count);
+        Assert.Single(result.Decomposition.ChildStories[0].SiblingDependencies);
     }
 
     [Fact]

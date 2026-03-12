@@ -193,6 +193,51 @@ public static class MockAIResponses
         testingStrategy = "Mock GitHub API responses, verify endpoint availability first"
     });
 
+    
+    public static string FeaturePlanningResponse => JsonSerializer.Serialize(new
+    {
+        readiness = new
+        {
+            proceed = true,
+            readinessScore = 90,
+            blockers = Array.Empty<string>(),
+            questions = Array.Empty<string>(),
+            researchNeeded = Array.Empty<string>(),
+            suggestedBreakdown = Array.Empty<string>(),
+            reason = "Feature can be decomposed into child stories"
+        },
+        problemAnalysis = "Feature introduces role-based access across modules.",
+        technicalApproach = "Decompose by bounded context and ownership.",
+        affectedFiles = new[] { "src/Auth", "src/API" },
+        complexity = 13,
+        architecture = "Layered services with shared authorization middleware",
+        subTasks = new[] { "Define story boundaries", "Document dependencies" },
+        dependencies = new[] { "Identity provider integration" },
+        risks = new[] { "Cross-team coupling" },
+        assumptions = new[] { "Identity scopes are available" },
+        testingStrategy = "Contract tests and end-to-end authorization scenarios",
+        decomposition = new
+        {
+            childStories = new[]
+            {
+                new
+                {
+                    title = "Implement API authorization policies",
+                    acceptanceCriteria = new[] { "Unauthorized requests return 403", "Policies map to roles" },
+                    complexity = 5,
+                    siblingDependencies = new[] { "Add role management UI" }
+                },
+                new
+                {
+                    title = "Add role management UI",
+                    acceptanceCriteria = new[] { "Admin can assign roles", "Role updates are audited" },
+                    complexity = 8,
+                    siblingDependencies = Array.Empty<string>()
+                }
+            }
+        }
+    });
+
     public static string MalformedPlanningResponse => "This is not valid JSON at all - just plain text analysis";
 
     public static string PlanningResponseInCodeFences => $"```json\n{ValidPlanningResponse}\n```";

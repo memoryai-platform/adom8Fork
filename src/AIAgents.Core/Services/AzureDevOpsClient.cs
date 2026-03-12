@@ -353,6 +353,7 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         {
             Id = workItem.Id ?? 0,
             Title = GetField<string>(fields, "System.Title") ?? "Untitled",
+            WorkItemType = GetField<string>(fields, "System.WorkItemType") ?? "User Story",
             Description = GetField<string>(fields, "System.Description"),
             AcceptanceCriteria = GetField<string>(fields, "Microsoft.VSTS.Common.AcceptanceCriteria"),
             State = GetField<string>(fields, "System.State") ?? "New",

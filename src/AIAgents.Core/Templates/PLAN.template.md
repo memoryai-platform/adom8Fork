@@ -52,8 +52,35 @@
 No dependencies identified.
 {{ end }}
 
----
 
+### Feature Decomposition
+{{ if DECOMPOSITION_CHILD_STORIES && (DECOMPOSITION_CHILD_STORIES | array.size) > 0 }}
+{{ for child in DECOMPOSITION_CHILD_STORIES }}
+#### {{ for.index + 1 }}. {{ child.title }}
+- **Complexity:** {{ child.complexity }}
+- **Acceptance Criteria:**
+{{ if child.acceptanceCriteria && (child.acceptanceCriteria | array.size) > 0 }}
+{{ for ac in child.acceptanceCriteria }}
+  - {{ ac }}
+{{ end }}
+{{ else }}
+  - None provided
+{{ end }}
+- **Sibling Dependencies:**
+{{ if child.siblingDependencies && (child.siblingDependencies | array.size) > 0 }}
+{{ for dep in child.siblingDependencies }}
+  - {{ dep }}
+{{ end }}
+{{ else }}
+  - None
+{{ end }}
+
+{{ end }}
+{{ else }}
+No feature decomposition provided.
+{{ end }}
+
+---
 ## Risk Assessment
 
 ### Identified Risks

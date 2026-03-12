@@ -8,6 +8,7 @@ public sealed record StoryWorkItem
 {
     public required int Id { get; init; }
     public required string Title { get; init; }
+    public string WorkItemType { get; init; } = "User Story";
     public string? Description { get; init; }
     public string? AcceptanceCriteria { get; init; }
     public required string State { get; init; }

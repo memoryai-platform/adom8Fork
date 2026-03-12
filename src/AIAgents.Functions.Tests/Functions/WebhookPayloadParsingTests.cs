@@ -1,3 +1,5 @@
+using AIAgents.Core.Models;
+using AIAgents.Functions.Functions;
 using System.Text.Json;
 using AIAgents.Functions.Models;
 
@@ -149,6 +151,23 @@ public sealed class WebhookPayloadParsingTests
     {
         Assert.True(s_expectedMapping.TryGetValue("ai agent", out _));
         Assert.True(s_expectedMapping.TryGetValue("AI AGENT", out _));
+    }
+
+
+    [Fact]
+    public void IsFeatureWorkItem_FeatureType_ReturnsTrue()
+    {
+        var wi = new StoryWorkItem { Id = 101, Title = "Feature", WorkItemType = "Feature", State = "AI Agent" };
+
+        Assert.True(OrchestratorWebhook.IsFeatureWorkItem(wi));
+    }
+
+    [Fact]
+    public void IsFeatureWorkItem_NonFeatureType_ReturnsFalse()
+    {
+        var wi = new StoryWorkItem { Id = 102, Title = "Story", WorkItemType = "User Story", State = "AI Agent" };
+
+        Assert.False(OrchestratorWebhook.IsFeatureWorkItem(wi));
     }
 
     // ── Work item ID extraction logic ──

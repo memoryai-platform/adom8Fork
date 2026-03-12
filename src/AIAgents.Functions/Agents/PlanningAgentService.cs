@@ -72,9 +72,11 @@ public sealed class PlanningAgentService : IAgentService
 
         // 1b. Resolve AI client with per-story model overrides
         var aiClient = _aiClientFactory.GetClientForAgent("Planning", workItem.GetModelOverrides());
+        var featureMode = task.PlanningFeatureMode || string.Equals(workItem.WorkItemType, "Feature", StringComparison.OrdinalIgnoreCase);
+        var workItemPrefix = featureMode ? "F" : "US";
 
         // 2. Get repository context via GitHub API — no local clone needed
-        var branchName = $"feature/US-{task.WorkItemId}";
+        var branchName = $"feature/{workItemPrefix}-{task.WorkItemId}";
         await EnsureBranchExistsAsync(branchName, cancellationToken);
         var existingFiles = await _githubContext.GetFileTreeAsync(branchName, cancellationToken);
         var fileListSummary = string.Join("\n", existingFiles.Take(100));
@@ -105,65 +107,15 @@ public sealed class PlanningAgentService : IAgentService
 
         await _adoClient.AddWorkItemCommentAsync(
             workItem.Id,
-            "Moved to Planning Agent: triaging requirements and preparing implementation plan.",
+            featureMode ? "Moved to Planning Agent (Feature mode): decomposing feature into child stories." : "Moved to Planning Agent: triaging requirements and preparing implementation plan.",
             cancellationToken);
 
         // 5. Detect placeholder text before calling AI
         var placeholderWarning = DetectPlaceholders(workItem);
 
         // 6. Call AI for planning analysis with triage gate
-        var systemPrompt = @"You are a senior software architect analyzing Azure DevOps user stories.
-You have TWO jobs:
-1. TRIAGE — Assess whether the story is ready for AI coding.
-2. PLAN — If ready, create a detailed implementation plan.
-
-TRIAGE CHECKS (evaluate all 7):
-- Completeness: Does the story have a clear title, description, AND acceptance criteria? All three are REQUIRED. An empty or missing acceptance criteria is an automatic blocker.
-- Complexity: Is the estimated complexity ≤ 13 story points? Stories over 13 should be broken down.
-- Ambiguity: Are the requirements specific enough to implement without guessing? Flag vague terms like 'improve', 'optimize', 'make better', 'enhance' without measurable criteria.
-- Risk: Are there architectural risks that need human review first?
-- Feasibility: Can this be implemented with the existing codebase and tech stack?
-- Content Quality: Does the story contain placeholder or unresolved text? Look for: TBD, TODO, TBC, N/A (in required fields), 'need to decide', 'to be determined', 'not yet defined', 'undecided', 'placeholder', '[fill in]', '???', or any open questions/decision points that haven't been resolved. Each placeholder found is a blocker — list the exact text and which field it appears in.
-- Unverified Assumptions: Does the story make assumptions about external API capabilities that cannot be verified from codebase documentation alone? Flag assumptions about:
-  • GitHub API capabilities (task GUIDs, repository metadata, Copilot-specific features, webhook payloads, GraphQL fields)
-  • Azure DevOps API capabilities (custom fields, work item types, webhooks, process templates, specific field names not in standard docs)
-  • Third-party APIs (specific endpoints, data formats, authentication methods, rate limits)
-  • Any external data that the story assumes exists or can be retrieved but hasn't been verified in codebase documentation or comments
-
-If ANY check fails, set readiness.proceed=false with clear blockers and questions.
-Be STRICT: do not allow stories with unverified decisions or placeholder text to proceed.
-
-DISTINCTION between questions and researchNeeded:
-- questions: Human clarification needed (business logic, requirements, user experience decisions)
-- researchNeeded: Technical verification needed (external API capabilities, data availability, endpoint existence)
-
-Respond ONLY with valid JSON matching this structure:
-{
-  ""readiness"": {
-    ""proceed"": true/false,
-    ""readinessScore"": number (0-100),
-    ""blockers"": [""string — blocking issue""],
-    ""questions"": [""string — question for the analyst requiring human clarification""],
-    ""researchNeeded"": [""string — unverified external API assumption that needs technical investigation""],
-    ""suggestedBreakdown"": [""string — suggested sub-stories if too complex""],
-    ""reason"": ""brief rationale for the decision""
-  },
-  ""problemAnalysis"": ""string"",
-  ""technicalApproach"": ""string"",
-  ""affectedFiles"": [""string""],
-  ""complexity"": number (1-13 fibonacci scale),
-  ""architecture"": ""string"",
-  ""subTasks"": [""string""],
-  ""dependencies"": [""string""],
-  ""risks"": [""string""],
-  ""assumptions"": [""string""],
-  ""testingStrategy"": ""string""
-}
-
-ALWAYS include the full plan even when proceed=false — the analyst needs the analysis to fix the story.
-If unverified external dependencies are detected, add a warning note in the technicalApproach field.";
-
-        var userPrompt = $@"## Story Details
+        var systemPrompt = featureMode ? BuildFeatureSystemPrompt() : BuildStorySystemPrompt();
+        var userPrompt = $@"## Work Item Details
 **ID:** {workItem.Id}
 **Title:** {workItem.Title}
 **Description:** {workItem.Description ?? "No description provided"}
@@ -180,7 +132,7 @@ If unverified external dependencies are detected, add a warning note in the tech
 
 {await _codebaseContext.LoadRelevantContextAsync(branchName, workItem.Title, workItem.Description, cancellationToken)}
 
-Analyze this story and create a comprehensive implementation plan.";
+Analyze this work item and return the required JSON output for the selected planning mode.";
 
         var aiResult = await aiClient.CompleteAsync(systemPrompt, userPrompt,
             new AICompletionOptions { Temperature = 0.3 }, cancellationToken);
@@ -194,7 +146,7 @@ Analyze this story and create a comprehensive implementation plan.";
         // 7. Render plan template
         var templateModel = new Dictionary<string, object?>
         {
-            ["WORK_ITEM_ID"] = $"US-{workItem.Id}",
+            ["WORK_ITEM_ID"] = $"{workItemPrefix}-{workItem.Id}",
             ["TITLE"] = workItem.Title,
             ["STATE"] = workItem.State,
             ["CREATED_DATE"] = workItem.CreatedDate.ToString("yyyy-MM-dd"),
@@ -210,18 +162,19 @@ Analyze this story and create a comprehensive implementation plan.";
             ["RISKS"] = planResult.Risks,
             ["ASSUMPTIONS"] = planResult.Assumptions,
             ["TESTING_STRATEGY"] = planResult.TestingStrategy,
+            ["DECOMPOSITION_CHILD_STORIES"] = planResult.Decomposition?.ChildStories ?? [],
             ["TIMESTAMP"] = DateTime.UtcNow.ToString("O")
         };
 
         var renderedPlan = await _templateEngine.RenderAsync("PLAN.template.md", templateModel, cancellationToken);
 
         // 8. Save artifacts to Table Storage
-        await context.WriteArtifactAsync("PLAN.md", renderedPlan, cancellationToken);
+        await context.WriteArtifactAsync(featureMode ? "FEATURE_PLAN.md" : "PLAN.md", renderedPlan, cancellationToken);
 
         // 9. Render and save tasks
         var tasksModel = new Dictionary<string, object?>
         {
-            ["WORK_ITEM_ID"] = $"US-{workItem.Id}",
+            ["WORK_ITEM_ID"] = $"{workItemPrefix}-{workItem.Id}",
             ["TITLE"] = workItem.Title,
             ["SUBTASKS"] = planResult.SubTasks,
             ["TIMESTAMP"] = DateTime.UtcNow.ToString("O")
@@ -236,10 +189,14 @@ Analyze this story and create a comprehensive implementation plan.";
             branchName,
             new Dictionary<string, string>
             {
-                [$".ado/stories/US-{workItem.Id}/PLAN.md"] = renderedPlan,
-                [$".ado/stories/US-{workItem.Id}/TASKS.md"] = renderedTasks
+                [featureMode
+                    ? $".ado/features/F-{workItem.Id}/FEATURE_PLAN.md"
+                    : $".ado/stories/US-{workItem.Id}/PLAN.md"] = renderedPlan,
+                [featureMode
+                    ? $".ado/features/F-{workItem.Id}/TASKS.md"
+                    : $".ado/stories/US-{workItem.Id}/TASKS.md"] = renderedTasks
             },
-            $"[AI Planning] US-{workItem.Id}: {workItem.Title}",
+            $"[AI Planning] {workItemPrefix}-{workItem.Id}: {workItem.Title}",
             cancellationToken);
 
         // 12. Triage gate — check readiness
@@ -333,19 +290,20 @@ Analyze this story and create a comprehensive implementation plan.";
             return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
 
-        // 13. Story IS ready — proceed to coding
         var readinessInfo = readiness is not null
             ? $"<br/>Readiness: {readiness.ReadinessScore}/100"
             : "";
 
         await _adoClient.AddWorkItemCommentAsync(workItem.Id,
-            $"<b>🤖 AI Planning Agent Complete</b><br/>Complexity: {planResult.Complexity} story points<br/>Sub-tasks: {planResult.SubTasks.Count}<br/>Risks: {planResult.Risks.Count}{readinessInfo}",
+            featureMode
+                ? $"<b>🤖 AI Planning Agent Complete (Feature Mode)</b><br/>Child stories: {planResult.Decomposition?.ChildStories.Count ?? 0}<br/>Sub-tasks: {planResult.SubTasks.Count}{readinessInfo}"
+                : $"<b>🤖 AI Planning Agent Complete</b><br/>Complexity: {planResult.Complexity} story points<br/>Sub-tasks: {planResult.SubTasks.Count}<br/>Risks: {planResult.Risks.Count}{readinessInfo}",
             cancellationToken);
 
         // 12. Update story state
         state.Agents["Planning"] = AgentStatus.Completed();
-        state.CurrentState = "AI Code";
-        state.CurrentStage = "Coding";
+        state.CurrentState = featureMode ? "Story Planning" : "AI Code";
+        state.CurrentStage = featureMode ? "Planning" : "Coding";
         state.LastActivityUtc = DateTime.UtcNow;
         state.Blockers.Clear();
         state.HandoffRef = new StoryHandoffReference
@@ -356,7 +314,7 @@ Analyze this story and create a comprehensive implementation plan.";
             Details = "Planning completed and handed off to Coding"
         };
         state.AcceptanceTrace = acceptanceTrace;
-        AddDocArtifact(state.Artifacts.Docs, "PLAN.md");
+        AddDocArtifact(state.Artifacts.Docs, featureMode ? "FEATURE_PLAN.md" : "PLAN.md");
         AddDocArtifact(state.Artifacts.Docs, "TASKS.md");
         AddDocArtifact(state.Artifacts.Docs, "ACCEPTANCE_TRACE.json");
         AddDocArtifact(state.Artifacts.Docs, "INITIALIZATION_BUNDLE.json");
@@ -374,6 +332,15 @@ Analyze this story and create a comprehensive implementation plan.";
 
         try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, AIPipelineNames.CurrentAgentValues.Coding, cancellationToken); }
         catch { /* field may not exist yet */ }
+
+        if (featureMode)
+        {
+            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
+            catch { }
+
+            _logger.LogInformation("Planning agent completed feature decomposition for WI-{WorkItemId}", task.WorkItemId);
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
+        }
 
         var nextTask = new AgentTask
         {
@@ -532,6 +499,7 @@ Analyze this story and create a comprehensive implementation plan.";
                 Risks = GetStringArray(root, "risks"),
                 Assumptions = GetStringArray(root, "assumptions"),
                 TestingStrategy = root.GetProperty("testingStrategy").GetString() ?? "",
+                Decomposition = ParseFeatureDecomposition(root),
                 Readiness = readiness
             };
         }
@@ -549,7 +517,8 @@ Analyze this story and create a comprehensive implementation plan.";
                 Dependencies = [],
                 Risks = ["AI response could not be parsed as structured JSON"],
                 Assumptions = [],
-                TestingStrategy = "Unit and integration tests recommended"
+                TestingStrategy = "Unit and integration tests recommended",
+                Decomposition = null
             };
         }
     }
@@ -564,6 +533,110 @@ Analyze this story and create a comprehensive implementation plan.";
             .Select(e => e.GetString()!)
             .ToList();
     }
+
+    private static FeatureDecomposition? ParseFeatureDecomposition(JsonElement root)
+    {
+        if (!root.TryGetProperty("decomposition", out var decompositionEl) || decompositionEl.ValueKind != JsonValueKind.Object)
+            return null;
+
+        if (!decompositionEl.TryGetProperty("childStories", out var childStoriesEl) || childStoriesEl.ValueKind != JsonValueKind.Array)
+            return new FeatureDecomposition();
+
+        var childStories = new List<FeatureChildStoryPlan>();
+        foreach (var child in childStoriesEl.EnumerateArray())
+        {
+            if (child.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var title = child.TryGetProperty("title", out var titleEl)
+                ? titleEl.GetString() ?? string.Empty
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(title))
+                continue;
+
+            var complexity = child.TryGetProperty("complexity", out var complexityEl) && complexityEl.TryGetInt32(out var parsedComplexity)
+                ? parsedComplexity
+                : 3;
+
+            childStories.Add(new FeatureChildStoryPlan
+            {
+                Title = title,
+                AcceptanceCriteria = GetStringArray(child, "acceptanceCriteria"),
+                Complexity = complexity,
+                SiblingDependencies = GetStringArray(child, "siblingDependencies")
+            });
+        }
+
+        return new FeatureDecomposition
+        {
+            ChildStories = childStories
+        };
+    }
+
+    private static string BuildStorySystemPrompt() => @"You are a senior software architect analyzing Azure DevOps user stories.
+You have TWO jobs:
+1. TRIAGE — Assess whether the story is ready for AI coding.
+2. PLAN — If ready, create a detailed implementation plan.
+
+TRIAGE CHECKS (evaluate all 7):
+- Completeness: Does the story have a clear title, description, AND acceptance criteria? All three are REQUIRED. An empty or missing acceptance criteria is an automatic blocker.
+- Complexity: Is the estimated complexity ≤ 13 story points? Stories over 13 should be broken down.
+- Ambiguity: Are the requirements specific enough to implement without guessing? Flag vague terms like 'improve', 'optimize', 'make better', 'enhance' without measurable criteria.
+- Risk: Are there architectural risks that need human review first?
+- Feasibility: Can this be implemented with the existing codebase and tech stack?
+- Content Quality: Does the story contain placeholder or unresolved text? Look for: TBD, TODO, TBC, N/A (in required fields), 'need to decide', 'to be determined', 'not yet defined', 'undecided', 'placeholder', '[fill in]', '???', or any open questions/decision points that haven't been resolved. Each placeholder found is a blocker — list the exact text and which field it appears in.
+- Unverified Assumptions: Does the story make assumptions about external API capabilities that cannot be verified from codebase documentation alone?
+
+If ANY check fails, set readiness.proceed=false with clear blockers and questions.
+Respond ONLY with valid JSON matching this structure:
+{
+  ""readiness"": {
+    ""proceed"": true/false,
+    ""readinessScore"": number,
+    ""blockers"": [""string""],
+    ""questions"": [""string""],
+    ""researchNeeded"": [""string""],
+    ""suggestedBreakdown"": [""string""],
+    ""reason"": ""string""
+  },
+  ""problemAnalysis"": ""string"",
+  ""technicalApproach"": ""string"",
+  ""affectedFiles"": [""string""],
+  ""complexity"": number,
+  ""architecture"": ""string"",
+  ""subTasks"": [""string""],
+  ""dependencies"": [""string""],
+  ""risks"": [""string""],
+  ""assumptions"": [""string""],
+  ""testingStrategy"": ""string""
+}";
+
+    private static string BuildFeatureSystemPrompt() => @"You are a senior software architect decomposing an Azure DevOps Feature into implementable child stories.
+Return JSON with normal planning fields plus decomposition:
+{
+  ""readiness"": { ""proceed"": true/false, ""readinessScore"": number, ""blockers"": [""string""], ""questions"": [""string""], ""researchNeeded"": [""string""], ""suggestedBreakdown"": [""string""], ""reason"": ""string"" },
+  ""problemAnalysis"": ""string"",
+  ""technicalApproach"": ""string"",
+  ""affectedFiles"": [""string""],
+  ""complexity"": number,
+  ""architecture"": ""string"",
+  ""subTasks"": [""string""],
+  ""dependencies"": [""string""],
+  ""risks"": [""string""],
+  ""assumptions"": [""string""],
+  ""testingStrategy"": ""string"",
+  ""decomposition"": {
+    ""childStories"": [
+      {
+        ""title"": ""string"",
+        ""acceptanceCriteria"": [""string""],
+        ""complexity"": number,
+        ""siblingDependencies"": [""string""]
+      }
+    ]
+  }
+}
+Ensure each child story is independently deliverable and siblingDependencies only reference other proposed child stories by title.";
 
     /// <summary>
     /// Scans story fields for placeholder/unresolved text patterns.
