@@ -244,6 +244,20 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
         return workItemId;
     }
 
+
+    public async Task<IReadOnlyList<int>> GetSuccessorIdsAsync(int workItemId, CancellationToken cancellationToken = default)
+    {
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var workItem = await client.GetWorkItemAsync(workItemId, expand: WorkItemExpand.Relations, cancellationToken: cancellationToken);
+        return ExtractRelatedIds(workItem, "System.LinkTypes.Dependency-Forward");
+    }
+
+    public async Task<IReadOnlyList<int>> GetPredecessorIdsAsync(int workItemId, CancellationToken cancellationToken = default)
+    {
+        var client = await _connection.Value.GetClientAsync<WorkItemTrackingHttpClient>(cancellationToken);
+        var workItem = await client.GetWorkItemAsync(workItemId, expand: WorkItemExpand.Relations, cancellationToken: cancellationToken);
+        return ExtractRelatedIds(workItem, "System.LinkTypes.Dependency-Reverse");
+    }
     public async Task<WorkItemSupportingArtifacts> DownloadSupportingArtifactsAsync(
         int workItemId,
         string repositoryPath,
@@ -406,6 +420,33 @@ public sealed class AzureDevOpsClient : IAzureDevOpsClient, IDisposable
                 ? (int)ci : null,
             AIDeploymentDecision = GetField<string>(fields, CustomFieldNames.DeploymentDecision)
         };
+    }
+
+
+    private static IReadOnlyList<int> ExtractRelatedIds(WorkItem workItem, string relationType)
+    {
+        if (workItem.Relations is null || workItem.Relations.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = new List<int>();
+        foreach (var relation in workItem.Relations)
+        {
+            if (!string.Equals(relation.Rel, relationType, StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(relation.Url))
+            {
+                continue;
+            }
+
+            var segments = relation.Url.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var last = segments.Length > 0 ? segments[^1] : string.Empty;
+            if (int.TryParse(last, out var id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
     }
 
     private static T? GetField<T>(IDictionary<string, object> fields, string key)

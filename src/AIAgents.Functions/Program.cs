@@ -130,6 +130,7 @@ var host = new HostBuilder()
 
         // Copilot delegation tracking (Azure Table Storage)
         services.AddSingleton<ICopilotDelegationService, TableStorageCopilotDelegationService>();
+        services.AddSingleton<IMergeEventDeduplicationStore, TableMergeEventDeduplicationStore>();
         services.AddSingleton<IGitHubOrchestrationLauncherService>(sp =>
             new GitHubOrchestrationLauncherService(
                 sp.GetRequiredService<IOptions<GitHubOptions>>(),

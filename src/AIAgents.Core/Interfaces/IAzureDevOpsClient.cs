@@ -59,4 +59,14 @@ public interface IAzureDevOpsClient
         int workItemId,
         string repositoryPath,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets successor work item IDs linked from this work item via ADO dependency links.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetSuccessorIdsAsync(int workItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets predecessor work item IDs linked to this work item via ADO dependency links.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetPredecessorIdsAsync(int workItemId, CancellationToken cancellationToken = default);
 }

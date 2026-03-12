@@ -181,4 +181,13 @@ public sealed class CopilotBridgeWebhookTests
         Assert.Contains("CurrentAIAgent", missing);
         Assert.Contains("CompletionComment", missing);
     }
+
+
+    [Fact]
+    public void ExtractWorkItemIdFromBranch_FeatureBranch_ReturnsId()
+    {
+        var result = CopilotBridgeWebhook.ExtractWorkItemIdFromBranch("feature/US-31415");
+        Assert.Equal(31415, result);
+    }
+
 }

@@ -504,6 +504,18 @@ public sealed class CopilotBridgeWebhook
         return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
 
+
+    internal static int? ExtractWorkItemIdFromBranch(string? branchName)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+        {
+            return null;
+        }
+
+        var match = System.Text.RegularExpressions.Regex.Match(branchName, @"US-(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null;
+    }
+
     internal static bool IsReadyToReconcile(string action, string prTitle, bool isDraft)
     {
         if (string.IsNullOrWhiteSpace(action))
