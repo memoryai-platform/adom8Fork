@@ -27,6 +27,7 @@ var host = new HostBuilder()
         services.Configure<InputValidationOptions>(configuration.GetSection(InputValidationOptions.SectionName));
         services.Configure<CopilotOptions>(configuration.GetSection(CopilotOptions.SectionName));
         services.Configure<SaasOptions>(configuration.GetSection(SaasOptions.SectionName));
+        services.Configure<PlanningOptions>(configuration.GetSection(PlanningOptions.SectionName));
 
         // Application Insights — register BEFORE HTTP resilience handlers
         try

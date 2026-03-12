@@ -35,6 +35,7 @@ public sealed class PlanningAgentService : IAgentService
     private readonly ILogger<PlanningAgentService> _logger;
     private readonly IAgentTaskQueue _taskQueue;
     private readonly GitHubOptions? _githubOptions;
+    private readonly PlanningOptions _planningOptions;
     private readonly HttpClient? _gitHubHttpClient;
 
     public PlanningAgentService(
@@ -46,6 +47,7 @@ public sealed class PlanningAgentService : IAgentService
         ICodebaseContextProvider codebaseContext,
         ILogger<PlanningAgentService> logger,
         IAgentTaskQueue taskQueue,
+        IOptions<PlanningOptions>? planningOptions = null,
         IOptions<GitHubOptions>? githubOptions = null,
         IHttpClientFactory? httpClientFactory = null)
     {
@@ -57,6 +59,7 @@ public sealed class PlanningAgentService : IAgentService
         _codebaseContext = codebaseContext;
         _logger = logger;
         _taskQueue = taskQueue;
+        _planningOptions = planningOptions?.Value ?? new PlanningOptions();
         _githubOptions = githubOptions?.Value;
         _gitHubHttpClient = httpClientFactory?.CreateClient("GitHub");
     }
@@ -330,6 +333,66 @@ Analyze this story and create a comprehensive implementation plan.";
             await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
 
             _logger.LogInformation("Planning agent rejected WI-{WorkItemId}, moved to Needs Revision", task.WorkItemId);
+            return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
+        }
+
+        // 13. Promotion gate for oversized User Stories
+        var promotionReasons = GetFeaturePromotionReasons(planResult, _planningOptions);
+        if (promotionReasons.Count > 0)
+        {
+            var decompositionSummary = BuildSuggestedDecompositionSummary(planResult);
+            var reasonList = string.Join("<br/>", promotionReasons.Select(reason => $"- {WebUtility.HtmlEncode(reason)}"));
+
+            var promotionComment = "<b>📈 Planning Recommendation — Promote User Story to Feature</b><br/>" +
+                "This story appears oversized for a single User Story and should be promoted to a Feature before coding begins.<br/><br/>" +
+                $"<b>Reasons:</b><br/>{reasonList}<br/><br/>" +
+                $"<b>Suggested Decomposition:</b><br/>{WebUtility.HtmlEncode(decompositionSummary)}<br/><br/>" +
+                "<i>Move this item back to AI Agent after decomposition into smaller stories.</i>";
+
+            await _adoClient.AddWorkItemCommentAsync(workItem.Id, promotionComment, cancellationToken);
+            await _adoClient.AddWorkItemCommentAsync(
+                workItem.Id,
+                "Moved to Needs Revision. Reason: Planning thresholds indicate this story should be promoted to a Feature.",
+                cancellationToken);
+
+            state.Agents["Planning"] = AgentStatus.Completed();
+            state.Agents["Planning"].AdditionalData = new Dictionary<string, object>
+            {
+                ["triageResult"] = "feature_promotion_recommended",
+                ["complexity"] = planResult.Complexity,
+                ["subTaskCount"] = planResult.SubTasks.Count
+            };
+            state.CurrentState = "Needs Revision";
+            state.CurrentStage = "Planning";
+            state.LastActivityUtc = DateTime.UtcNow;
+            state.Blockers = promotionReasons
+                .Select(reason => $"Feature promotion recommended: {reason}")
+                .ToList();
+            state.HandoffRef = new StoryHandoffReference
+            {
+                Source = "PlanningAgentService",
+                Stage = "Needs Revision",
+                CorrelationId = task.CorrelationId,
+                Details = "Story exceeded planning thresholds and should be promoted to a Feature."
+            };
+            state.AcceptanceTrace = acceptanceTrace;
+            state.Decisions.Add(new Decision
+            {
+                Agent = "Planning",
+                DecisionText = "Recommended feature promotion for oversized story",
+                Rationale = string.Join("; ", promotionReasons)
+            });
+            await context.SaveStateAsync(state, cancellationToken);
+
+            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.LastAgent, "Planning", cancellationToken); }
+            catch { }
+
+            try { await _adoClient.UpdateWorkItemFieldAsync(workItem.Id, CustomFieldNames.Paths.CurrentAIAgent, string.Empty, cancellationToken); }
+            catch { }
+
+            await _adoClient.UpdateWorkItemStateAsync(workItem.Id, "Needs Revision", cancellationToken);
+
+            _logger.LogInformation("Planning agent recommended feature promotion for WI-{WorkItemId}; moved to Needs Revision", task.WorkItemId);
             return AgentResult.Ok(aiResult.Usage?.TotalTokens ?? 0, aiResult.Usage?.EstimatedCost ?? 0m);
         }
 
@@ -611,6 +674,33 @@ Analyze this story and create a comprehensive implementation plan.";
         var start = Math.Max(0, index - radius);
         var end = Math.Min(text.Length, index + radius);
         return text[start..end].Trim();
+    }
+
+    internal static List<string> GetFeaturePromotionReasons(PlanningResult planResult, PlanningOptions options)
+    {
+        var reasons = new List<string>();
+
+        if (planResult.Complexity > options.FeaturePromotionComplexityThreshold)
+        {
+            reasons.Add($"Complexity {planResult.Complexity} exceeds threshold {options.FeaturePromotionComplexityThreshold}");
+        }
+
+        if (planResult.SubTasks.Count > options.FeaturePromotionSubstoryThreshold)
+        {
+            reasons.Add($"Sub-story count {planResult.SubTasks.Count} exceeds threshold {options.FeaturePromotionSubstoryThreshold}");
+        }
+
+        return reasons;
+    }
+
+    internal static string BuildSuggestedDecompositionSummary(PlanningResult planResult)
+    {
+        if (planResult.SubTasks.Count == 0)
+        {
+            return "Split the story into smaller, independently shippable vertical slices aligned to acceptance criteria.";
+        }
+
+        return string.Join("; ", planResult.SubTasks.Take(5));
     }
 
     private async Task<string> BuildTargetedFileContextAsync(

@@ -193,6 +193,37 @@ public static class MockAIResponses
         testingStrategy = "Mock GitHub API responses, verify endpoint availability first"
     });
 
+
+    /// <summary>
+    /// Planning response that is ready but oversized and should trigger feature promotion recommendation.
+    /// </summary>
+    public static string OversizedPlanningResponse => JsonSerializer.Serialize(new
+    {
+        readiness = new
+        {
+            proceed = true,
+            readinessScore = 90,
+            blockers = Array.Empty<string>(),
+            questions = Array.Empty<string>(),
+            suggestedBreakdown = Array.Empty<string>(),
+            reason = "Story is implementable but too large for a single user story"
+        },
+        problemAnalysis = "Large cross-cutting effort spanning backend, frontend, and observability.",
+        technicalApproach = "Implement in decomposed vertical slices.",
+        affectedFiles = new[] { "src/A.cs", "src/B.cs" },
+        complexity = 13,
+        architecture = "Layered",
+        subTasks = new[]
+        {
+            "Define API contracts", "Implement service layer", "Add persistence", "Add migration",
+            "Create UI flow", "Add telemetry", "Add alerting", "Integration tests", "Docs update"
+        },
+        dependencies = Array.Empty<string>(),
+        risks = new[] { "Scope is too broad" },
+        assumptions = Array.Empty<string>(),
+        testingStrategy = "Unit and integration tests"
+    });
+
     public static string MalformedPlanningResponse => "This is not valid JSON at all - just plain text analysis";
 
     public static string PlanningResponseInCodeFences => $"```json\n{ValidPlanningResponse}\n```";

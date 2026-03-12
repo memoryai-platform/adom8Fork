@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
@@ -45,7 +46,7 @@ public sealed class PlanningAgentServiceTests
         _contextFactoryMock.Setup(f => f.Create(It.IsAny<int>(), It.IsAny<string>())).Returns(_contextMock.Object);
     }
 
-    private PlanningAgentService CreateService()
+    private PlanningAgentService CreateService(PlanningOptions? planningOptions = null)
     {
         return new PlanningAgentService(
             _aiFactoryMock.Object,
@@ -55,7 +56,8 @@ public sealed class PlanningAgentServiceTests
             _templateMock.Object,
             _codebaseMock.Object,
             NullLogger<PlanningAgentService>.Instance,
-            _taskQueueMock.Object);
+            _taskQueueMock.Object,
+            planningOptions is null ? null : Microsoft.Extensions.Options.Options.Create(planningOptions));
     }
 
     private void SetupHappyPath(StoryWorkItem? workItem = null, string? aiResponse = null)
@@ -388,6 +390,50 @@ public sealed class PlanningAgentServiceTests
 
         Assert.Contains(_capturedState.Decisions, d =>
             d.Agent == "Planning" && d.DecisionText.Contains("rejected by triage gate"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_OversizedStory_PostsPromotionRecommendationAndMovesToNeedsRevision()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.OversizedPlanningResponse);
+        var service = CreateService(new PlanningOptions
+        {
+            FeaturePromotionComplexityThreshold = 8,
+            FeaturePromotionSubstoryThreshold = 6
+        });
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("Needs Revision", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Promote User Story to Feature") &&
+                              c.Contains("Suggested Decomposition")),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _adoMock.Verify(a => a.UpdateWorkItemStateAsync(12345, "Needs Revision", It.IsAny<CancellationToken>()), Times.Once);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(It.IsAny<AgentTask>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BelowPromotionThreshold_ProceedsToCoding()
+    {
+        SetupHappyPath(aiResponse: MockAIResponses.ValidPlanningResponse);
+        var service = CreateService(new PlanningOptions
+        {
+            FeaturePromotionComplexityThreshold = 13,
+            FeaturePromotionSubstoryThreshold = 10
+        });
+        var task = new AgentTask { WorkItemId = 12345, AgentType = AgentType.Planning };
+
+        await service.ExecuteAsync(task);
+
+        Assert.Equal("AI Code", _capturedState.CurrentState);
+        _adoMock.Verify(a => a.AddWorkItemCommentAsync(12345,
+            It.Is<string>(c => c.Contains("Promote User Story to Feature")),
+            It.IsAny<CancellationToken>()), Times.Never);
+        _taskQueueMock.Verify(q => q.EnqueueAsync(
+            It.Is<AgentTask>(t => t.AgentType == AgentType.Coding),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
