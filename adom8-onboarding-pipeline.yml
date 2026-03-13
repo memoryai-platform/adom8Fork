@@ -245,8 +245,7 @@ stages:
       displayName: 'Deploy dashboard to Static Web App'
       inputs:
         azure_static_web_apps_api_token: $(STATIC_WEB_APP_API_KEY)
-        app_location: 'dashboard'
-        output_location: 'dist'
+        app_location: 'dashboard/dist'
         skip_app_build: true
 
 - stage: Configuration
