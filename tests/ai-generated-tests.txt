@@ -1,261 +1,123 @@
-I'll generate comprehensive test cases and test files for the dashboard story card improvements (US-90). Based on the implementation details and acceptance criteria, here's a JSON response with test cases and test files:
-
 ```json
 {
   "testCases": [
     {
-      "name": "Story Card Collapsibility",
-      "type": "Unit",
+      "name": "Update primary accent color from purple to Azure DevOps blue",
+      "type": "E2E",
       "priority": "High",
-      "description": "Verify story cards can be expanded and collapsed with smooth CSS transitions",
-      "expectedResult": "Cards toggle between collapsed and expanded states with smooth animation"
+      "description": "Verify that all purple/violet branding elements are replaced with Azure DevOps blue across the dashboard",
+      "expectedResult": "All UI elements use Azure DevOps blue (#0078d4) instead of purple/violet colors"
     },
     {
-      "name": "Search Functionality",
-      "type": "Integration",
-      "priority": "High", 
-      "description": "Test search bar filters stories by work item ID and title",
-      "expectedResult": "Only matching stories are displayed when searching"
-    },
-    {
-      "name": "Status Filter Chips",
-      "type": "Unit",
+      "name": "Legacy logo displays with transparent background",
+      "type": "E2E",
       "priority": "High",
-      "description": "Verify status filter chips (All/In Progress/Completed/Failed) work correctly",
-      "expectedResult": "Clicking filter chips shows only stories matching selected status"
+      "description": "Verify the legacy logo (logo-option-chunky-infinity-box.svg) displays correctly with transparent background",
+      "expectedResult": "Logo displays without background artifacts and maintains transparency"
     },
     {
-      "name": "Progress Bar Gradient",
-      "type": "Unit", 
-      "priority": "Medium",
-      "description": "Check progress bars have correct gradient colors based on percentage",
-      "expectedResult": "Progress bars show red/orange/blue/green gradients at different progress levels"
+      "name": "Branding consistency across main dashboard components",
+      "type": "E2E",
+      "priority": "High",
+      "description": "Verify updated branding is applied consistently to login, header, sidebar, links, badges, and status panels",
+      "expectedResult": "All dashboard components use consistent Azure DevOps blue branding"
     },
     {
-      "name": "Progress Bar Shimmer Animation",
-      "type": "Unit",
-      "priority": "Medium", 
-      "description": "Verify shimmer animation on in-progress bars",
-      "expectedResult": "In-progress bars have subtle shimmer/shine animation"
-    },
-    {
-      "name": "Dark Mode Compatibility",
+      "name": "User story integration continues to function",
       "type": "Integration",
       "priority": "High",
-      "description": "Ensure all new components work correctly in dark mode",
-      "expectedResult": "All story card, filter, and progress bar styles adapt to dark mode"
+      "description": "Verify that user stories from Azure DevOps project appear correctly in the dashboard after branding update",
+      "expectedResult": "Stories display correctly with new branding without affecting data integration"
     },
     {
-      "name": "Filter Persistence",
+      "name": "Authentication functionality preserved",
+      "type": "Integration",
+      "priority": "High",
+      "description": "Verify authentication flow works correctly with updated branding",
+      "expectedResult": "Users can authenticate successfully with new UI styling"
+    },
+    {
+      "name": "Navigation functionality preserved",
+      "type": "Integration",
+      "priority": "High",
+      "description": "Verify all navigation elements work correctly after branding update",
+      "expectedResult": "All navigation links and interactions function as expected"
+    },
+    {
+      "name": "Agent status display preserved",
+      "type": "Integration",
+      "priority": "High",
+      "description": "Verify agent status indicators display correctly with new branding",
+      "expectedResult": "Agent statuses show accurate information with updated styling"
+    },
+    {
+      "name": "Purple branding removal validation",
       "type": "Unit",
       "priority": "Medium",
-      "description": "Check that search and status filters persist across page reloads",
-      "expectedResult": "Filters are restored from localStorage after page refresh"
+      "description": "Verify no purple/violet colors remain except for semantic purposes",
+      "expectedResult": "Only semantic purple elements remain (error states, warnings, etc.)"
     },
     {
-      "name": "Result Count Display",
+      "name": "Logo asset path validation",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify the correct logo asset path is used",
+      "expectedResult": "Logo references ADO-Agent/dashboard/public/brand/logo-option-chunky-infinity-box.svg"
+    },
+    {
+      "name": "CSS color variable updates",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify CSS color variables are updated to Azure DevOps blue values",
+      "expectedResult": "Primary color variables use Azure DevOps blue hex values"
+    },
+    {
+      "name": "Dark mode compatibility",
+      "type": "E2E",
+      "priority": "Medium",
+      "description": "Verify branding updates work correctly in both light and dark modes",
+      "expectedResult": "Azure DevOps blue branding displays appropriately in both themes"
+    },
+    {
+      "name": "Mobile responsive branding",
+      "type": "E2E",
+      "priority": "Medium",
+      "description": "Verify branding displays correctly on mobile devices",
+      "expectedResult": "Logo and color scheme adapt properly to mobile viewport"
+    },
+    {
+      "name": "Browser compatibility for new branding",
+      "type": "E2E",
+      "priority": "Low",
+      "description": "Verify branding displays correctly across different browsers",
+      "expectedResult": "Consistent appearance in Chrome, Firefox, Safari, and Edge"
+    },
+    {
+      "name": "Logo loading error handling",
       "type": "Unit",
       "priority": "Low",
-      "description": "Verify result count updates correctly with filtering",
-      "expectedResult": "Result count shows correct number of displayed stories"
+      "description": "Verify graceful handling when logo asset fails to load",
+      "expectedResult": "Fallback behavior or error state displays appropriately"
     },
     {
-      "name": "Agent Pipeline Stepper",
-      "type": "Unit",
-      "priority": "Medium",
-      "description": "Check horizontal agent pipeline stepper shows correct status",
-      "expectedResult": "Each agent step shows correct status color and icon"
+      "name": "Performance impact of branding changes",
+      "type": "Integration",
+      "priority": "Low",
+      "description": "Verify branding changes don't negatively impact dashboard performance",
+      "expectedResult": "Dashboard loads and refreshes within acceptable time limits"
     }
   ],
   "testFiles": [
     {
-      "relativePath": "tests/dashboard/StoryCardTests.js",
-      "content": `
-// Story Card Interaction Tests
-describe('Story Card Interactions', () => {
-  beforeEach(() => {
-    // Setup test DOM with sample story cards
-    document.body.innerHTML = \`
-      <div id="agents-container">
-        <div class="story-card" data-story-id="123">
-          <div class="story-card-header">Story Card Header</div>
-          <div class="story-card-body">Story Card Body</div>
-        </div>
-      </div>
-    \`;
-  });
-
-  test('toggleStoryCard expands and collapses card', () => {
-    const storyCard = document.querySelector('.story-card');
-    const workItemId = '123';
-
-    // Initial state should be collapsed
-    expect(storyCard.classList.contains('expanded')).toBe(false);
-
-    // Toggle card
-    toggleStoryCard(workItemId);
-
-    // Card should now be expanded
-    expect(storyCard.classList.contains('expanded')).toBe(true);
-
-    // Toggle again
-    toggleStoryCard(workItemId);
-
-    // Card should be collapsed again
-    expect(storyCard.classList.contains('expanded')).toBe(false);
-  });
-
-  test('localStorage persists card expansion state', () => {
-    const workItemId = '123';
-
-    // Expand card
-    toggleStoryCard(workItemId);
-
-    // Check localStorage
-    const storedState = localStorage.getItem(\`story-\${workItemId}-expanded\`);
-    expect(storedState).toBe('true');
-
-    // Collapse card
-    toggleStoryCard(workItemId);
-
-    // Check localStorage again
-    const newStoredState = localStorage.getItem(\`story-\${workItemId}-expanded\`);
-    expect(newStoredState).toBe('false');
-  });
-});
-
-// Search and Filter Tests
-describe('Story Search and Filter', () => {
-  const mockStories = [
-    { workItemId: 123, title: 'Test Story 1', agents: { Planning: 'completed' } },
-    { workItemId: 456, title: 'Another Test Story', agents: { Planning: 'in_progress' } },
-    { workItemId: 789, title: 'Failed Story', agents: { Planning: 'failed' } }
-  ];
-
-  beforeEach(() => {
-    document.body.innerHTML = \`
-      <input id="story-search" />
-      <div id="agents-container"></div>
-      <div id="filter-result-count"></div>
-    \`;
-    
-    // Mock global functions and variables
-    window.allStories = mockStories;
-    window.renderFilteredStories = jest.fn();
-  });
-
-  test('search filters stories by work item ID', () => {
-    const searchInput = document.getElementById('story-search');
-    searchInput.value = '123';
-    
-    handleSearchFilter();
-
-    expect(window.currentSearchText).toBe('123');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-
-  test('search filters stories by title', () => {
-    const searchInput = document.getElementById('story-search');
-    searchInput.value = 'test';
-    
-    handleSearchFilter();
-
-    expect(window.currentSearchText).toBe('test');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-
-  test('status filter works correctly', () => {
-    handleStatusFilter('in-progress');
-
-    expect(window.currentStatusFilter).toBe('in-progress');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-});
-
-// Progress Bar Tests
-describe('Progress Bar Rendering', () => {
-  test('getProgressColorClass returns correct color classes', () => {
-    expect(getProgressColorClass(10)).toBe('progress-red');
-    expect(getProgressColorClass(30)).toBe('progress-orange');
-    expect(getProgressColorClass(60)).toBe('progress-blue');
-    expect(getProgressColorClass(90)).toBe('progress-green');
-  });
-
-  test('progress bar shows correct gradient', () => {
-    const progressFill = document.createElement('div');
-    progressFill.classList.add('story-progress-fill');
-    
-    progressFill.dataset.progress = '30';
-    renderFilteredStories(); // Triggers progress bar rendering
-
-    expect(progressFill.classList.contains('progress-orange')).toBe(true);
-  });
-});
-      `,
+      "relativePath": "tests/Dashboard/BrandingUpdateTests.cs",
+      "content": "using Microsoft.Extensions.DependencyInjection;\nusing Microsoft.Extensions.Logging;\nusing Moq;\nusing System.IO;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Xunit;\nusing AIAgents.Functions.Functions;\nusing AIAgents.Core.Interfaces;\nusing AIAgents.Core.Models;\nusing System.Collections.Generic;\nusing System.Linq;\n\nnamespace AIAgents.Functions.Tests.Dashboard\n{\n    public class BrandingUpdateTests\n    {\n        private readonly Mock<ILogger<GetCurrentStatus>> _mockLogger;\n        private readonly Mock<IGitOperations> _mockGitOps;\n        private readonly Mock<IAzureDevOpsClient> _mockAdoClient;\n        private readonly GetCurrentStatus _function;\n\n        public BrandingUpdateTests()\n        {\n            _mockLogger = new Mock<ILogger<GetCurrentStatus>>();\n            _mockGitOps = new Mock<IGitOperations>();\n            _mockAdoClient = new Mock<IAzureDevOpsClient>();\n            _function = new GetCurrentStatus(_mockGitOps.Object, _mockAdoClient.Object, _mockLogger.Object);\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_AfterBrandingUpdate_ReturnsValidDashboardData()\n        {\n            // Arrange\n            var mockStories = new List<StoryWorkItem>\n            {\n                new StoryWorkItem\n                {\n                    Id = 147,\n                    Title = \"Update React dashboard branding to Azure DevOps blue\",\n                    State = \"AI Code\",\n                    AutonomyLevel = 3\n                }\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"AI Code\\\", \\\"agents\\\": {}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(mockStories.First());\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            Assert.NotNull(result);\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            Assert.Single(dashboardStatus.Stories);\n            Assert.Equal(147, dashboardStatus.Stories.First().Id);\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_WithBrandingStory_PreservesStoryData()\n        {\n            // Arrange\n            var brandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo\",\n                Description = \"Change primary accent color and use legacy logo\",\n                State = \"Story Planning\",\n                AutonomyLevel = 4,\n                Tags = new List<string> { \"branding\", \"ui\" }\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"Story Planning\\\", \\\"agents\\\": {\\\"Planning\\\": {\\\"status\\\": \\\"in_progress\\\"}}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(brandingStory);\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            var story = dashboardStatus.Stories.First();\n            Assert.Equal(\"Update React dashboard branding to Azure DevOps blue and restore legacy logo\", story.Title);\n            Assert.Contains(\"branding\", story.Tags);\n            Assert.Contains(\"ui\", story.Tags);\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_MultipleStories_IncludesBrandingStory()\n        {\n            // Arrange\n            var stories = new List<StoryWorkItem>\n            {\n                new StoryWorkItem { Id = 146, Title = \"Other story\", State = \"New\" },\n                new StoryWorkItem { Id = 147, Title = \"Update React dashboard branding\", State = \"AI Code\" },\n                new StoryWorkItem { Id = 148, Title = \"Another story\", State = \"Completed\" }\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \n                    \".ado/stories/US-146/state.json\",\n                    \".ado/stories/US-147/state.json\", \n                    \".ado/stories/US-148/state.json\" \n                });\n\n            foreach (var story in stories)\n            {\n                _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), $\".ado/stories/US-{story.Id}/state.json\", It.IsAny<CancellationToken>()))\n                    .ReturnsAsync($\"{{\\\"workItemId\\\": {story.Id}, \\\"currentState\\\": \\\"{story.State}\\\", \\\"agents\\\": {{}}}}\");\n                \n                _mockAdoClient.Setup(x => x.GetWorkItemAsync(story.Id, It.IsAny<CancellationToken>()))\n                    .ReturnsAsync(story);\n            }\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            Assert.Equal(3, dashboardStatus.Stories.Count);\n            Assert.Contains(dashboardStatus.Stories, s => s.Id == 147 && s.Title.Contains(\"branding\"));\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_BrandingStoryInProgress_ShowsCorrectAgentStatus()\n        {\n            // Arrange\n            var brandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding\",\n                State = \"AI Code\",\n                AutonomyLevel = 3\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"AI Code\\\", \\\"agents\\\": {\\\"Planning\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Coding\\\": {\\\"status\\\": \\\"in_progress\\\"}}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(brandingStory);\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            var story = dashboardStatus.Stories.First();\n            \n            // Verify agent statuses are preserved\n            Assert.NotNull(story.Agents);\n            Assert.True(story.Agents.Any());\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_ErrorReadingBrandingStory_HandlesGracefully()\n        {\n            // Arrange\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ThrowsAsync(new FileNotFoundException(\"State file not found\"));\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            // Should handle error gracefully and return empty or partial data\n            Assert.NotNull(dashboardStatus.Stories);\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_BrandingStoryCompleted_ShowsCompletedStatus()\n        {\n            // Arrange\n            var completedBrandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding\",\n                State = \"Deployed\",\n                AutonomyLevel = 4\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"Deployed\\\", \\\"agents\\\": {\\\"Planning\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Coding\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Testing\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Review\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Documentation\\\": {\\\"status\\\": \\\"completed\\\"}, \\\"Deployment\\\": {\\\"status\\\": \\\"completed\\\"}}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(completedBrandingStory);\n\n            // Act\n            var result = await _function.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            var story = dashboardStatus.Stories.First();\n            Assert.Equal(\"Deployed\", story.State);\n        }\n    }\n}",
       "isNew": true
     },
     {
-      "relativePath": "tests/dashboard/DarkModeTests.js", 
-      "content": `
-// Dark Mode Compatibility Tests
-describe('Dark Mode Compatibility', () => {
-  beforeEach(() => {
-    document.body.classList.remove('dark-mode');
-  });
-
-  test('toggleDarkMode switches body class', () => {
-    toggleDarkMode();
-    expect(document.body.classList.contains('dark-mode')).toBe(true);
-    
-    toggleDarkMode();
-    expect(document.body.classList.contains('dark-mode')).toBe(false);
-  });
-
-  test('dark mode persists in localStorage', () => {
-    toggleDarkMode();
-    
-    // Simulate page reload by checking localStorage
-    const isDarkMode = localStorage.getItem('darkMode') === '1';
-    expect(isDarkMode).toBe(true);
-  });
-
-  test('story cards have dark mode styles', () => {
-    document.body.classList.add('dark-mode');
-    
-    const storyCard = document.createElement('div');
-    storyCard.classList.add('story-card');
-    document.body.appendChild(storyCard);
-
-    // Check for dark mode specific classes/styles
-    expect(storyCard.classList.contains('dark-mode')).toBe(true);
-  });
-});
-      `,
+      "relativePath": "tests/Dashboard/DashboardIntegrationTests.cs",
+      "content": "using Microsoft.Extensions.DependencyInjection;\nusing Microsoft.Extensions.Logging;\nusing Moq;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Xunit;\nusing AIAgents.Functions.Functions;\nusing AIAgents.Core.Interfaces;\nusing AIAgents.Core.Models;\nusing System.Collections.Generic;\nusing System.Linq;\nusing Microsoft.Azure.Functions.Worker.Http;\nusing Microsoft.Azure.Functions.Worker;\nusing System.Net;\n\nnamespace AIAgents.Functions.Tests.Dashboard\n{\n    public class DashboardIntegrationTests\n    {\n        private readonly Mock<ILogger<GetCurrentStatus>> _mockStatusLogger;\n        private readonly Mock<ILogger<HealthCheck>> _mockHealthLogger;\n        private readonly Mock<IGitOperations> _mockGitOps;\n        private readonly Mock<IAzureDevOpsClient> _mockAdoClient;\n        private readonly Mock<IAIClient> _mockAiClient;\n        private readonly GetCurrentStatus _statusFunction;\n        private readonly HealthCheck _healthFunction;\n\n        public DashboardIntegrationTests()\n        {\n            _mockStatusLogger = new Mock<ILogger<GetCurrentStatus>>();\n            _mockHealthLogger = new Mock<ILogger<HealthCheck>>();\n            _mockGitOps = new Mock<IGitOperations>();\n            _mockAdoClient = new Mock<IAzureDevOpsClient>();\n            _mockAiClient = new Mock<IAIClient>();\n            \n            _statusFunction = new GetCurrentStatus(_mockGitOps.Object, _mockAdoClient.Object, _mockStatusLogger.Object);\n            _healthFunction = new HealthCheck(_mockAdoClient.Object, _mockAiClient.Object, _mockGitOps.Object, _mockHealthLogger.Object);\n        }\n\n        [Fact]\n        public async Task Dashboard_AfterBrandingUpdate_MaintainsAuthentication()\n        {\n            // Arrange\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new StoryWorkItem { Id = 147, Title = \"Test Story\", State = \"New\" });\n\n            // Act & Assert - Should not throw authentication errors\n            var result = await _statusFunction.RunAsync(null, CancellationToken.None);\n            Assert.NotNull(result);\n            \n            // Verify ADO client was called (authentication worked)\n            _mockAdoClient.Verify(x => x.GetWorkItemAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);\n        }\n\n        [Fact]\n        public async Task Dashboard_AfterBrandingUpdate_PreservesHealthCheck()\n        {\n            // Arrange\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(1, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new StoryWorkItem { Id = 1, Title = \"Health Check Test\" });\n            \n            _mockAiClient.Setup(x => x.CompleteAsync(It.IsAny<string>(), It.IsAny<string>(), null, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new AICompletionResult { Content = \"Test response\", Success = true });\n            \n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \"test.txt\" });\n\n            // Act\n            var result = await _healthFunction.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            Assert.NotNull(result);\n            var healthStatus = result.Value as HealthStatus;\n            Assert.NotNull(healthStatus);\n            Assert.NotNull(healthStatus.Status);\n        }\n\n        [Fact]\n        public async Task Dashboard_BrandingStoryVisible_InStatusEndpoint()\n        {\n            // Arrange\n            var brandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo\",\n                State = \"Story Planning\",\n                AutonomyLevel = 3\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"Story Planning\\\", \\\"agents\\\": {}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(brandingStory);\n\n            // Act\n            var result = await _statusFunction.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            Assert.Single(dashboardStatus.Stories);\n            \n            var story = dashboardStatus.Stories.First();\n            Assert.Equal(147, story.Id);\n            Assert.Contains(\"branding\", story.Title.ToLower());\n            Assert.Contains(\"azure devops blue\", story.Title.ToLower());\n            Assert.Contains(\"legacy logo\", story.Title.ToLower());\n        }\n\n        [Fact]\n        public async Task Dashboard_Navigation_PreservedAfterBrandingUpdate()\n        {\n            // Arrange - Simulate multiple stories for navigation testing\n            var stories = new List<StoryWorkItem>\n            {\n                new StoryWorkItem { Id = 145, Title = \"Previous Story\", State = \"Completed\" },\n                new StoryWorkItem { Id = 147, Title = \"Branding Update Story\", State = \"AI Code\" },\n                new StoryWorkItem { Id = 149, Title = \"Next Story\", State = \"New\" }\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(stories.Select(s => $\".ado/stories/US-{s.Id}/state.json\").ToArray());\n\n            foreach (var story in stories)\n            {\n                _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), $\".ado/stories/US-{story.Id}/state.json\", It.IsAny<CancellationToken>()))\n                    .ReturnsAsync($\"{{\\\"workItemId\\\": {story.Id}, \\\"currentState\\\": \\\"{story.State}\\\", \\\"agents\\\": {{}}}}\");\n                \n                _mockAdoClient.Setup(x => x.GetWorkItemAsync(story.Id, It.IsAny<CancellationToken>()))\n                    .ReturnsAsync(story);\n            }\n\n            // Act\n            var result = await _statusFunction.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            Assert.NotNull(dashboardStatus);\n            Assert.Equal(3, dashboardStatus.Stories.Count);\n            \n            // Verify all stories are accessible (navigation preserved)\n            Assert.Contains(dashboardStatus.Stories, s => s.Id == 145);\n            Assert.Contains(dashboardStatus.Stories, s => s.Id == 147);\n            Assert.Contains(dashboardStatus.Stories, s => s.Id == 149);\n        }\n\n        [Fact]\n        public async Task Dashboard_AgentStatus_DisplayedCorrectlyAfterBrandingUpdate()\n        {\n            // Arrange\n            var brandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding\",\n                State = \"AI Review\",\n                AutonomyLevel = 4\n            };\n\n            var stateJson = @\"{\n                \"\"workItemId\"\": 147,\n                \"\"currentState\"\": \"\"AI Review\"\",\n                \"\"agents\"\": {\n                    \"\"Planning\"\": { \"\"status\"\": \"\"completed\"\", \"\"startedAt\"\": \"\"2024-01-01T10:00:00Z\"\", \"\"completedAt\"\": \"\"2024-01-01T10:05:00Z\"\" },\n                    \"\"Coding\"\": { \"\"status\"\": \"\"completed\"\", \"\"startedAt\"\": \"\"2024-01-01T10:05:00Z\"\", \"\"completedAt\"\": \"\"2024-01-01T10:15:00Z\"\" },\n                    \"\"Testing\"\": { \"\"status\"\": \"\"completed\"\", \"\"startedAt\"\": \"\"2024-01-01T10:15:00Z\"\", \"\"completedAt\"\": \"\"2024-01-01T10:20:00Z\"\" },\n                    \"\"Review\"\": { \"\"status\"\": \"\"in_progress\"\", \"\"startedAt\"\": \"\"2024-01-01T10:20:00Z\"\" }\n                }\n            }\";\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(stateJson);\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(brandingStory);\n\n            // Act\n            var result = await _statusFunction.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            var dashboardStatus = result.Value as DashboardStatus;\n            var story = dashboardStatus.Stories.First();\n            \n            Assert.NotNull(story.Agents);\n            Assert.True(story.Agents.Count >= 4); // Planning, Coding, Testing, Review\n            \n            // Verify agent statuses are correctly represented\n            var planningAgent = story.Agents.FirstOrDefault(a => a.Name == \"Planning\");\n            var reviewAgent = story.Agents.FirstOrDefault(a => a.Name == \"Review\");\n            \n            if (planningAgent != null)\n                Assert.Equal(\"completed\", planningAgent.Status);\n            if (reviewAgent != null)\n                Assert.Equal(\"in_progress\", reviewAgent.Status);\n        }\n\n        [Fact]\n        public async Task Dashboard_PerformanceImpact_WithinAcceptableLimits()\n        {\n            // Arrange\n            var startTime = System.DateTime.UtcNow;\n            \n            var brandingStory = new StoryWorkItem\n            {\n                Id = 147,\n                Title = \"Update React dashboard branding\",\n                State = \"AI Code\"\n            };\n\n            _mockGitOps.Setup(x => x.ListFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .ReturnsAsync(new[] { \".ado/stories/US-147/state.json\" });\n\n            _mockGitOps.Setup(x => x.ReadFileAsync(It.IsAny<string>(), \".ado/stories/US-147/state.json\", It.IsAny<CancellationToken>()))\n                .ReturnsAsync(\"{\\\"workItemId\\\": 147, \\\"currentState\\\": \\\"AI Code\\\", \\\"agents\\\": {}}\");\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(147, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(brandingStory);\n\n            // Act\n            var result = await _statusFunction.RunAsync(null, CancellationToken.None);\n            var endTime = System.DateTime.UtcNow;\n            var duration = endTime - startTime;\n\n            // Assert\n            Assert.NotNull(result);\n            Assert.True(duration.TotalSeconds < 5, $\"Dashboard status call took {duration.TotalSeconds} seconds, which exceeds acceptable limit of 5 seconds\");\n        }\n    }\n}",
       "isNew": true
-    }
-  ]
-}
-```
-
-This test suite covers the key requirements for US-90:
-1. Story card collapsibility and state persistence
-2. Search and filter functionality
-3. Progress bar gradient and animation
-4. Dark mode compatibility
-5. Result count display
-6. Agent pipeline stepper
-
-The tests use Jest-style syntax and cover both unit and integration scenarios. They validate:
-- Interaction behaviors
-- State management
-- Rendering logic
-- Persistence mechanisms
-- Accessibility features
-
-Recommendations for implementation:
-- Add Jest or similar testing framework to the project
-- Configure test runner in CI/CD pipeline
-- Add more edge case tests as needed
-- Consider adding snapshot testing for complex rendering logic
-
-The tests provide comprehensive coverage of the dashboard story card improvements while maintaining the existing vanilla JavaScript architecture.
+    },
+    {
+      "relativePath": "tests/Dashboard/BrandingValidationTests.cs",
+      "content": "using System;\nusing System.IO;\nusing System.Text.RegularExpressions;\nusing Xunit;\nusing System.Threading.Tasks;\nusing System.Linq;\n\nnamespace AIAgents.Functions.Tests.Dashboard\n{\n    public class BrandingValidationTests\n    {\n        private const string DashboardPath = \"dashboard/index.html\";\n        private const string LogoPath = \"ADO-Agent/dashboard/public/brand/logo-option-chunky-infinity-box.svg\";\n        private const string AzureDevOpsBlue = \"#0078d4\";\n        private const string AzureDevOpsBlueRgb =
