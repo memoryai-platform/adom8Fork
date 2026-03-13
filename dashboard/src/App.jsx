@@ -6,6 +6,8 @@ import AppLayout from './components/AppLayout';
 import LoginGate from './components/LoginGate';
 import { useAgentStatus } from './hooks/useAgentStatus';
 import { useAppKey } from './hooks/useAppKey';
+import { useCodebaseIntelligence } from './hooks/useCodebaseIntelligence';
+import { useSystemHealth } from './hooks/useSystemHealth';
 import AgentLog from './pages/AgentLog';
 import Overview from './pages/Overview';
 import StoryDetail from './pages/StoryDetail';
@@ -24,6 +26,8 @@ function LoadingScreen() {
 export default function App() {
   const { appKey, clearAppKey, ready, setAppKey } = useAppKey();
   const status = useAgentStatus(appKey, clearAppKey);
+  const health = useSystemHealth(appKey, clearAppKey);
+  const codebase = useCodebaseIntelligence(appKey, clearAppKey);
 
   if (!ready) {
     return <LoadingScreen />;
@@ -39,12 +43,21 @@ export default function App() {
         element={
           <AppLayout
             appKey={appKey}
+            codebaseData={codebase.data}
+            codebaseError={codebase.error}
+            codebaseLoading={codebase.loading}
             connectionStatus={status.connectionStatus}
             data={status.data}
             error={status.error}
+            healthData={health.data}
+            healthError={health.error}
+            healthLoading={health.loading}
             lastUpdated={status.lastUpdated}
             loading={status.loading}
             onLogout={clearAppKey}
+            refreshCodebase={codebase.refresh}
+            refreshHealth={health.refresh}
+            refreshStatus={status.refresh}
           />
         }
       >

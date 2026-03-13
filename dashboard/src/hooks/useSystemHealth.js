@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getSystemHealth } from '../api';
 import { config } from '../config';
-import { getCurrentStatus } from '../api';
 
-export function useAgentStatus(appKey, onUnauthorized) {
+export function useSystemHealth(appKey, onUnauthorized) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('connecting');
-  const failureCountRef = useRef(0);
   const intervalRef = useRef(null);
   const inFlightRef = useRef(false);
 
@@ -20,7 +18,7 @@ export function useAgentStatus(appKey, onUnauthorized) {
     }
   }, []);
 
-  const fetchStatus = useCallback(async (isInitialLoad = false) => {
+  const refresh = useCallback(async (isInitialLoad = false) => {
     if (!appKey || inFlightRef.current) {
       return;
     }
@@ -32,21 +30,17 @@ export function useAgentStatus(appKey, onUnauthorized) {
     }
 
     try {
-      const nextData = await getCurrentStatus(appKey);
-      failureCountRef.current = 0;
+      const nextData = await getSystemHealth(appKey);
       setData(nextData);
       setError('');
       setLastUpdated(new Date().toISOString());
-      setConnectionStatus(document.visibilityState === 'hidden' ? 'paused' : 'live');
     } catch (requestError) {
-      if (requestError.code === 401) {
+      if (requestError.code === 401 || requestError.code === 403) {
         onUnauthorized?.();
         return;
       }
 
-      failureCountRef.current += 1;
-      setError(requestError.message || 'Failed to refresh status');
-      setConnectionStatus(failureCountRef.current >= 3 ? 'disconnected' : 'reconnecting');
+      setError(requestError.message || 'Failed to refresh system health');
     } finally {
       inFlightRef.current = false;
       if (isInitialLoad) {
@@ -62,35 +56,30 @@ export function useAgentStatus(appKey, onUnauthorized) {
       setLoading(false);
       setError('');
       setLastUpdated(null);
-      setConnectionStatus('connecting');
       return undefined;
     }
 
-    fetchStatus(true);
+    refresh(true);
 
     const startPolling = () => {
       clearPolling();
-      setConnectionStatus((current) => current === 'disconnected' ? current : 'live');
       intervalRef.current = window.setInterval(() => {
-        fetchStatus(false);
-      }, config.pollIntervalMs);
+        refresh(false);
+      }, config.healthPollIntervalMs);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         clearPolling();
-        setConnectionStatus((current) => current === 'disconnected' ? current : 'paused');
         return;
       }
 
-      fetchStatus(false);
+      refresh(false);
       startPolling();
     };
 
     if (document.visibilityState !== 'hidden') {
       startPolling();
-    } else {
-      setConnectionStatus('paused');
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -99,14 +88,13 @@ export function useAgentStatus(appKey, onUnauthorized) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearPolling();
     };
-  }, [appKey, clearPolling, fetchStatus]);
+  }, [appKey, clearPolling, refresh]);
 
   return {
-    connectionStatus,
     data,
     error,
     lastUpdated,
     loading,
-    refresh: () => fetchStatus(false),
+    refresh: () => refresh(false),
   };
 }

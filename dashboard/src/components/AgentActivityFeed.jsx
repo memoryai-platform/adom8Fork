@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 import { formatRelativeTime } from '../utils/formatting';
 
 /**
- * @param {{entries: Array<{timestamp: string, agent: string, workItemId: number, message: string}>}} props
+ * @param {{entries: Array<{timestamp: string, agent: string, workItemId: number, message: string}>, onClear?: () => void, clearing?: boolean, feedback?: {type: string, message: string} | null}} props
  */
-export default function AgentActivityFeed({ entries }) {
+export default function AgentActivityFeed({ entries, onClear, clearing = false, feedback = null }) {
   const containerRef = useRef(null);
   const items = useMemo(
     () =>
@@ -27,7 +27,23 @@ export default function AgentActivityFeed({ entries }) {
   return (
     <div className="col-span-full xl:col-span-5 rounded-xl bg-white shadow-xs">
       <header className="border-b border-gray-100 px-5 py-4">
-        <h2 className="font-semibold text-gray-800">Activity Feed</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-semibold text-gray-800">Activity Feed</h2>
+          {onClear ? (
+            <button
+              onClick={onClear}
+              disabled={clearing}
+              className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-gray-600 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {clearing ? 'Clearing…' : 'Clear Activity'}
+            </button>
+          ) : null}
+        </div>
+        {feedback?.message ? (
+          <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${feedback.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+            {feedback.message}
+          </div>
+        ) : null}
       </header>
       <div ref={containerRef} className="max-h-[420px] space-y-1 overflow-y-auto p-3">
         {items.length ? (

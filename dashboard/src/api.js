@@ -3,6 +3,11 @@ import { getMockStatusPayload, getMockStoryDetail } from './mockData';
 
 const STATUS_ENDPOINTS = ['/api/status', '/api/GetCurrentStatus'];
 const STORY_DETAIL_ENDPOINTS = ['/api/GetStoryDetail'];
+const HEALTH_ENDPOINT = '/api/health';
+const CODEBASE_INTELLIGENCE_ENDPOINT = '/api/codebase-intelligence';
+const INITIALIZE_CODEBASE_ENDPOINT = '/api/initialize-codebase';
+const CLEAR_STORIES_ENDPOINT = '/api/clear-stories';
+const CLEAR_ACTIVITY_ENDPOINT = '/api/clear-activity';
 
 function getBaseOrigin() {
   if (config.apiBaseUrl) {
@@ -33,36 +38,69 @@ function buildUrl(path, appKey, query = {}) {
   return appendAuthParams(url, appKey);
 }
 
+async function sendJsonRequest(path, appKey, { method = 'GET', query, body } = {}) {
+  const headers = {
+    Accept: 'application/json',
+  };
+
+  const requestInit = {
+    method,
+    headers,
+    cache: 'no-store',
+  };
+
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    requestInit.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+
+  const response = await fetch(buildUrl(path, appKey, query), requestInit);
+
+  if (response.status === 401 || response.status === 403) {
+    const unauthorizedError = new Error('Unauthorized');
+    unauthorizedError.code = response.status;
+    throw unauthorizedError;
+  }
+
+  if (response.status === 404) {
+    const notFoundError = new Error('Not Found');
+    notFoundError.code = 404;
+    throw notFoundError;
+  }
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    const requestError = new Error(errorBody || `Request failed with status ${response.status}`);
+    requestError.code = response.status;
+    throw requestError;
+  }
+
+  const responseText = await response.text();
+  if (!responseText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return responseText;
+  }
+}
+
 async function fetchJsonFromCandidates(paths, appKey, query) {
   let lastError = null;
 
   for (const path of paths) {
-    const response = await fetch(buildUrl(path, appKey, query), {
-      headers: {
-        Accept: 'application/json',
-      },
-      cache: 'no-store',
-    });
+    try {
+      return await sendJsonRequest(path, appKey, { method: 'GET', query });
+    } catch (error) {
+      if (error.code === 404) {
+        lastError = error;
+        continue;
+      }
 
-    if (response.status === 401) {
-      const unauthorizedError = new Error('Unauthorized');
-      unauthorizedError.code = 401;
-      throw unauthorizedError;
+      throw error;
     }
-
-    if (response.status === 404) {
-      lastError = new Error('Not Found');
-      lastError.code = 404;
-      continue;
-    }
-
-    if (!response.ok) {
-      const requestError = new Error(`Request failed with status ${response.status}`);
-      requestError.code = response.status;
-      throw requestError;
-    }
-
-    return response.json();
   }
 
   throw lastError ?? new Error('Request failed');
@@ -104,4 +142,33 @@ export async function getStoryDetail(storyId, appKey) {
   }
 
   return fetchJsonFromCandidates(STORY_DETAIL_ENDPOINTS, appKey, { id: storyId });
+}
+
+export async function getSystemHealth(appKey) {
+  return sendJsonRequest(HEALTH_ENDPOINT, appKey);
+}
+
+export async function getCodebaseIntelligence(appKey) {
+  return sendJsonRequest(CODEBASE_INTELLIGENCE_ENDPOINT, appKey);
+}
+
+export async function initializeCodebase(appKey) {
+  return sendJsonRequest(INITIALIZE_CODEBASE_ENDPOINT, appKey, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function clearStories(appKey) {
+  return sendJsonRequest(CLEAR_STORIES_ENDPOINT, appKey, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+export async function clearActivity(appKey) {
+  return sendJsonRequest(CLEAR_ACTIVITY_ENDPOINT, appKey, {
+    method: 'POST',
+    body: {},
+  });
 }

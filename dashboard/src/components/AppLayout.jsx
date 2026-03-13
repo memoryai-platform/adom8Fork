@@ -23,7 +23,21 @@ export default function AppLayout(props) {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
-      <AppSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <AppSidebar
+        appKey={props.appKey}
+        codebaseData={props.codebaseData}
+        codebaseError={props.codebaseError}
+        codebaseLoading={props.codebaseLoading}
+        healthData={props.healthData}
+        healthError={props.healthError}
+        healthLoading={props.healthLoading}
+        onUnauthorized={props.onLogout}
+        refreshCodebase={props.refreshCodebase}
+        refreshHealth={props.refreshHealth}
+        refreshStatus={props.refreshStatus}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
 
       <div className="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
         <AppHeader
@@ -40,10 +54,20 @@ export default function AppLayout(props) {
             <Outlet
               context={{
                 appKey: props.appKey,
+                codebaseData: props.codebaseData,
+                codebaseError: props.codebaseError,
+                codebaseLoading: props.codebaseLoading,
                 connectionStatus: props.connectionStatus,
                 data: props.data,
                 error: props.error,
+                healthData: props.healthData,
+                healthError: props.healthError,
+                healthLoading: props.healthLoading,
                 loading: props.loading,
+                onUnauthorized: props.onLogout,
+                refreshCodebase: props.refreshCodebase,
+                refreshHealth: props.refreshHealth,
+                refreshStatus: props.refreshStatus,
               }}
             />
           </div>

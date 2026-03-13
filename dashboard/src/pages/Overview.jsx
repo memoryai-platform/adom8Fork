@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import {
   Bar,
@@ -13,6 +14,7 @@ import AgentActivityFeed from '../components/AgentActivityFeed';
 import AgentCard from '../components/AgentCard';
 import MetricCard from '../components/MetricCard';
 import StoryQueueTable from '../components/StoryQueueTable';
+import { clearActivity, clearStories } from '../api';
 import { AGENT_ORDER } from '../constants';
 import { formatDuration, formatPercent, formatRelativeTime } from '../utils/formatting';
 
@@ -218,7 +220,20 @@ function AgentDurationChart({ agents }) {
 }
 
 export default function Overview() {
-  const { data, error, loading } = useOutletContext();
+  const {
+    appKey,
+    data,
+    error,
+    loading,
+    onUnauthorized,
+    refreshCodebase,
+    refreshHealth,
+    refreshStatus,
+  } = useOutletContext();
+  const [clearingStories, setClearingStories] = useState(false);
+  const [clearingActivity, setClearingActivity] = useState(false);
+  const [storiesFeedback, setStoriesFeedback] = useState(null);
+  const [activityFeedback, setActivityFeedback] = useState(null);
 
   if (loading && !data) {
     return <div className="rounded-xl bg-white px-5 py-8 text-sm text-gray-500 shadow-xs">Loading orchestration status...</div>;
@@ -243,6 +258,76 @@ export default function Overview() {
       return new Date(rightTs ?? 0).getTime() - new Date(leftTs ?? 0).getTime();
     })[0] ?? null;
 
+  const handleClearStories = async () => {
+    if (!appKey || clearingStories) {
+      return;
+    }
+
+    const confirmed = window.confirm('Clear all story activity and queued work items from the dashboard? This also clears queue contents.');
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingStories(true);
+    setStoriesFeedback(null);
+
+    try {
+      const response = await clearStories(appKey);
+      await Promise.allSettled([refreshStatus?.(), refreshHealth?.(), refreshCodebase?.()]);
+      setStoriesFeedback({
+        type: 'success',
+        message: `Cleared ${response?.activitiesCleared ?? 0} activity entries, ${response?.queueMessagesCleared ?? 0} queued messages, and ${response?.poisonMessagesCleared ?? 0} poison messages.`,
+      });
+    } catch (requestError) {
+      if (requestError.code === 401 || requestError.code === 403) {
+        onUnauthorized?.();
+        return;
+      }
+
+      setStoriesFeedback({
+        type: 'error',
+        message: requestError.message || 'Failed to clear stories.',
+      });
+    } finally {
+      setClearingStories(false);
+    }
+  };
+
+  const handleClearActivity = async () => {
+    if (!appKey || clearingActivity) {
+      return;
+    }
+
+    const confirmed = window.confirm('Clear only the live activity feed? This does not clear stories or queue contents.');
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingActivity(true);
+    setActivityFeedback(null);
+
+    try {
+      await clearActivity(appKey);
+      await Promise.allSettled([refreshStatus?.(), refreshHealth?.()]);
+      setActivityFeedback({
+        type: 'success',
+        message: 'Live activity feed cleared.',
+      });
+    } catch (requestError) {
+      if (requestError.code === 401 || requestError.code === 403) {
+        onUnauthorized?.();
+        return;
+      }
+
+      setActivityFeedback({
+        type: 'error',
+        message: requestError.message || 'Failed to clear live activity.',
+      });
+    } finally {
+      setClearingActivity(false);
+    }
+  };
+
   return (
     <>
       <div className="mb-8 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
@@ -253,6 +338,25 @@ export default function Overview() {
         <MetricCard label="Hours Saved" value={String(stats.estimatedHoursSaved ?? 0)} detail="Estimated engineering time reclaimed." />
       </div>
 
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Operations</h2>
+          <p className="mt-1 text-sm text-gray-500">Administrative dashboard controls for the current environment.</p>
+        </div>
+        <button
+          onClick={handleClearStories}
+          disabled={clearingStories}
+          className="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+        >
+          {clearingStories ? 'Clearing Stories…' : 'Clear Stories'}
+        </button>
+      </div>
+      {storiesFeedback?.message ? (
+        <div className={`mb-6 rounded-xl px-4 py-3 text-sm ${storiesFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+          {storiesFeedback.message}
+        </div>
+      ) : null}
+
       {data?.currentWorkItem ? <CurrentWorkItemBanner currentWorkItem={data.currentWorkItem} /> : null}
       {!data?.currentWorkItem && latestFailedStory ? <FailedWorkItemBanner story={latestFailedStory} recentActivity={recentActivity} /> : null}
       {!data?.currentWorkItem && !latestFailedStory ? <IdleBanner /> : null}
@@ -261,7 +365,12 @@ export default function Overview() {
       <div className="grid grid-cols-12 gap-6">
         <AgentDurationChart agents={agents} />
         <StoryQueueTable queue={queuedTasks} />
-        <AgentActivityFeed entries={recentActivity} />
+        <AgentActivityFeed
+          clearing={clearingActivity}
+          entries={recentActivity}
+          feedback={activityFeedback}
+          onClear={handleClearActivity}
+        />
       </div>
     </>
   );
