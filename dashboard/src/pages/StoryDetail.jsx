@@ -10,7 +10,7 @@ function phaseStyles(status) {
     case 'completed':
       return 'bg-green-100 text-green-700 border-green-200';
     case 'active':
-      return 'bg-sky-100 text-sky-700 border-sky-200';
+      return 'bg-sky-100 text-sky-700 border-sky-300 shadow-[0_0_0_1px_rgba(56,189,248,0.2)] animate-pulse';
     case 'failed':
       return 'bg-red-100 text-red-700 border-red-200';
     default:
@@ -128,6 +128,22 @@ export default function StoryDetail() {
               <dd className="mt-1 font-semibold text-gray-900">{formatTimestamp(metadata.updatedDate)}</dd>
             </div>
           </dl>
+          {metadata.githubDelegated && metadata.githubIssueUrl ? (
+            <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">GitHub Delegation</div>
+              <p className="mt-2 text-sm text-sky-900">
+                Coding is currently delegated to @{metadata.delegatedAgent ?? 'copilot'}.
+              </p>
+              <a
+                href={metadata.githubIssueUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700"
+              >
+                Open GitHub Issue #{metadata.githubIssueNumber}
+              </a>
+            </div>
+          ) : null}
         </div>
 
         <div className="col-span-full rounded-xl bg-white p-5 shadow-xs xl:col-span-8">
@@ -137,14 +153,31 @@ export default function StoryDetail() {
           </div>
           <ul className="space-y-4">
             {(metadata.phases ?? []).map((phase, index) => (
-              <li key={phase.agent} className="relative pb-4 last:pb-0">
+              <li
+                key={phase.agent}
+                className={`relative rounded-xl pb-4 pl-2 pr-2 pt-1 last:pb-0 ${phase.status === 'active' ? 'bg-sky-50/70' : ''}`}
+              >
                 <div className="pl-8">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold text-gray-900">{phase.agent.replace('Agent', ' Agent')}</div>
                       <div className="mt-1 text-xs text-gray-500">
-                        {phase.completedAt ? `Completed ${formatRelativeTime(phase.completedAt)}` : 'Awaiting execution'}
+                        {phase.status === 'active'
+                          ? 'Processing now'
+                          : phase.completedAt
+                            ? `Completed ${formatRelativeTime(phase.completedAt)}`
+                            : 'Awaiting execution'}
                       </div>
+                      {phase.agent === 'CodingAgent' && metadata.githubDelegated && metadata.githubIssueUrl && phase.status === 'active' ? (
+                        <a
+                          href={metadata.githubIssueUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex text-xs font-semibold text-sky-700 hover:text-sky-800"
+                        >
+                          View GitHub agent issue #{metadata.githubIssueNumber}
+                        </a>
+                      ) : null}
                     </div>
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${phaseStyles(phase.status)}`}>
                       {phase.status}
@@ -155,7 +188,14 @@ export default function StoryDetail() {
                   {index < (metadata.phases?.length ?? 0) - 1 ? (
                     <div className="absolute bottom-0 left-1.5 top-0.5 ml-px w-0.5 bg-gray-200" />
                   ) : null}
-                  <div className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white bg-violet-500" />
+                  {phase.status === 'active' ? (
+                    <>
+                      <div className="absolute left-0 top-1.5 h-3 w-3 rounded-full bg-sky-400 opacity-75 animate-ping" />
+                      <div className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white bg-sky-500" />
+                    </>
+                  ) : (
+                    <div className={`absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white ${phase.status === 'failed' ? 'bg-red-500' : phase.status === 'completed' ? 'bg-green-500' : 'bg-violet-500'}`} />
+                  )}
                 </div>
               </li>
             ))}

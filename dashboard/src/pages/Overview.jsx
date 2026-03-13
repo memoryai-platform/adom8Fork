@@ -32,6 +32,46 @@ function resolveLatestFailureEntry(workItemId, recentActivity) {
     .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())[0] ?? null;
 }
 
+function normalizeAgentStatus(status) {
+  switch (status) {
+    case 'in_progress':
+    case 'awaiting_code':
+      return 'active';
+    case 'completed':
+      return 'completed';
+    case 'failed':
+    case 'needs_revision':
+      return 'failed';
+    default:
+      return 'idle';
+  }
+}
+
+function buildAgentCardsFromStories(stories, recentActivity) {
+  return AGENT_ORDER.map((agentName) => {
+    const agentKey = agentName.replace('Agent', '');
+    const matchingStories = (stories ?? []).filter((story) => story?.agents?.[agentKey] || story?.agents?.[agentName]);
+    const latestActivity = (recentActivity ?? [])
+      .filter((entry) => entry.agent === agentKey || entry.agent === agentName)
+      .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())[0] ?? null;
+    const activeStory = matchingStories.find((story) => ['in_progress', 'awaiting_code'].includes(story?.agents?.[agentKey] ?? story?.agents?.[agentName]));
+    const failedStory = matchingStories.find((story) => ['failed', 'needs_revision'].includes(story?.agents?.[agentKey] ?? story?.agents?.[agentName]));
+    const completedStories = matchingStories.filter((story) => (story?.agents?.[agentKey] ?? story?.agents?.[agentName]) === 'completed');
+
+    return {
+      name: agentName,
+      status: activeStory ? 'active' : failedStory ? 'failed' : completedStories.length ? 'completed' : 'idle',
+      lastRun: latestActivity?.timestamp ?? null,
+      storiesProcessed: completedStories.length,
+      avgDurationSeconds:
+        completedStories
+          .map((story) => story?.agentTimings?.[agentKey]?.durationSeconds ?? story?.agentTimings?.[agentName]?.durationSeconds ?? null)
+          .filter((value) => typeof value === 'number')
+          .reduce((sum, value, _, arr) => sum + value / arr.length, 0) || 0,
+    };
+  });
+}
+
 function CurrentWorkItemBanner({ currentWorkItem }) {
   return (
     <div className="mb-6 overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 via-violet-500 to-sky-500 p-[1px] shadow-lg shadow-violet-500/10">
@@ -189,7 +229,10 @@ export default function Overview() {
   }
 
   const stats = data?.stats ?? {};
-  const agents = data?.agents ?? [];
+  const agents = (data?.agents?.length ? data.agents : buildAgentCardsFromStories(data?.stories, data?.recentActivity)).map((agent) => ({
+    ...agent,
+    status: normalizeAgentStatus(agent.status),
+  }));
   const recentActivity = data?.recentActivity ?? [];
   const queuedTasks = data?.queuedTasks ?? [];
   const latestFailedStory = (data?.stories ?? [])

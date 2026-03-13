@@ -1,7 +1,7 @@
 import { config } from './config';
 import { getMockStatusPayload, getMockStoryDetail } from './mockData';
 
-const STATUS_ENDPOINTS = ['/api/GetCurrentStatus', '/api/status'];
+const STATUS_ENDPOINTS = ['/api/status', '/api/GetCurrentStatus'];
 const STORY_DETAIL_ENDPOINTS = ['/api/GetStoryDetail'];
 
 function getBaseOrigin() {
