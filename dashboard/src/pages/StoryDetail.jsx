@@ -88,7 +88,7 @@ export default function StoryDetail() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link to="/" className="text-sm font-medium text-violet-500 hover:text-violet-600">
+          <Link to="/" className="text-sm font-medium text-ado-600 hover:text-ado-700">
             Back to Overview
           </Link>
           <h2 className="mt-2 text-2xl font-semibold text-gray-900">
@@ -97,7 +97,7 @@ export default function StoryDetail() {
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-gray-100 px-3 py-1 font-semibold text-gray-700">{metadata.state}</span>
-          <span className="rounded-full bg-violet-100 px-3 py-1 font-semibold text-violet-700">Autonomy L{metadata.autonomyLevel}</span>
+          <span className="rounded-full bg-ado-100 px-3 py-1 font-semibold text-ado-700">Autonomy L{metadata.autonomyLevel}</span>
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export default function StoryDetail() {
                       <div className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white bg-sky-500" />
                     </>
                   ) : (
-                    <div className={`absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white ${phase.status === 'failed' ? 'bg-red-500' : phase.status === 'completed' ? 'bg-green-500' : 'bg-violet-500'}`} />
+                    <div className={`absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white ${phase.status === 'failed' ? 'bg-red-500' : phase.status === 'completed' ? 'bg-green-500' : 'bg-ado-600'}`} />
                   )}
                 </div>
               </li>

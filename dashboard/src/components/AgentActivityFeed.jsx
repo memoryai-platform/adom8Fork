@@ -49,7 +49,7 @@ export default function AgentActivityFeed({ entries, onClear, clearing = false, 
         {items.length ? (
           items.map((entry, index) => (
             <div key={`${entry.timestamp}-${entry.agent}-${index}`} className="flex rounded-lg px-2 py-3 hover:bg-gray-50">
-              <div className="mr-3 mt-1 h-9 w-9 shrink-0 rounded-full bg-violet-500 text-white">
+              <div className="mr-3 mt-1 h-9 w-9 shrink-0 rounded-full bg-ado-600 text-white">
                 <div className="flex h-full items-center justify-center text-xs font-semibold">
                   {entry.agent.replace('Agent', '').slice(0, 2).toUpperCase()}
                 </div>
@@ -62,7 +62,7 @@ export default function AgentActivityFeed({ entries, onClear, clearing = false, 
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                   <span className="inline-flex rounded-full bg-sky-100 px-2 py-1 font-semibold text-sky-700">{entry.agent}</span>
                   <span>Story</span>
-                  <Link to={`/story/${entry.workItemId}`} className="font-semibold text-violet-500 hover:text-violet-600">
+                  <Link to={`/story/${entry.workItemId}`} className="font-semibold text-ado-600 hover:text-ado-700">
                     #{entry.workItemId}
                   </Link>
                 </div>

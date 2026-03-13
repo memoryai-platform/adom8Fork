@@ -76,11 +76,11 @@ function buildAgentCardsFromStories(stories, recentActivity) {
 
 function CurrentWorkItemBanner({ currentWorkItem }) {
   return (
-    <div className="mb-6 overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 via-violet-500 to-sky-500 p-[1px] shadow-lg shadow-violet-500/10">
+    <div className="mb-6 overflow-hidden rounded-xl bg-gradient-to-r from-ado-700 via-ado-600 to-sky-500 p-[1px] shadow-lg shadow-ado-600/10">
       <div className="rounded-[11px] bg-white px-5 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Current Work Item</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ado-600">Current Work Item</div>
             <h2 className="mt-2 text-2xl font-semibold text-gray-900">{currentWorkItem.title}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
               <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">#{currentWorkItem.id}</span>
@@ -88,7 +88,7 @@ function CurrentWorkItemBanner({ currentWorkItem }) {
                 <span className="rounded-full bg-sky-100 px-2.5 py-1 font-semibold text-sky-700">{currentWorkItem.state}</span>
               ) : null}
               {currentWorkItem.autonomyLevel ? (
-                <span className="rounded-full bg-violet-100 px-2.5 py-1 font-semibold text-violet-700">
+                <span className="rounded-full bg-ado-100 px-2.5 py-1 font-semibold text-ado-700">
                   Autonomy L{currentWorkItem.autonomyLevel}
                 </span>
               ) : null}
@@ -99,7 +99,7 @@ function CurrentWorkItemBanner({ currentWorkItem }) {
             <Link
               to={`/story/${currentWorkItem.id}`}
               state={{ story: currentWorkItem }}
-              className="mt-3 inline-flex font-semibold text-violet-500 hover:text-violet-600"
+              className="mt-3 inline-flex font-semibold text-ado-600 hover:text-ado-700"
             >
               View Details
             </Link>
@@ -211,7 +211,7 @@ function AgentDurationChart({ agents }) {
             <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
             <YAxis tickLine={false} axisLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
             <RechartsTooltip formatter={(value) => formatDuration(Number(value))} />
-            <Bar dataKey="duration" fill="#8470ff" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="duration" fill="#0078d4" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

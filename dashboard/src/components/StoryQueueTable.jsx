@@ -36,14 +36,14 @@ export default function StoryQueueTable({ queue }) {
                       <Link
                         to={`/story/${item.id}`}
                         state={{ story: item }}
-                        className="font-semibold text-violet-500 hover:text-violet-600"
+                        className="font-semibold text-ado-600 hover:text-ado-700"
                       >
                         #{item.id}
                       </Link>
                     </td>
                     <td className="p-2 text-gray-800">{item.title}</td>
                     <td className="p-2 text-center">
-                      <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                      <span className="inline-flex rounded-full bg-ado-100 px-2.5 py-1 text-xs font-semibold text-ado-700">
                         {item.autonomyLevel != null ? `L${item.autonomyLevel}` : 'N/A'}
                       </span>
                     </td>

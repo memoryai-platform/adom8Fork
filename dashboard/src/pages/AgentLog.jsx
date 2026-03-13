@@ -68,7 +68,7 @@ export default function AgentLog() {
                     <td className="p-2 text-gray-500">{formatTimestamp(entry.timestamp)}</td>
                     <td className="p-2 font-medium text-gray-900">{entry.agent}</td>
                     <td className="p-2">
-                      <Link to={`/story/${entry.workItemId}`} className="font-semibold text-violet-500 hover:text-violet-600">
+                      <Link to={`/story/${entry.workItemId}`} className="font-semibold text-ado-600 hover:text-ado-700">
                         #{entry.workItemId}
                       </Link>
                     </td>
