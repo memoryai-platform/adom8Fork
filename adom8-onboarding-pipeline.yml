@@ -22,6 +22,7 @@ variables:
   # - OPENAI_API_KEY (secret)   ← OpenAI; used as primary if CLAUDE_API_KEY is not set
   # - RESOURCE_GROUP_NAME
   # - LOCATION
+  # - STATIC_WEB_APP_LOCATION (optional; defaults to LOCATION)
   # - GITHUB_TOKEN (secret)      ← must have 'repo' scope (read + write secrets)
   # - AZURE_SERVICE_CONNECTION
   # - AdoDashboardKey (secret)
@@ -34,6 +35,7 @@ variables:
   FUNCTION_APP_NAME: 'adom8-func-placeholder'
   STORAGE_ACCOUNT_NAME: 'adom8stplaceholder'
   KEY_VAULT_NAME: 'adom8-kv-placeholder'
+  STATIC_WEB_APP_LOCATION: '$(LOCATION)'
   COPILOT_ENABLED: 'true'
   COPILOT_MODE: 'Auto'
   COPILOT_COMPLEXITY_THRESHOLD: '8'
@@ -69,6 +71,8 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
+          set -euo pipefail
+
           # Compute stable 8-char suffix from resource group name so resource
           # names are identical on every re-run (idempotent).
           SUFFIX=$(echo -n "$(RESOURCE_GROUP_NAME)" | sha256sum | cut -c1-8)
@@ -115,12 +119,24 @@ stages:
           az functionapp show --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) >/dev/null 2>&1 || \
             az functionapp create --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) --storage-account $STORAGE_ACCOUNT_NAME --consumption-plan-location $(LOCATION) --functions-version 4 --os-type Windows --runtime dotnet-isolated --runtime-version 8.0
 
-          echo "Creating Static Web App: $SWA_NAME"
+          SWA_LOCATION="$(STATIC_WEB_APP_LOCATION)"
+          if [ -z "$SWA_LOCATION" ] || [ "$SWA_LOCATION" = "null" ]; then
+            SWA_LOCATION="$(LOCATION)"
+          fi
+
+          echo "Creating Static Web App: $SWA_NAME in $SWA_LOCATION"
           az staticwebapp show --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) 2>/dev/null || \
-            az staticwebapp create --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) --location $(LOCATION) --sku Free
+            az staticwebapp create --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) --location "$SWA_LOCATION" --sku Free
+
+          echo "Validating Static Web App exists"
+          az staticwebapp show --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) >/dev/null
 
           echo "Retrieving Static Web App hostname and adding CORS to Function App"
           SWA_HOSTNAME=$(az staticwebapp show --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) --query "defaultHostname" -o tsv)
+          if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = "null" ]; then
+            echo "ERROR: Static Web App hostname is empty."
+            exit 1
+          fi
           FUNCTION_APP_HOSTNAME="https://${FUNCTION_APP_NAME}.azurewebsites.net"
           echo "##vso[task.setvariable variable=FUNCTION_APP_HOSTNAME]$FUNCTION_APP_HOSTNAME"
           az functionapp cors add --name $FUNCTION_APP_NAME --resource-group $(RESOURCE_GROUP_NAME) --allowed-origins "https://$SWA_HOSTNAME"
@@ -136,6 +152,10 @@ stages:
 
           echo "Retrieving Static Web App deployment token"
           SWA_TOKEN=$(az staticwebapp secrets list --name $SWA_NAME --resource-group $(RESOURCE_GROUP_NAME) --query "properties.apiKey" -o tsv)
+          if [ -z "$SWA_TOKEN" ] || [ "$SWA_TOKEN" = "null" ]; then
+            echo "ERROR: Static Web App deployment token is empty."
+            exit 1
+          fi
           echo "##vso[task.setvariable variable=SWA_TOKEN;issecret=true]$SWA_TOKEN"
           echo "##vso[task.setvariable variable=STATIC_WEB_APP_API_KEY;issecret=true]$SWA_TOKEN"
 
