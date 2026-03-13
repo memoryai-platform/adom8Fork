@@ -14,9 +14,23 @@ import AgentActivityFeed from '../components/AgentActivityFeed';
 import AgentCard from '../components/AgentCard';
 import MetricCard from '../components/MetricCard';
 import StoryQueueTable from '../components/StoryQueueTable';
+import ModalBasic from '../mosaic/components/ModalBasic';
 import { clearActivity, clearStories } from '../api';
 import { AGENT_ORDER } from '../constants';
 import { formatDuration, formatPercent, formatRelativeTime } from '../utils/formatting';
+
+const CLEAR_ACTIONS = {
+  stories: {
+    title: 'Clear stories and queues',
+    description: 'This clears story activity plus queued and poison-queue work items from the dashboard.',
+    confirmLabel: 'Clear Stories',
+  },
+  activity: {
+    title: 'Clear activity feed',
+    description: 'This clears only the live activity feed. Stories and queue contents will remain intact.',
+    confirmLabel: 'Clear Activity',
+  },
+};
 
 function resolveLatestTimestamp(workItemId, recentActivity) {
   const timestamps = (recentActivity ?? [])
@@ -219,6 +233,41 @@ function AgentDurationChart({ agents }) {
   );
 }
 
+function ConfirmActionModal({ action, loading, onConfirm, onCancel, setModalOpen }) {
+  if (!action) {
+    return null;
+  }
+
+  return (
+    <ModalBasic
+      id="dashboard-confirm-action-modal"
+      title={action.title}
+      modalOpen={Boolean(action)}
+      setModalOpen={setModalOpen}
+    >
+      <div className="px-5 py-4">
+        <p className="text-sm leading-6 text-gray-600">{action.description}</p>
+      </div>
+      <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-5 py-4">
+        <button
+          onClick={onCancel}
+          disabled={loading}
+          className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={loading}
+          className="inline-flex items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+        >
+          {loading ? 'Clearing...' : action.confirmLabel}
+        </button>
+      </div>
+    </ModalBasic>
+  );
+}
+
 export default function Overview() {
   const {
     appKey,
@@ -234,6 +283,7 @@ export default function Overview() {
   const [clearingActivity, setClearingActivity] = useState(false);
   const [storiesFeedback, setStoriesFeedback] = useState(null);
   const [activityFeedback, setActivityFeedback] = useState(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState(null);
 
   if (loading && !data) {
     return <div className="rounded-xl bg-white px-5 py-8 text-sm text-gray-500 shadow-xs">Loading orchestration status...</div>;
@@ -250,6 +300,12 @@ export default function Overview() {
   }));
   const recentActivity = data?.recentActivity ?? [];
   const queuedTasks = data?.queuedTasks ?? [];
+  const confirmationAction = pendingConfirmation ? CLEAR_ACTIONS[pendingConfirmation] : null;
+  const confirmationLoading = pendingConfirmation === 'stories'
+    ? clearingStories
+    : pendingConfirmation === 'activity'
+      ? clearingActivity
+      : false;
   const latestFailedStory = (data?.stories ?? [])
     .filter((story) => story.workItemState === 'Agent Failed' || Object.values(story.agents ?? {}).some((status) => status === 'failed'))
     .sort((left, right) => {
@@ -258,13 +314,8 @@ export default function Overview() {
       return new Date(rightTs ?? 0).getTime() - new Date(leftTs ?? 0).getTime();
     })[0] ?? null;
 
-  const handleClearStories = async () => {
+  const executeClearStories = async () => {
     if (!appKey || clearingStories) {
-      return;
-    }
-
-    const confirmed = window.confirm('Clear all story activity and queued work items from the dashboard? This also clears queue contents.');
-    if (!confirmed) {
       return;
     }
 
@@ -293,13 +344,8 @@ export default function Overview() {
     }
   };
 
-  const handleClearActivity = async () => {
+  const executeClearActivity = async () => {
     if (!appKey || clearingActivity) {
-      return;
-    }
-
-    const confirmed = window.confirm('Clear only the live activity feed? This does not clear stories or queue contents.');
-    if (!confirmed) {
       return;
     }
 
@@ -328,6 +374,39 @@ export default function Overview() {
     }
   };
 
+  const openConfirmation = (actionName) => {
+    if (!appKey) {
+      return;
+    }
+
+    if ((actionName === 'stories' && clearingStories) || (actionName === 'activity' && clearingActivity)) {
+      return;
+    }
+
+    setPendingConfirmation(actionName);
+  };
+
+  const closeConfirmation = () => {
+    if (confirmationLoading) {
+      return;
+    }
+
+    setPendingConfirmation(null);
+  };
+
+  const handleConfirmAction = async () => {
+    if (pendingConfirmation === 'stories') {
+      await executeClearStories();
+      setPendingConfirmation(null);
+      return;
+    }
+
+    if (pendingConfirmation === 'activity') {
+      await executeClearActivity();
+      setPendingConfirmation(null);
+    }
+  };
+
   return (
     <>
       <div className="mb-8 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
@@ -344,11 +423,11 @@ export default function Overview() {
           <p className="mt-1 text-sm text-gray-500">Administrative dashboard controls for the current environment.</p>
         </div>
         <button
-          onClick={handleClearStories}
+          onClick={() => openConfirmation('stories')}
           disabled={clearingStories}
           className="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
-          {clearingStories ? 'Clearing Stories…' : 'Clear Stories'}
+          {clearingStories ? 'Clearing Stories...' : 'Clear Stories'}
         </button>
       </div>
       {storiesFeedback?.message ? (
@@ -369,9 +448,20 @@ export default function Overview() {
           clearing={clearingActivity}
           entries={recentActivity}
           feedback={activityFeedback}
-          onClear={handleClearActivity}
+          onClear={() => openConfirmation('activity')}
         />
       </div>
+      <ConfirmActionModal
+        action={confirmationAction}
+        loading={confirmationLoading}
+        onConfirm={handleConfirmAction}
+        onCancel={closeConfirmation}
+        setModalOpen={(nextOpen) => {
+          if (!nextOpen) {
+            closeConfirmation();
+          }
+        }}
+      />
     </>
   );
 }

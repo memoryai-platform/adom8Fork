@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using AIAgents.Core.Configuration;
@@ -23,7 +22,7 @@ public interface ICopilotCompletionService
 
 public sealed record GitHubIssueSnapshot(int Number, string Title, string State);
 
-public sealed record GitHubPullRequestSnapshot(int Number, string Title, string HeadBranch, string BaseBranch, bool IsDraft);
+public sealed record GitHubPullRequestSnapshot(int Number, string Title, string HeadBranch, string BaseBranch, bool IsDraft, string Body);
 
 public enum CopilotCompletionProbeResult
 {
@@ -37,6 +36,7 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
     private const string CheckpointLastAgent = "LastAgent";
     private const string CheckpointCurrentAiAgent = "AICurrentAgent";
     private const string CheckpointCompletionComment = "CompletionComment";
+    private static readonly string[] PullRequestStates = ["open", "closed"];
 
     private readonly CopilotOptions _copilotOptions;
     private readonly GitHubOptions _githubOptions;
@@ -101,26 +101,12 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
             return null;
         }
 
-        var states = new[] { "open", "closed" };
-        foreach (var state in states)
+        foreach (var state in PullRequestStates)
         {
-            var response = await _httpClient.GetAsync(
-                $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/pulls?state={state}&base={Uri.EscapeDataString(baseBranch)}&per_page=20",
-                cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            using var doc = JsonDocument.Parse(body);
-            foreach (var pr in doc.RootElement.EnumerateArray())
+            var matches = await FindPullRequestsAsync(state, baseBranch, cancellationToken);
+            foreach (var pr in matches)
             {
-                var headBranch = pr.GetProperty("head").GetProperty("ref").GetString() ?? string.Empty;
-                var resolvedBase = pr.GetProperty("base").GetProperty("ref").GetString() ?? string.Empty;
-                return new GitHubPullRequestSnapshot(
-                    pr.GetProperty("number").GetInt32(),
-                    pr.GetProperty("title").GetString() ?? string.Empty,
-                    headBranch,
-                    resolvedBase,
-                    pr.TryGetProperty("draft", out var draftProp) && draftProp.ValueKind == JsonValueKind.True);
+                return pr;
             }
         }
 
@@ -137,18 +123,7 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
             return CopilotCompletionProbeResult.NoSignal;
         }
 
-        if (delegation.IssueNumber > 0)
-        {
-            var issue = await GetIssueAsync(delegation.IssueNumber, cancellationToken);
-            if (issue is not null && IsTitleReady(issue.Title))
-            {
-                return await TryCompleteFromIssueAsync(delegation, completionSource, cancellationToken)
-                    ? CopilotCompletionProbeResult.Completed
-                    : CopilotCompletionProbeResult.WaitingForPullRequest;
-            }
-        }
-
-        var pr = await FindPullRequestByBaseBranchAsync(delegation.BranchName, cancellationToken);
+        var pr = await FindPullRequestForDelegationAsync(delegation, cancellationToken);
         if (pr is not null && IsTitleReady(pr.Title))
         {
             return await TryCompleteFromPullRequestAsync(
@@ -161,6 +136,11 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
                 : CopilotCompletionProbeResult.WaitingForPullRequest;
         }
 
+        if (pr is not null)
+        {
+            return CopilotCompletionProbeResult.WaitingForPullRequest;
+        }
+
         return CopilotCompletionProbeResult.NoSignal;
     }
 
@@ -169,20 +149,19 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
         string completionSource,
         CancellationToken cancellationToken = default)
     {
-        var pullRequest = await FindPullRequestByBaseBranchAsync(delegation.BranchName, cancellationToken);
+        var pullRequest = await FindPullRequestForDelegationAsync(delegation, cancellationToken);
         if (pullRequest is null)
         {
             _logger.LogInformation(
-                "GitHub issue signaled completion for WI-{WorkItemId}, but no PR targeting {Branch} was found yet. Waiting.",
-                delegation.WorkItemId,
-                delegation.BranchName);
+                "GitHub issue signaled completion for WI-{WorkItemId}, but no matching Copilot PR was found yet. Waiting.",
+                delegation.WorkItemId);
 
             try
             {
                 await _activityLogger.LogAsync(
                     "Coding",
                     delegation.WorkItemId,
-                    $"GitHub issue is ready, but no PR targeting `{delegation.BranchName}` was found yet — waiting for PR reconciliation.",
+                    $"GitHub issue is ready, but no matching Copilot PR was found yet for {delegation.BranchName}. Waiting for PR reconciliation.",
                     "info",
                     cancellationToken);
             }
@@ -191,6 +170,33 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
                 _logger.LogWarning(
                     ex,
                     "Non-critical activity log failed while waiting for PR after issue completion signal for WI-{WorkItemId}",
+                    delegation.WorkItemId);
+            }
+
+            return false;
+        }
+
+        if (!IsTitleReady(pullRequest.Title))
+        {
+            _logger.LogInformation(
+                "GitHub issue signaled completion for WI-{WorkItemId}, but PR #{PrNumber} still has a WIP title. Waiting.",
+                delegation.WorkItemId,
+                pullRequest.Number);
+
+            try
+            {
+                await _activityLogger.LogAsync(
+                    "Coding",
+                    delegation.WorkItemId,
+                    $"GitHub issue is ready, but matching PR #{pullRequest.Number} still has [WIP]. Waiting for final PR reconciliation.",
+                    "info",
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Non-critical activity log failed while waiting for WIP PR after issue completion signal for WI-{WorkItemId}",
                     delegation.WorkItemId);
             }
 
@@ -491,6 +497,30 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
         (string.Equals(action, "edited", StringComparison.OrdinalIgnoreCase)
          || string.Equals(action, "reopened", StringComparison.OrdinalIgnoreCase));
 
+    internal static bool PullRequestMatchesDelegation(
+        CopilotDelegation delegation,
+        GitHubPullRequestSnapshot pullRequest,
+        string owner,
+        string repo)
+    {
+        var workItemMarker = $"US-{delegation.WorkItemId}";
+        var workItemBranchMarker = $"us-{delegation.WorkItemId}";
+        var combinedText = $"{pullRequest.Title}\n{pullRequest.Body}";
+
+        var branchMatch =
+            string.Equals(pullRequest.BaseBranch, delegation.BranchName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(pullRequest.HeadBranch, delegation.BranchName, StringComparison.OrdinalIgnoreCase);
+
+        var workItemMatch = combinedText.Contains(workItemMarker, StringComparison.OrdinalIgnoreCase);
+        var headBranchMatch = pullRequest.HeadBranch.Contains(workItemBranchMarker, StringComparison.OrdinalIgnoreCase);
+
+        var issueReferenceMatch = delegation.IssueNumber > 0 &&
+            (combinedText.Contains($"#{delegation.IssueNumber}", StringComparison.OrdinalIgnoreCase) ||
+             combinedText.Contains($"{owner}/{repo}#{delegation.IssueNumber}", StringComparison.OrdinalIgnoreCase));
+
+        return branchMatch || workItemMatch || headBranchMatch || issueReferenceMatch;
+    }
+
     internal static IReadOnlyList<string> ParseRequiredAdoCheckpoints(string? configured)
     {
         var defaults = new[]
@@ -551,6 +581,70 @@ public sealed class CopilotCompletionService : ICopilotCompletionService
         "completioncomment" or "comment" or "completion_comment" => CheckpointCompletionComment,
         _ => null
     };
+
+    private async Task<GitHubPullRequestSnapshot?> FindPullRequestForDelegationAsync(
+        CopilotDelegation delegation,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(delegation.BranchName))
+        {
+            foreach (var state in PullRequestStates)
+            {
+                var branchMatches = await FindPullRequestsAsync(state, delegation.BranchName, cancellationToken);
+                var branchMatch = branchMatches.FirstOrDefault(pr =>
+                    PullRequestMatchesDelegation(delegation, pr, _githubOptions.Owner, _githubOptions.Repo));
+
+                if (branchMatch is not null)
+                {
+                    return branchMatch;
+                }
+            }
+        }
+
+        foreach (var state in PullRequestStates)
+        {
+            var candidates = await FindPullRequestsAsync(state, null, cancellationToken);
+            var match = candidates.FirstOrDefault(pr =>
+                PullRequestMatchesDelegation(delegation, pr, _githubOptions.Owner, _githubOptions.Repo));
+
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<IReadOnlyList<GitHubPullRequestSnapshot>> FindPullRequestsAsync(
+        string state,
+        string? baseBranch,
+        CancellationToken cancellationToken)
+    {
+        var route = string.IsNullOrWhiteSpace(baseBranch)
+            ? $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/pulls?state={state}&per_page=50"
+            : $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/pulls?state={state}&base={Uri.EscapeDataString(baseBranch)}&per_page=50";
+
+        var response = await _httpClient.GetAsync(route, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var doc = JsonDocument.Parse(body);
+        var pullRequests = new List<GitHubPullRequestSnapshot>();
+
+        foreach (var pr in doc.RootElement.EnumerateArray())
+        {
+            pullRequests.Add(new GitHubPullRequestSnapshot(
+                pr.GetProperty("number").GetInt32(),
+                pr.GetProperty("title").GetString() ?? string.Empty,
+                pr.GetProperty("head").GetProperty("ref").GetString() ?? string.Empty,
+                pr.GetProperty("base").GetProperty("ref").GetString() ?? string.Empty,
+                pr.TryGetProperty("draft", out var draftProp) && draftProp.ValueKind == JsonValueKind.True,
+                pr.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() ?? string.Empty : string.Empty));
+        }
+
+        return pullRequests;
+    }
 
     private async Task<(List<PrFile> Files, CopilotMetrics Metrics)> FetchPrDetailsAsync(
         int prNumber,

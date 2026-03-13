@@ -37,6 +37,20 @@ function formatAgentLabel(value) {
   return key ? `${key} Agent` : value ?? null;
 }
 
+function getAgentOrderIndex(agentName) {
+  return AGENT_ORDER.findIndex((entry) => stripAgentSuffix(entry) === agentName);
+}
+
+function resolveCurrentAgentSignal(seedStory, liveStory, currentItem) {
+  return currentItem?.state
+    ?? seedStory?.currentAiAgent
+    ?? seedStory?.currentAgent
+    ?? seedStory?.state
+    ?? liveStory?.currentAiAgent
+    ?? liveStory?.currentAgent
+    ?? null;
+}
+
 function mapAgentStatus(rawStatus) {
   switch (rawStatus) {
     case 'completed':
@@ -56,18 +70,25 @@ function mapAgentStatus(rawStatus) {
 function getAgentTimelineStatus(story, agentName) {
   const agentKey = stripAgentSuffix(agentName);
   const rawStatus = story?.agents?.[agentKey] ?? story?.agents?.[agentName] ?? null;
+  const mappedStatus = rawStatus ? mapAgentStatus(rawStatus) : null;
+  const normalizedCurrent = normalizeAgentKey(story?.currentAiAgent ?? story?.currentAgent ?? story?.state);
+  const currentIndex = normalizedCurrent ? getAgentOrderIndex(normalizedCurrent) : -1;
+  const agentIndex = getAgentOrderIndex(agentKey);
 
-  if (rawStatus) {
-    return mapAgentStatus(rawStatus);
+  // Prefer the freshest current-agent signal over stale in-progress status from router state.
+  if (currentIndex !== -1 && agentIndex !== -1) {
+    if (agentIndex === currentIndex && mappedStatus !== 'completed' && mappedStatus !== 'failed') {
+      return 'active';
+    }
+
+    if (agentIndex < currentIndex && mappedStatus === 'active') {
+      return 'completed';
+    }
   }
 
-  const normalizedCurrent = normalizeAgentKey(story?.currentAgent ?? story?.currentAiAgent ?? story?.state);
-  if (!normalizedCurrent) {
-    return 'pending';
+  if (mappedStatus) {
+    return mappedStatus;
   }
-
-  const currentIndex = AGENT_ORDER.findIndex((entry) => stripAgentSuffix(entry) === normalizedCurrent);
-  const agentIndex = AGENT_ORDER.findIndex((entry) => entry === agentName);
 
   if (currentIndex === -1 || agentIndex === -1) {
     return 'pending';
@@ -92,29 +113,72 @@ export function getPhaseStatus(story, agentName) {
   return getAgentTimelineStatus(story, agentName);
 }
 
+function getLatestTimestamp(activity) {
+  return (activity ?? []).reduce((latest, entry) => {
+    if (!entry?.timestamp) {
+      return latest;
+    }
+
+    if (!latest) {
+      return entry.timestamp;
+    }
+
+    return new Date(entry.timestamp).getTime() > new Date(latest).getTime()
+      ? entry.timestamp
+      : latest;
+  }, null);
+}
+
+function mergeAgentData(...sources) {
+  return sources.reduce((accumulator, source) => {
+    if (!source) {
+      return accumulator;
+    }
+
+    return { ...accumulator, ...source };
+  }, {});
+}
+
 export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
   const numericId = Number(storyId);
   const liveStory = statusData?.stories?.find((item) => item.workItemId === numericId) ?? null;
   const currentItem = statusData?.currentWorkItem?.id === numericId ? statusData.currentWorkItem : null;
   const queuedItem = statusData?.queuedTasks?.find((item) => item.workItemId === numericId) ?? null;
-  const story = seedStory ?? liveStory ?? currentItem ?? queuedItem;
+  const hasStoryData = Boolean(seedStory || liveStory || currentItem || queuedItem);
+
+  if (!hasStoryData) {
+    return null;
+  }
+
+  const resolvedCurrentAgent = resolveCurrentAgentSignal(seedStory, liveStory, currentItem);
+  const resolvedWorkItemState = liveStory?.workItemState ?? seedStory?.workItemState ?? null;
+  const agentDetails = mergeAgentData(queuedItem?.agentDetails, seedStory?.agentDetails, liveStory?.agentDetails);
+  const story = {
+    ...(queuedItem ?? {}),
+    ...(seedStory ?? {}),
+    ...(liveStory ?? {}),
+    title: liveStory?.title ?? seedStory?.title ?? currentItem?.title ?? queuedItem?.title ?? null,
+    state: resolvedCurrentAgent ?? resolvedWorkItemState,
+    workItemState: resolvedWorkItemState,
+    currentAgent: resolvedCurrentAgent,
+    currentAiAgent: resolvedCurrentAgent,
+    autonomyLevel: currentItem?.autonomyLevel ?? liveStory?.autonomyLevel ?? seedStory?.autonomyLevel ?? queuedItem?.autonomyLevel ?? null,
+    agents: liveStory?.agents ?? seedStory?.agents ?? queuedItem?.agents ?? {},
+    agentDetails,
+    agentTimings: mergeAgentData(queuedItem?.agentTimings, seedStory?.agentTimings, liveStory?.agentTimings),
+  };
   const activity = (statusData?.recentActivity ?? []).filter((entry) => entry.workItemId === numericId);
-  const updatedDate = activity[0]?.timestamp ?? null;
-  const agentDetails = story?.agentDetails ?? liveStory?.agentDetails ?? {};
+  const updatedDate = getLatestTimestamp(activity);
   const codingDetails = agentDetails?.Coding?.additionalData ?? agentDetails?.CodingAgent?.additionalData ?? null;
   const githubIssueNumber = Number(codingDetails?.issueNumber ?? 0) || null;
   const githubIssueUrl = githubIssueNumber && statusData?.githubOwner && statusData?.githubRepo
     ? `https://github.com/${statusData.githubOwner}/${statusData.githubRepo}/issues/${githubIssueNumber}`
     : null;
 
-  if (!story) {
-    return null;
-  }
-
   return {
     id: numericId,
     title: story.title,
-    state: story.state ?? story.workItemState ?? 'AI Agent',
+    state: formatAgentLabel(story.currentAiAgent ?? story.currentAgent) ?? story.workItemState ?? 'AI Agent',
     autonomyLevel: story.autonomyLevel ?? currentItem?.autonomyLevel ?? null,
     currentAgent: formatAgentLabel(story.currentAiAgent ?? story.currentAgent ?? currentItem?.state),
     lastAgent: currentItem?.lastAgent ?? null,
