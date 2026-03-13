@@ -9,7 +9,7 @@ export default function AgentLog() {
   const { data } = useOutletContext();
   const [selectedAgent, setSelectedAgent] = useState('all');
   const [page, setPage] = useState(1);
-  const entries = data?.activityFeed ?? [];
+  const entries = data?.recentActivity ?? [];
 
   const agentNames = useMemo(() => ['all', ...new Set(entries.map((entry) => entry.agent))], [entries]);
   const filteredEntries = useMemo(

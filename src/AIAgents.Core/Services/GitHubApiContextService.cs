@@ -239,7 +239,13 @@ public sealed class GitHubApiContextService : IGitHubApiContextService
             $"repos/{_gitHub.Owner}/{_gitHub.Repo}/branches/{Uri.EscapeDataString(branch)}",
             ct);
         var body = await response.Content.ReadAsStringAsync(ct);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"Failed to resolve GitHub branch '{branch}' in '{_gitHub.Owner}/{_gitHub.Repo}': {(int)response.StatusCode} {response.StatusCode}. {body}",
+                null,
+                response.StatusCode);
+        }
         using var doc = JsonDocument.Parse(body);
         return doc.RootElement.GetProperty("commit").GetProperty("sha").GetString()
                ?? throw new InvalidOperationException($"Could not resolve head SHA for branch '{branch}'.");

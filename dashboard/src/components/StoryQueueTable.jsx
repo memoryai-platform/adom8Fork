@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom';
+import { formatRelativeTime } from '../utils/formatting';
 
 /**
- * @param {{queue: Array<{id: number, title: string, autonomyLevel: number, queuePosition: number}>}} props
+ * @param {{queue: Array<{workItemId: number, title: string, agentType: string, autonomyLevel: number, enqueuedAt: string}>}} props
  */
 export default function StoryQueueTable({ queue }) {
-  const rows = (queue ?? []).slice(0, 10);
+  const rows = (queue ?? []).slice(0, 10).map((item) => ({
+    id: item.workItemId ?? item.id,
+    title: item.title ?? `${item.agentType ?? 'Agent'} queued`,
+    autonomyLevel: item.autonomyLevel ?? null,
+    enqueuedAt: item.enqueuedAt ?? null,
+  }));
 
   return (
     <div className="col-span-full xl:col-span-7 rounded-xl bg-white shadow-xs">
@@ -20,7 +26,7 @@ export default function StoryQueueTable({ queue }) {
                   <th className="p-2 text-left font-semibold">Work Item</th>
                   <th className="p-2 text-left font-semibold">Title</th>
                   <th className="p-2 text-center font-semibold">Autonomy</th>
-                  <th className="p-2 text-center font-semibold">Queue Position</th>
+                  <th className="p-2 text-center font-semibold">Enqueued</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm font-medium">
@@ -38,10 +44,10 @@ export default function StoryQueueTable({ queue }) {
                     <td className="p-2 text-gray-800">{item.title}</td>
                     <td className="p-2 text-center">
                       <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                        L{item.autonomyLevel}
+                        {item.autonomyLevel != null ? `L${item.autonomyLevel}` : 'N/A'}
                       </span>
                     </td>
-                    <td className="p-2 text-center text-gray-600">{item.queuePosition}</td>
+                    <td className="p-2 text-center text-gray-600">{formatRelativeTime(item.enqueuedAt)}</td>
                   </tr>
                 ))}
               </tbody>

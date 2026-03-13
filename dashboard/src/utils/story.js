@@ -27,8 +27,15 @@ export function getPhaseStatus(story, agentName) {
 export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
   const numericId = Number(storyId);
   const currentItem = statusData?.currentWorkItem?.id === numericId ? statusData.currentWorkItem : null;
-  const queuedItem = statusData?.queue?.find((item) => item.id === numericId) ?? null;
+  const queuedItem = statusData?.queuedTasks?.find((item) => item.workItemId === numericId) ?? null;
   const story = seedStory ?? currentItem ?? queuedItem;
+  const activity = (statusData?.recentActivity ?? []).filter((entry) => entry.workItemId === numericId);
+  const updatedDate = activity[0]?.timestamp ?? null;
+  const timelineSource = seedStory?.currentAgent
+    ? seedStory
+    : currentItem?.state
+      ? { currentAgent: currentItem.state.replace(/\s+Agent$/i, '') }
+      : null;
 
   if (!story) {
     return null;
@@ -37,17 +44,17 @@ export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
   return {
     id: numericId,
     title: story.title,
-    state: story.state ?? 'AI Agent',
-    autonomyLevel: story.autonomyLevel,
-    currentAgent: currentItem?.currentAgent ?? null,
+    state: story.state ?? story.workItemState ?? 'AI Agent',
+    autonomyLevel: story.autonomyLevel ?? currentItem?.autonomyLevel ?? null,
+    currentAgent: story.currentAgent ?? currentItem?.state ?? null,
     lastAgent: currentItem?.lastAgent ?? null,
     createdDate: currentItem?.createdDate ?? null,
-    updatedDate: currentItem?.updatedDate ?? null,
+    updatedDate,
     phases: AGENT_ORDER.map((agentName) => ({
       agent: agentName,
-      status: getPhaseStatus(currentItem, agentName),
-      completedAt: getPhaseStatus(currentItem, agentName) === 'completed' ? currentItem?.updatedDate ?? null : null,
+      status: getPhaseStatus(timelineSource, agentName),
+      completedAt: getPhaseStatus(timelineSource, agentName) === 'completed' ? updatedDate : null,
     })),
-    activity: (statusData?.activityFeed ?? []).filter((entry) => entry.workItemId === numericId),
+    activity,
   };
 }

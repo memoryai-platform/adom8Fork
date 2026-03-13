@@ -143,24 +143,9 @@ public sealed class GetCurrentStatus
                 : gitHubRepo,
             CurrentWorkItem = currentWorkItem,
             Stories = storyStatuses,
-            Stats = new DashboardStats
-            {
-                StoriesProcessed = storyStatuses.Count(s =>
-                    s.Agents.Values.All(a => a is "completed" or "failed")),
-                AgentsActive = storyStatuses.Count(s =>
-                    s.Agents.Values.Any(a => a == "in_progress")),
-                SuccessRate = CalculateSuccessRate(storyStatuses),
-                AvgProcessingTime = CalculateAverageProcessingTime(storyStatuses),
-                TotalTokens = storyStatuses.Sum(s => s.TokenUsage?.TotalTokens ?? 0),
-                TotalCost = storyStatuses.Sum(s => s.TokenUsage?.TotalCost ?? 0m)
-            },
+            Stats = BuildDashboardStats(storyStatuses, storyActivity),
             RecentActivity = recentActivity,
-            QueuedTasks = queuedTasks.Select(t => new QueuedTaskInfo
-            {
-                WorkItemId = t.WorkItemId,
-                AgentType = t.AgentType.ToString(),
-                EnqueuedAt = t.EnqueuedAt
-            }).ToList()
+            QueuedTasks = await BuildQueuedTasksAsync(queuedTasks, cancellationToken)
         };
 
         return new OkObjectResult(status);
@@ -571,6 +556,92 @@ public sealed class GetCurrentStatus
 
         var averageSeconds = storyDurations.Average();
         return FormatElapsed(TimeSpan.FromSeconds(averageSeconds));
+    }
+
+    private static DashboardStats BuildDashboardStats(
+        List<StoryStatus> storyStatuses,
+        IReadOnlyList<ActivityEntry> storyActivity)
+    {
+        var completedStories = storyStatuses.Count(s =>
+            s.Agents.Values.All(a => a is "completed" or "failed"));
+
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+        var recentIds = storyActivity
+            .Where(a => a.Timestamp >= cutoff)
+            .Select(a => a.WorkItemId)
+            .ToHashSet();
+        var storiesLast24h = storyStatuses.Count(s =>
+            recentIds.Contains(s.WorkItemId) &&
+            s.Agents.Values.All(a => a is "completed" or "failed"));
+
+        return new DashboardStats
+        {
+            StoriesProcessed = completedStories,
+            AgentsActive = storyStatuses.Count(s =>
+                s.Agents.Values.Any(a => a == "in_progress")),
+            SuccessRate = CalculateSuccessRate(storyStatuses),
+            AvgProcessingTime = CalculateAverageProcessingTime(storyStatuses),
+            TotalTokens = storyStatuses.Sum(s => s.TokenUsage?.TotalTokens ?? 0),
+            TotalCost = storyStatuses.Sum(s => s.TokenUsage?.TotalCost ?? 0m),
+            StoriesLast24h = storiesLast24h,
+            TotalStoriesProcessed = completedStories,
+            AvgCycleTimeMinutes = CalculateAverageCycleTimeMinutes(storyStatuses),
+            EstimatedHoursSaved = completedStories * 2.0
+        };
+    }
+
+    private async Task<List<QueuedTaskInfo>> BuildQueuedTasksAsync(
+        IReadOnlyList<AgentTask> queuedTasks,
+        CancellationToken cancellationToken)
+    {
+        var results = await Task.WhenAll(queuedTasks.Select(async t =>
+        {
+            string? title = null;
+            int? autonomy = null;
+            try
+            {
+                var wi = await _adoClient.GetWorkItemAsync(t.WorkItemId, cancellationToken);
+                title = wi.Title;
+                autonomy = wi.AutonomyLevel;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch work item details for queued task WI-{WorkItemId}", t.WorkItemId);
+            }
+
+            return new QueuedTaskInfo
+            {
+                WorkItemId = t.WorkItemId,
+                AgentType = t.AgentType.ToString(),
+                EnqueuedAt = t.EnqueuedAt,
+                Title = title,
+                AutonomyLevel = autonomy
+            };
+        }));
+
+        return results.ToList();
+    }
+
+    private static double CalculateAverageCycleTimeMinutes(List<StoryStatus> stories)
+    {
+        var completedStories = stories
+            .Where(s => s.Agents.Values.Any() && s.Agents.Values.All(a => a is "completed" or "failed"))
+            .ToList();
+
+        if (completedStories.Count == 0)
+            return 0;
+
+        var storyDurations = completedStories
+            .Select(s => s.AgentTimings?.Values
+                .Where(t => t.DurationSeconds.HasValue && t.DurationSeconds.Value > 0)
+                .Sum(t => t.DurationSeconds ?? 0) ?? 0)
+            .Where(seconds => seconds > 0)
+            .ToList();
+
+        if (storyDurations.Count == 0)
+            return 0;
+
+        return Math.Round(storyDurations.Average() / 60.0, 1);
     }
 
     private static string? MapCurrentAgentField(string? currentAIAgent)

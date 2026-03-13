@@ -432,9 +432,42 @@ Analyze this story and create a comprehensive implementation plan.";
                 branchRefResponse.StatusCode);
         }
 
-        var baseBranch = string.IsNullOrWhiteSpace(_githubOptions.BaseBranch)
-            ? "main"
+        var repoResponse = await _gitHubHttpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}",
+            cancellationToken);
+
+        if (!repoResponse.IsSuccessStatusCode)
+        {
+            var repoBody = await repoResponse.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Failed to resolve repository '{_githubOptions.Owner}/{_githubOptions.Repo}' while creating '{branchName}': {(int)repoResponse.StatusCode} {repoResponse.StatusCode}. {repoBody}",
+                null,
+                repoResponse.StatusCode);
+        }
+
+        var repoContent = await repoResponse.Content.ReadAsStringAsync(cancellationToken);
+        using var repoDoc = JsonDocument.Parse(repoContent);
+        var repositoryDefaultBranch = repoDoc.RootElement.GetProperty("default_branch").GetString() ?? "main";
+        var preferredBaseBranch = string.IsNullOrWhiteSpace(_githubOptions.BaseBranch)
+            ? repositoryDefaultBranch
             : _githubOptions.BaseBranch;
+        var baseBranch = preferredBaseBranch;
+
+        var preferredBaseRefResponse = await _gitHubHttpClient.GetAsync(
+            $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{Uri.EscapeDataString(preferredBaseBranch)}",
+            cancellationToken);
+
+        if (!preferredBaseRefResponse.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Configured GitHub base branch '{PreferredBranch}' not found or inaccessible for {Owner}/{Repo} (status {StatusCode}); falling back to repository default branch '{DefaultBranch}'",
+                preferredBaseBranch,
+                _githubOptions.Owner,
+                _githubOptions.Repo,
+                preferredBaseRefResponse.StatusCode,
+                repositoryDefaultBranch);
+            baseBranch = repositoryDefaultBranch;
+        }
 
         var baseRefResponse = await _gitHubHttpClient.GetAsync(
             $"repos/{_githubOptions.Owner}/{_githubOptions.Repo}/git/ref/heads/{Uri.EscapeDataString(baseBranch)}",
@@ -444,7 +477,7 @@ Analyze this story and create a comprehensive implementation plan.";
         {
             var baseBody = await baseRefResponse.Content.ReadAsStringAsync(cancellationToken);
             throw new HttpRequestException(
-                $"Failed to resolve base branch '{baseBranch}' while creating '{branchName}': {(int)baseRefResponse.StatusCode} {baseRefResponse.StatusCode}. {baseBody}",
+                $"Failed to resolve base branch '{baseBranch}' while creating '{branchName}' in '{_githubOptions.Owner}/{_githubOptions.Repo}': {(int)baseRefResponse.StatusCode} {baseRefResponse.StatusCode}. {baseBody}",
                 null,
                 baseRefResponse.StatusCode);
         }

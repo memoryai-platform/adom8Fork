@@ -48,6 +48,12 @@ public sealed class QueuedTaskInfo
 
     [JsonPropertyName("enqueuedAt")]
     public DateTime EnqueuedAt { get; init; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
+
+    [JsonPropertyName("autonomyLevel")]
+    public int? AutonomyLevel { get; init; }
 }
 
 /// <summary>
@@ -153,6 +159,18 @@ public sealed class DashboardStats
 
     [JsonPropertyName("totalCost")]
     public decimal TotalCost { get; init; }
+
+    [JsonPropertyName("storiesLast24h")]
+    public int StoriesLast24h { get; init; }
+
+    [JsonPropertyName("totalStoriesProcessed")]
+    public int TotalStoriesProcessed { get; init; }
+
+    [JsonPropertyName("avgCycleTimeMinutes")]
+    public double AvgCycleTimeMinutes { get; init; }
+
+    [JsonPropertyName("estimatedHoursSaved")]
+    public double EstimatedHoursSaved { get; init; }
 }
 
 /// <summary>
