@@ -26,7 +26,7 @@ function getStatusStyles(status) {
 }
 
 /**
- * @param {{agent: {name: string, status: string, lastRun?: string, storiesProcessed?: number, avgDurationSeconds?: number}}} props
+ * @param {{agent: {name: string, status: string, lastRun?: string, storiesProcessed?: number, avgDurationSeconds?: number, detail?: string}}} props
  */
 export default function AgentCard({ agent }) {
   const styles = getStatusStyles(agent.status);
@@ -37,6 +37,7 @@ export default function AgentCard({ agent }) {
         <div>
           <div className="text-sm font-semibold text-gray-900">{agent.name.replace('Agent', ' Agent')}</div>
           <div className="mt-1 text-xs text-gray-400">Last run {formatRelativeTime(agent.lastRun)}</div>
+          {agent.detail ? <div className="mt-1 truncate text-xs font-medium text-gray-600">{agent.detail}</div> : null}
         </div>
         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${styles.badge}`}>
           {agent.status}

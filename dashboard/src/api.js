@@ -70,8 +70,21 @@ async function sendJsonRequest(path, appKey, { method = 'GET', query, body } = {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    const requestError = new Error(errorBody || `Request failed with status ${response.status}`);
+    let parsedErrorBody = null;
+    try {
+      parsedErrorBody = errorBody ? JSON.parse(errorBody) : null;
+    } catch {
+      parsedErrorBody = null;
+    }
+
+    const requestError = new Error(
+      parsedErrorBody?.message
+      || parsedErrorBody?.status
+      || errorBody
+      || `Request failed with status ${response.status}`,
+    );
     requestError.code = response.status;
+    requestError.responseData = parsedErrorBody;
     throw requestError;
   }
 

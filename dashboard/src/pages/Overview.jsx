@@ -18,6 +18,7 @@ import ModalBasic from '../mosaic/components/ModalBasic';
 import { clearActivity, clearStories } from '../api';
 import { AGENT_ORDER } from '../constants';
 import { formatDuration, formatPercent, formatRelativeTime } from '../utils/formatting';
+import { stripAgentSuffix } from '../utils/story';
 
 const CLEAR_ACTIONS = {
   stories: {
@@ -50,10 +51,12 @@ function resolveLatestFailureEntry(workItemId, recentActivity) {
 
 function normalizeAgentStatus(status) {
   switch (status) {
+    case 'active':
     case 'in_progress':
     case 'awaiting_code':
       return 'active';
     case 'completed':
+    case 'skipped':
       return 'completed';
     case 'failed':
     case 'needs_revision':
@@ -65,18 +68,28 @@ function normalizeAgentStatus(status) {
 
 function buildAgentCardsFromStories(stories, recentActivity) {
   return AGENT_ORDER.map((agentName) => {
-    const agentKey = agentName.replace('Agent', '');
+    const agentKey = stripAgentSuffix(agentName);
     const matchingStories = (stories ?? []).filter((story) => story?.agents?.[agentKey] || story?.agents?.[agentName]);
     const latestActivity = (recentActivity ?? [])
       .filter((entry) => entry.agent === agentKey || entry.agent === agentName)
       .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())[0] ?? null;
     const activeStory = matchingStories.find((story) => ['in_progress', 'awaiting_code'].includes(story?.agents?.[agentKey] ?? story?.agents?.[agentName]));
     const failedStory = matchingStories.find((story) => ['failed', 'needs_revision'].includes(story?.agents?.[agentKey] ?? story?.agents?.[agentName]));
-    const completedStories = matchingStories.filter((story) => (story?.agents?.[agentKey] ?? story?.agents?.[agentName]) === 'completed');
+    const completedStories = matchingStories.filter((story) => ['completed', 'skipped'].includes(story?.agents?.[agentKey] ?? story?.agents?.[agentName]));
+
+    let detail = null;
+    if (activeStory) {
+      detail = activeStory.title;
+    } else if (failedStory) {
+      detail = failedStory.title;
+    } else if (latestActivity?.message) {
+      detail = latestActivity.message;
+    }
 
     return {
       name: agentName,
       status: activeStory ? 'active' : failedStory ? 'failed' : completedStories.length ? 'completed' : 'idle',
+      detail,
       lastRun: latestActivity?.timestamp ?? null,
       storiesProcessed: completedStories.length,
       avgDurationSeconds:

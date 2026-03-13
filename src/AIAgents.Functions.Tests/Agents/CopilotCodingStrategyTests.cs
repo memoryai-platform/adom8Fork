@@ -1,6 +1,13 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Agents;
+using AIAgents.Functions.Services;
 using AIAgents.Functions.Tests.Helpers;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
 
 namespace AIAgents.Functions.Tests.Agents;
 
@@ -285,5 +292,203 @@ public sealed class CopilotCodingStrategyTests
         var body = CopilotCodingStrategy.BuildIssueBody(context, "codex");
 
         Assert.Contains("**Assigned Agent:** @codex", body);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConcurrentDuplicateTriggers_CreateOnlyOneGitHubIssue()
+    {
+        var githubOptions = Options.Create(new AIAgents.Core.Configuration.GitHubOptions
+        {
+            Owner = "toddpick",
+            Repo = "adom8",
+            Token = "test-token",
+            BaseBranch = "main"
+        });
+        var copilotOptions = Options.Create(new AIAgents.Core.Configuration.CopilotOptions
+        {
+            Enabled = true,
+            CreateIssue = true,
+            Model = "copilot"
+        });
+
+        var delegationService = new DelayedInMemoryDelegationService(TimeSpan.FromMilliseconds(150));
+        var logger = new Mock<ILogger>();
+        var handler = new FakeGitHubHandler();
+        var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.github.com/")
+        };
+
+        var strategy = new CopilotCodingStrategy(
+            githubOptions,
+            copilotOptions,
+            delegationService,
+            logger.Object,
+            httpClient: httpClient);
+
+        var context = CreateContext(workItemId: 148, branchName: "feature/US-148");
+
+        var first = strategy.ExecuteAsync(context, CancellationToken.None);
+        var second = strategy.ExecuteAsync(CreateContext(workItemId: 148, branchName: "feature/US-148"), CancellationToken.None);
+
+        var results = await Task.WhenAll(first, second);
+
+        Assert.Equal(1, handler.IssueCreateCount);
+        Assert.All(results, result => Assert.Equal("copilot-delegated", result.Mode));
+        Assert.Contains(results, result => result.CopilotMetrics?.IssueNumber == 101);
+        Assert.Contains(results, result => result.Summary.Contains("Already delegated to Copilot", StringComparison.Ordinal));
+
+        var delegation = await delegationService.GetByWorkItemIdAsync(148, CancellationToken.None);
+        Assert.NotNull(delegation);
+        Assert.Equal(101, delegation!.IssueNumber);
+        Assert.Equal("Pending", delegation.Status);
+    }
+
+    private sealed class DelayedInMemoryDelegationService : ICopilotDelegationService
+    {
+        private readonly TimeSpan _lookupDelay;
+        private readonly object _gate = new();
+        private CopilotDelegation? _delegation;
+
+        public DelayedInMemoryDelegationService(TimeSpan lookupDelay)
+        {
+            _lookupDelay = lookupDelay;
+        }
+
+        public Task CreateAsync(CopilotDelegation delegation, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                _delegation = Clone(delegation);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public async Task<CopilotDelegation?> GetByWorkItemIdAsync(int workItemId, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(_lookupDelay, cancellationToken);
+
+            lock (_gate)
+            {
+                return _delegation is null || _delegation.WorkItemId != workItemId
+                    ? null
+                    : Clone(_delegation);
+            }
+        }
+
+        public Task<CopilotDelegation?> GetByIssueNumberAsync(int issueNumber, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                return Task.FromResult(
+                    _delegation is not null && _delegation.IssueNumber == issueNumber
+                        ? Clone(_delegation)
+                        : null);
+            }
+        }
+
+        public Task UpdateAsync(CopilotDelegation delegation, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                _delegation = Clone(delegation);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<CopilotDelegation>> GetTimedOutAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<CopilotDelegation>>(Array.Empty<CopilotDelegation>());
+        }
+
+        public Task<IReadOnlyList<CopilotDelegation>> GetPendingAsync(CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                IReadOnlyList<CopilotDelegation> result = _delegation is null
+                    ? Array.Empty<CopilotDelegation>()
+                    : new[] { Clone(_delegation) };
+                return Task.FromResult(result);
+            }
+        }
+
+        private static CopilotDelegation Clone(CopilotDelegation delegation) => new()
+        {
+            WorkItemId = delegation.WorkItemId,
+            IssueNumber = delegation.IssueNumber,
+            CorrelationId = delegation.CorrelationId,
+            BranchName = delegation.BranchName,
+            DelegatedAt = delegation.DelegatedAt,
+            Status = delegation.Status,
+            CopilotPrNumber = delegation.CopilotPrNumber,
+            CompletedAt = delegation.CompletedAt
+        };
+    }
+
+    private sealed class FakeGitHubHandler : HttpMessageHandler
+    {
+        private int _issueCounter = 100;
+
+        public int IssueCreateCount { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.PathAndQuery ?? string.Empty;
+
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/heads/feature%2FUS-148", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, new
+                {
+                    @ref = "refs/heads/feature/US-148",
+                    @object = new { sha = "abc123" }
+                });
+            }
+
+            if (request.Method == HttpMethod.Post && path.EndsWith("/issues", StringComparison.Ordinal))
+            {
+                IssueCreateCount++;
+                await Task.Delay(200, cancellationToken);
+                var issueNumber = Interlocked.Increment(ref _issueCounter);
+                return Json(HttpStatusCode.Created, new { number = issueNumber });
+            }
+
+            if (request.Method == HttpMethod.Post && path.Contains("/assignees", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.Created, new { });
+            }
+
+            if (request.Method == HttpMethod.Get && path.Contains("/issues/101", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, new
+                {
+                    assignees = new[]
+                    {
+                        new { login = "copilot" }
+                    }
+                });
+            }
+
+            if (request.Method == HttpMethod.Post && path.Contains("/comments", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.Created, new { });
+            }
+
+            if (request.Method == HttpMethod.Patch && path.Contains("/issues/101", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, new { });
+            }
+
+            throw new InvalidOperationException($"Unexpected GitHub request: {request.Method} {path}");
+        }
+
+        private static HttpResponseMessage Json(HttpStatusCode statusCode, object payload)
+        {
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+            };
+        }
     }
 }

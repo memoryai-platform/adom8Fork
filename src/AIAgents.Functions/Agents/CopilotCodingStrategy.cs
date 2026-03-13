@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -22,6 +23,8 @@ namespace AIAgents.Functions.Agents;
 /// </summary>
 public sealed class CopilotCodingStrategy : ICodingStrategy
 {
+    private static readonly ConcurrentDictionary<int, SemaphoreSlim> s_delegationLocks = new();
+
     private readonly GitHubOptions _githubOptions;
     private readonly CopilotOptions _copilotOptions;
     private readonly ICopilotDelegationService _delegationService;
@@ -74,14 +77,78 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
             "Delegating coding for WI-{WorkItemId} to GitHub Copilot coding agent",
             context.WorkItemId);
 
-        // Guard against duplicate triggers — if a delegation already exists for this work item,
-        // return immediately instead of creating another GitHub Issue + Copilot agent run.
-        var existingDelegation = await _delegationService.GetByWorkItemIdAsync(context.WorkItemId, cancellationToken);
-        if (existingDelegation is not null && existingDelegation.Status == "Pending")
+        var delegationLock = s_delegationLocks.GetOrAdd(context.WorkItemId, _ => new SemaphoreSlim(1, 1));
+        await delegationLock.WaitAsync(cancellationToken);
+
+        try
         {
-            _logger.LogWarning(
-                "Duplicate Copilot delegation detected for WI-{WorkItemId} (Issue #{IssueNumber}) — skipping",
-                context.WorkItemId, existingDelegation.IssueNumber);
+            // Guard against duplicate triggers — if a delegation already exists for this work item,
+            // return immediately instead of creating another GitHub Issue + Copilot agent run.
+            var existingDelegation = await _delegationService.GetByWorkItemIdAsync(context.WorkItemId, cancellationToken);
+            if (existingDelegation is not null && existingDelegation.Status == "Pending")
+            {
+                _logger.LogWarning(
+                    "Duplicate Copilot delegation detected for WI-{WorkItemId} (Issue #{IssueNumber}) — skipping",
+                    context.WorkItemId, existingDelegation.IssueNumber);
+
+                return new CodingResult
+                {
+                    Success = true,
+                    Mode = "copilot-delegated",
+                    ModifiedFiles = [],
+                    Tokens = 0,
+                    Cost = 0m,
+                    Summary = $"Already delegated to Copilot (Issue #{existingDelegation.IssueNumber}). Pipeline waiting."
+                };
+            }
+
+            await EnsureBranchExistsAsync(context.BranchName, cancellationToken);
+
+            int issueNumber = 0;
+
+            if (_copilotOptions.CreateIssue)
+            {
+                issueNumber = await CreateGitHubIssueAsync(context, cancellationToken);
+
+                // Assign to Copilot coding agent via the proper GitHub API
+                await AssignIssueToAgentAsync(issueNumber, context.BranchName, cancellationToken);
+                await PostKickoffCommentAsync(issueNumber, context, cancellationToken);
+
+                _logger.LogInformation(
+                    "Created GitHub Issue #{IssueNumber}, assigned Copilot agent, and posted kickoff for WI-{WorkItemId}",
+                    issueNumber, context.WorkItemId);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Copilot:CreateIssue is false — pipeline paused for WI-{WorkItemId}. " +
+                    "Manual Copilot trigger required.",
+                    context.WorkItemId);
+            }
+
+            // Record delegation in table storage
+            var delegation = new CopilotDelegation
+            {
+                WorkItemId = context.WorkItemId,
+                IssueNumber = issueNumber,
+                CorrelationId = context.CorrelationId,
+                BranchName = context.BranchName
+            };
+            await _delegationService.CreateAsync(delegation, cancellationToken);
+
+            // Update state to reflect delegation
+            context.State.Agents["Coding"] = AgentStatus.InProgress();
+            context.State.Agents["Coding"].AdditionalData = new Dictionary<string, object>
+            {
+                ["mode"] = "copilot-delegated",
+                ["issueNumber"] = issueNumber,
+                ["delegatedAt"] = DateTime.UtcNow.ToString("O"),
+                ["agent"] = _agentAssignee
+            };
+
+            var summary = _copilotOptions.CreateIssue
+                ? $"Delegated to GitHub Copilot (Issue #{issueNumber}). Pipeline paused — waiting for Copilot PR."
+                : "Copilot delegation requested (CreateIssue=false). Manual action required.";
 
             return new CodingResult
             {
@@ -90,71 +157,21 @@ public sealed class CopilotCodingStrategy : ICodingStrategy
                 ModifiedFiles = [],
                 Tokens = 0,
                 Cost = 0m,
-                Summary = $"Already delegated to Copilot (Issue #{existingDelegation.IssueNumber}). Pipeline waiting."
+                Summary = summary,
+                CopilotMetrics = new CopilotMetrics
+                {
+                    IssueNumber = issueNumber
+                }
             };
         }
-
-        await EnsureBranchExistsAsync(context.BranchName, cancellationToken);
-
-        int issueNumber = 0;
-
-        if (_copilotOptions.CreateIssue)
+        finally
         {
-            issueNumber = await CreateGitHubIssueAsync(context, cancellationToken);
-
-            // Assign to Copilot coding agent via the proper GitHub API
-            await AssignIssueToAgentAsync(issueNumber, context.BranchName, cancellationToken);
-            await PostKickoffCommentAsync(issueNumber, context, cancellationToken);
-
-            _logger.LogInformation(
-                "Created GitHub Issue #{IssueNumber}, assigned Copilot agent, and posted kickoff for WI-{WorkItemId}",
-                issueNumber, context.WorkItemId);
-        }
-        else
-        {
-            _logger.LogWarning(
-                "Copilot:CreateIssue is false — pipeline paused for WI-{WorkItemId}. " +
-                "Manual Copilot trigger required.",
-                context.WorkItemId);
-        }
-
-        // Record delegation in table storage
-        var delegation = new CopilotDelegation
-        {
-            WorkItemId = context.WorkItemId,
-            IssueNumber = issueNumber,
-            CorrelationId = context.CorrelationId,
-            BranchName = context.BranchName
-        };
-        await _delegationService.CreateAsync(delegation, cancellationToken);
-
-        // Update state to reflect delegation
-        context.State.Agents["Coding"] = AgentStatus.InProgress();
-        context.State.Agents["Coding"].AdditionalData = new Dictionary<string, object>
-        {
-            ["mode"] = "copilot-delegated",
-            ["issueNumber"] = issueNumber,
-            ["delegatedAt"] = DateTime.UtcNow.ToString("O"),
-            ["agent"] = _agentAssignee
-        };
-
-        var summary = _copilotOptions.CreateIssue
-            ? $"Delegated to GitHub Copilot (Issue #{issueNumber}). Pipeline paused — waiting for Copilot PR."
-            : "Copilot delegation requested (CreateIssue=false). Manual action required.";
-
-        return new CodingResult
-        {
-            Success = true,
-            Mode = "copilot-delegated",
-            ModifiedFiles = [],
-            Tokens = 0,
-            Cost = 0m,
-            Summary = summary,
-            CopilotMetrics = new CopilotMetrics
+            delegationLock.Release();
+            if (delegationLock.CurrentCount == 1)
             {
-                IssueNumber = issueNumber
+                s_delegationLocks.TryRemove(context.WorkItemId, out _);
             }
-        };
+        }
     }
 
     private async Task EnsureBranchExistsAsync(string branchName, CancellationToken cancellationToken)

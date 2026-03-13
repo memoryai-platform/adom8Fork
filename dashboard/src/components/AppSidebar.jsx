@@ -55,8 +55,32 @@ function getHealthTone(status) {
   }
 }
 
+function getToneStatus(status) {
+  const normalized = String(status ?? '').toLowerCase();
+
+  if (['healthy', 'configured', 'enabled', 'active', 'success'].includes(normalized)) {
+    return 'healthy';
+  }
+
+  if (['degraded', 'warning', 'pending'].includes(normalized)) {
+    return 'degraded';
+  }
+
+  if (['unhealthy', 'failed', 'error'].includes(normalized)) {
+    return 'unhealthy';
+  }
+
+  return 'unknown';
+}
+
+function formatStatusLabel(status) {
+  return String(status ?? 'unknown')
+    .replaceAll('_', ' ')
+    .trim();
+}
+
 function HealthRow({ label, check }) {
-  const tone = getHealthTone(check?.status);
+  const tone = getHealthTone(getToneStatus(check?.status));
   const queueMeta = label === 'Queue' && check
     ? `${check.messageCount ?? 0} queued${check.poisonMessageCount ? ` • ${check.poisonMessageCount} poison` : ''}`
     : null;
@@ -71,14 +95,14 @@ function HealthRow({ label, check }) {
         </div>
       </div>
       <span className={`shrink-0 text-xs font-semibold uppercase ${tone.text}`}>
-        {check?.status ?? 'unknown'}
+        {formatStatusLabel(check?.status ?? 'unknown')}
       </span>
     </div>
   );
 }
 
 function ProviderPill({ name, model, status, detail }) {
-  const tone = getHealthTone(status);
+  const tone = getHealthTone(getToneStatus(status));
 
   return (
     <div className={`rounded-xl border px-3 py-2 ${tone.border}`}>
@@ -86,6 +110,7 @@ function ProviderPill({ name, model, status, detail }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-gray-900">{name}</div>
           <div className="truncate text-xs text-gray-500">{model || detail || 'No model configured'}</div>
+          {status ? <div className={`mt-1 text-[11px] font-semibold uppercase ${tone.text}`}>{formatStatusLabel(status)}</div> : null}
         </div>
         <span className={`inline-flex h-2.5 w-2.5 rounded-full ${tone.dot}`} />
       </div>
@@ -101,7 +126,7 @@ function buildProviderCards(healthData) {
     cards.push({
       name: providers.ai.name,
       model: providers.ai.model,
-      status: providers.ai.configured ? (providers.ai.status ?? 'degraded') : 'unknown',
+      status: providers.ai.status ?? (providers.ai.configured ? 'configured' : 'unknown'),
       detail: providers.ai.configured ? 'Configured' : 'Not configured',
     });
   }
@@ -110,7 +135,7 @@ function buildProviderCards(healthData) {
     cards.push({
       name: 'GitHub Copilot',
       model: providers.copilot.model ?? providers.copilot.mode,
-      status: providers.copilot.enabled && providers.copilot.configured ? 'degraded' : 'unknown',
+      status: providers.copilot.status ?? (providers.copilot.enabled ? 'enabled' : 'disabled'),
       detail: providers.copilot.enabled ? 'Enabled' : 'Disabled',
     });
   }
@@ -119,7 +144,7 @@ function buildProviderCards(healthData) {
     cards.push({
       name: provider.name,
       model: provider.model,
-      status: provider.configured ? (provider.status ?? 'degraded') : 'unknown',
+      status: provider.status ?? (provider.configured ? 'configured' : 'not_configured'),
       detail: provider.configured ? 'Configured' : 'Not configured',
     });
   }
@@ -337,7 +362,11 @@ export default function AppSidebar({
               <HealthRow label="Config" check={healthChecks.configuration} />
               <HealthRow label="Git" check={healthChecks.git} />
             </div>
-            {healthError ? <div className="mt-2 px-3 text-xs text-red-600">{healthError}</div> : null}
+            {healthError ? (
+              <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${healthData ? 'bg-amber-50 text-amber-700' : 'text-red-600'}`}>
+                {healthData ? `Latest health check reported: ${healthError}` : healthError}
+              </div>
+            ) : null}
           </div>
 
           <div>

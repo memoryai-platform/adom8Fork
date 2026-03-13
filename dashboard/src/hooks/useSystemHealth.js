@@ -40,6 +40,11 @@ export function useSystemHealth(appKey, onUnauthorized) {
         return;
       }
 
+      if (requestError.responseData) {
+        setData(requestError.responseData);
+        setLastUpdated(new Date().toISOString());
+      }
+
       setError(requestError.message || 'Failed to refresh system health');
     } finally {
       inFlightRef.current = false;

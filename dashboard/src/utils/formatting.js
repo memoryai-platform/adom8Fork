@@ -41,5 +41,11 @@ export function formatPercent(value) {
     return '0%';
   }
 
-  return `${Math.round(value * 100)}%`;
+  const numericValue = Number(value);
+  if (Number.isNaN(numericValue)) {
+    return '0%';
+  }
+
+  const percentValue = Math.abs(numericValue) <= 1 ? numericValue * 100 : numericValue;
+  return `${Math.round(percentValue)}%`;
 }

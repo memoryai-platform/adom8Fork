@@ -97,7 +97,12 @@ export default function StoryDetail() {
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-gray-100 px-3 py-1 font-semibold text-gray-700">{metadata.state}</span>
-          <span className="rounded-full bg-violet-100 px-3 py-1 font-semibold text-violet-700">Autonomy L{metadata.autonomyLevel}</span>
+          {metadata.currentAgent ? (
+            <span className="rounded-full bg-sky-100 px-3 py-1 font-semibold text-sky-700">{metadata.currentAgent}</span>
+          ) : null}
+          {metadata.autonomyLevel != null ? (
+            <span className="rounded-full bg-violet-100 px-3 py-1 font-semibold text-violet-700">Autonomy L{metadata.autonomyLevel}</span>
+          ) : null}
         </div>
       </div>
 
@@ -114,6 +119,10 @@ export default function StoryDetail() {
             <div>
               <dt className="text-gray-400">Current Agent</dt>
               <dd className="mt-1 font-semibold text-gray-900">{metadata.currentAgent ?? 'Pending assignment'}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">Work Item State</dt>
+              <dd className="mt-1 font-semibold text-gray-900">{metadata.workItemState ?? metadata.state ?? 'Unknown'}</dd>
             </div>
             <div>
               <dt className="text-gray-400">Last Agent</dt>
@@ -168,6 +177,11 @@ export default function StoryDetail() {
                             ? `Completed ${formatRelativeTime(phase.completedAt)}`
                             : 'Awaiting execution'}
                       </div>
+                      {phase.rawStatus ? (
+                        <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                          Backend: {phase.rawStatus}
+                        </div>
+                      ) : null}
                       {phase.agent === 'CodingAgent' && metadata.githubDelegated && metadata.githubIssueUrl && phase.status === 'active' ? (
                         <a
                           href={metadata.githubIssueUrl}
