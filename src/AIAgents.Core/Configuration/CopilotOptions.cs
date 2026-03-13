@@ -11,7 +11,7 @@ namespace AIAgents.Core.Configuration;
 ///   <item><c>Always</c> — sends ALL coding work to Copilot (no API key needed for the Coding agent)</item>
 /// </list>
 /// 
-/// A webhook bridge (<c>CopilotBridgeWebhook</c>) catches Copilot's PR, reconciles
+/// A webhook bridge (<c>CopilotBridgeWebhook</c>) catches Copilot completion signals, reconciles
 /// changes onto the pipeline branch, and resumes the sequential pipeline.
 /// </summary>
 public sealed class CopilotOptions
@@ -54,7 +54,7 @@ public sealed class CopilotOptions
 
     /// <summary>
     /// GitHub webhook secret used to validate <c>X-Hub-Signature-256</c> on incoming
-    /// <c>pull_request</c> events from the Copilot bridge webhook.
+    /// <c>pull_request</c> and <c>issues</c> events from the Copilot bridge webhook.
     /// Generate with: <c>openssl rand -hex 32</c>
     /// </summary>
     public string? WebhookSecret { get; init; }

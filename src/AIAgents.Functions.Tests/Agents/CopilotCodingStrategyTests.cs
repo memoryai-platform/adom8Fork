@@ -166,7 +166,7 @@ public sealed class CopilotCodingStrategyTests
         Assert.Contains("Match existing code style", body);
         Assert.Contains("Ensure correct syntax", body);
         Assert.Contains("Do NOT orchestrate ADO stage transitions", body);
-        Assert.Contains("Ready for Review", body);
+        Assert.Contains("[WIP]", body);
     }
 
     [Fact]

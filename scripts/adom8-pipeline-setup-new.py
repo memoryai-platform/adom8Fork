@@ -274,7 +274,7 @@ def main():
     webhook_payload = {
         "name": "web",
         "active": True,
-        "events": ["pull_request", "issue_comment"],
+        "events": ["pull_request", "issues", "issue_comment"],
         "config": {
             "url": f"https://{args.function_app}.azurewebsites.net/api/github-webhook?code={function_key}",
             "content_type": "json",

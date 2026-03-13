@@ -334,7 +334,7 @@ def main():
     webhook_payload = {
         "name": "web",
         "active": True,
-        "events": ["pull_request", "issue_comment"],
+        "events": ["pull_request", "issues", "issue_comment"],
         "config": {
             "url": f"https://{args.function_app}.azurewebsites.net/api/copilot-webhook?code={function_key}",
             "content_type": "json",
@@ -382,7 +382,7 @@ def main():
             update_url = f"{gh_webhook_url}/{current_hook['id']}"
             update_payload = {
                 "active": True,
-                "events": ["pull_request", "issue_comment"],
+                "events": ["pull_request", "issues", "issue_comment"],
                 "config": webhook_payload["config"]
             }
             update_response = requests.patch(update_url, headers=gh_headers, json=update_payload, timeout=30)

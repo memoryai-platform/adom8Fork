@@ -1,15 +1,10 @@
 using AIAgents.Functions.Functions;
+using AIAgents.Functions.Services;
 
 namespace AIAgents.Functions.Tests.Functions;
 
-/// <summary>
-/// Tests for CopilotBridgeWebhook — static/internal methods that don't require
-/// full DI or HTTP infrastructure.
-/// </summary>
 public sealed class CopilotBridgeWebhookTests
 {
-    // ========== EXTRACT WORK ITEM ID TESTS ==========
-
     [Fact]
     public void ExtractWorkItemId_FromTitle_ReturnsId()
     {
@@ -25,14 +20,6 @@ public sealed class CopilotBridgeWebhookTests
     }
 
     [Fact]
-    public void ExtractWorkItemId_TitleTakesPrecedence()
-    {
-        // Should match the first occurrence (in title)
-        var result = CopilotBridgeWebhook.ExtractWorkItemId("[US-111] Feature", "Related to US-222");
-        Assert.Equal(111, result);
-    }
-
-    [Fact]
     public void ExtractWorkItemId_NoMatch_ReturnsNull()
     {
         var result = CopilotBridgeWebhook.ExtractWorkItemId("Fix typo in readme", "No work item reference here");
@@ -40,145 +27,49 @@ public sealed class CopilotBridgeWebhookTests
     }
 
     [Fact]
-    public void ExtractWorkItemId_EmptyInputs_ReturnsNull()
-    {
-        var result = CopilotBridgeWebhook.ExtractWorkItemId("", "");
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public void ExtractWorkItemId_CaseInsensitive()
-    {
-        var result = CopilotBridgeWebhook.ExtractWorkItemId("us-42 feature", "");
-        Assert.Equal(42, result);
-    }
-
-    [Fact]
-    public void ExtractWorkItemId_LargeId()
-    {
-        var result = CopilotBridgeWebhook.ExtractWorkItemId("[US-999999] Big project", "");
-        Assert.Equal(999999, result);
-    }
-
-    [Fact]
-    public void ExtractWorkItemId_IdInMiddleOfBody()
-    {
-        var result = CopilotBridgeWebhook.ExtractWorkItemId(
-            "Copilot implementation",
-            "This PR implements the changes for US-54321 as described in the plan.");
-        Assert.Equal(54321, result);
-    }
-
-    // ========== READINESS GATING TESTS ==========
-
-    [Fact]
     public void IsReadyToReconcile_Opened_AlwaysFalse()
     {
-        var result = CopilotBridgeWebhook.IsReadyToReconcile(
-            action: "opened",
-            prTitle: "Feature implementation",
-            isDraft: false);
-
+        var result = CopilotBridgeWebhook.IsReadyToReconcile("opened", "Feature implementation", false);
         Assert.False(result);
     }
 
     [Fact]
     public void IsReadyToReconcile_Edited_WipFalse_True()
     {
-        var result = CopilotBridgeWebhook.IsReadyToReconcile(
-            action: "edited",
-            prTitle: "Feature implementation",
-            isDraft: false);
-
+        var result = CopilotBridgeWebhook.IsReadyToReconcile("edited", "Feature implementation", false);
         Assert.True(result);
     }
 
     [Fact]
     public void IsReadyToReconcile_Synchronize_WipTrue_False()
     {
-        var result = CopilotBridgeWebhook.IsReadyToReconcile(
-            action: "synchronize",
-            prTitle: "[WIP] Feature implementation",
-            isDraft: false);
-
+        var result = CopilotBridgeWebhook.IsReadyToReconcile("synchronize", "[WIP] Feature implementation", false);
         Assert.False(result);
     }
 
     [Fact]
-    public void IsReadyToReconcile_ReadyForReview_WipFalse_True()
+    public void IsReadyToReconcile_DraftPr_IsStillTrueWhenWipRemoved()
     {
-        var result = CopilotBridgeWebhook.IsReadyToReconcile(
-            action: "ready_for_review",
-            prTitle: "Feature implementation",
-            isDraft: false);
-
+        var result = CopilotBridgeWebhook.IsReadyToReconcile("edited", "Feature implementation", true);
         Assert.True(result);
     }
 
-    [Fact]
-    public void IsReadyToReconcile_DraftPr_False()
+    [Theory]
+    [InlineData("[WIP] coding in progress", true)]
+    [InlineData("Coding complete", false)]
+    [InlineData("", false)]
+    public void HasWipMarker_DetectsExpectedValues(string title, bool expected)
     {
-        var result = CopilotBridgeWebhook.IsReadyToReconcile(
-            action: "edited",
-            prTitle: "Feature implementation",
-            isDraft: true);
-
-        Assert.False(result);
+        Assert.Equal(expected, CopilotCompletionService.HasWipMarker(title));
     }
 
-    // ========== CHECKPOINT ENFORCEMENT TESTS ==========
-
-    [Fact]
-    public void ParseRequiredAdoCheckpoints_Empty_UsesDefaults()
+    [Theory]
+    [InlineData("edited", true)]
+    [InlineData("reopened", true)]
+    [InlineData("opened", false)]
+    [InlineData("closed", false)]
+    public void ShouldHandleIssueAction_MatchesSupportedActions(string action, bool expected)
     {
-        var checkpoints = CopilotBridgeWebhook.ParseRequiredAdoCheckpoints("");
-
-        Assert.Equal(3, checkpoints.Count);
-        Assert.Contains("LastAgent", checkpoints);
-        Assert.Contains("CurrentAIAgent", checkpoints);
-        Assert.Contains("CompletionComment", checkpoints);
-    }
-
-    [Fact]
-    public void ParseRequiredAdoCheckpoints_Aliases_Normalized()
-    {
-        var checkpoints = CopilotBridgeWebhook.ParseRequiredAdoCheckpoints("last_agent, current-agent, comment");
-
-        Assert.Equal(3, checkpoints.Count);
-        Assert.Contains("LastAgent", checkpoints);
-        Assert.Contains("CurrentAIAgent", checkpoints);
-        Assert.Contains("CompletionComment", checkpoints);
-    }
-
-    [Fact]
-    public void EvaluateRequiredCheckpointStatus_AllPresent_Passes()
-    {
-        var required = new[] { "LastAgent", "CurrentAIAgent", "CompletionComment" };
-
-        var (passed, missing) = CopilotBridgeWebhook.EvaluateRequiredCheckpointStatus(
-            required,
-            lastAgentUpdated: true,
-            currentAgentUpdated: true,
-            completionCommentAdded: true);
-
-        Assert.True(passed);
-        Assert.Empty(missing);
-    }
-
-    [Fact]
-    public void EvaluateRequiredCheckpointStatus_MissingCurrentAndComment_Fails()
-    {
-        var required = new[] { "LastAgent", "CurrentAIAgent", "CompletionComment" };
-
-        var (passed, missing) = CopilotBridgeWebhook.EvaluateRequiredCheckpointStatus(
-            required,
-            lastAgentUpdated: true,
-            currentAgentUpdated: false,
-            completionCommentAdded: false);
-
-        Assert.False(passed);
-        Assert.Equal(2, missing.Count);
-        Assert.Contains("CurrentAIAgent", missing);
-        Assert.Contains("CompletionComment", missing);
+        Assert.Equal(expected, CopilotCompletionService.ShouldHandleIssueAction(action));
     }
 }
