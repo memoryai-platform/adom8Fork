@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -17,6 +18,13 @@ namespace AIAgents.Core.Services;
 /// </summary>
 public sealed class GitHubApiContextService : IGitHubApiContextService
 {
+    private static readonly TimeSpan[] s_branchHeadRetryDelays =
+    [
+        TimeSpan.FromMilliseconds(200),
+        TimeSpan.FromMilliseconds(400),
+        TimeSpan.FromMilliseconds(800)
+    ];
+
     private readonly GitHubOptions _gitHub;
     private readonly ILogger<GitHubApiContextService> _logger;
     private readonly HttpClient _httpClient;
@@ -235,20 +243,38 @@ public sealed class GitHubApiContextService : IGitHubApiContextService
 
     private async Task<string> GetBranchHeadShaAsync(string branch, CancellationToken ct)
     {
-        var response = await _httpClient.GetAsync(
-            $"repos/{_gitHub.Owner}/{_gitHub.Repo}/branches/{Uri.EscapeDataString(branch)}",
-            ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
+        for (var attempt = 0; ; attempt++)
         {
+            var response = await _httpClient.GetAsync(
+                $"repos/{_gitHub.Owner}/{_gitHub.Repo}/branches/{Uri.EscapeDataString(branch)}",
+                ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            if (response.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.GetProperty("commit").GetProperty("sha").GetString()
+                       ?? throw new InvalidOperationException($"Could not resolve head SHA for branch '{branch}'.");
+            }
+
+            // Newly-created refs can take a moment to appear on the /branches endpoint.
+            if (response.StatusCode == HttpStatusCode.NotFound && attempt < s_branchHeadRetryDelays.Length)
+            {
+                var delay = s_branchHeadRetryDelays[attempt];
+                _logger.LogDebug(
+                    "GitHub branch {Branch} was not yet visible on /branches (attempt {Attempt}/{MaxAttempts}); retrying in {DelayMs}ms",
+                    branch,
+                    attempt + 1,
+                    s_branchHeadRetryDelays.Length + 1,
+                    delay.TotalMilliseconds);
+                await Task.Delay(delay, ct);
+                continue;
+            }
+
             throw new HttpRequestException(
                 $"Failed to resolve GitHub branch '{branch}' in '{_gitHub.Owner}/{_gitHub.Repo}': {(int)response.StatusCode} {response.StatusCode}. {body}",
                 null,
                 response.StatusCode);
         }
-        using var doc = JsonDocument.Parse(body);
-        return doc.RootElement.GetProperty("commit").GetProperty("sha").GetString()
-               ?? throw new InvalidOperationException($"Could not resolve head SHA for branch '{branch}'.");
     }
 
     private async Task<string?> TryGetFileContentAsync(string path, string branch, CancellationToken ct)

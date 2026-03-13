@@ -196,3 +196,40 @@ export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
     activity,
   };
 }
+
+export function mergeStoryDetailWithLiveStatus(detail, liveStatusDetail) {
+  if (!detail) {
+    return liveStatusDetail ?? null;
+  }
+
+  if (!liveStatusDetail) {
+    return detail;
+  }
+
+  const livePhasesByAgent = new Map((liveStatusDetail.phases ?? []).map((phase) => [phase.agent, phase]));
+  const mergedPhases = (detail.phases ?? []).map((phase) => ({
+    ...phase,
+    ...(livePhasesByAgent.get(phase.agent) ?? {}),
+  }));
+
+  for (const livePhase of liveStatusDetail.phases ?? []) {
+    if (!mergedPhases.some((phase) => phase.agent === livePhase.agent)) {
+      mergedPhases.push(livePhase);
+    }
+  }
+
+  return {
+    ...detail,
+    state: liveStatusDetail.state ?? detail.state,
+    workItemState: liveStatusDetail.workItemState ?? detail.workItemState,
+    currentAgent: liveStatusDetail.currentAgent ?? detail.currentAgent,
+    lastAgent: liveStatusDetail.lastAgent ?? detail.lastAgent,
+    updatedDate: liveStatusDetail.updatedDate ?? detail.updatedDate,
+    githubIssueNumber: liveStatusDetail.githubIssueNumber ?? detail.githubIssueNumber,
+    githubIssueUrl: liveStatusDetail.githubIssueUrl ?? detail.githubIssueUrl,
+    githubDelegated: liveStatusDetail.githubDelegated ?? detail.githubDelegated,
+    delegatedAgent: liveStatusDetail.delegatedAgent ?? detail.delegatedAgent,
+    phases: mergedPhases,
+    activity: liveStatusDetail.activity ?? detail.activity,
+  };
+}

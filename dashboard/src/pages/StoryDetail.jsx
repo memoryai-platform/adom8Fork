@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom';
 
 import { getStoryDetail } from '../api';
-import { buildFallbackStoryDetail } from '../utils/story';
+import { buildFallbackStoryDetail, mergeStoryDetailWithLiveStatus } from '../utils/story';
 import { formatRelativeTime, formatTimestamp } from '../utils/formatting';
 
 function phaseStyles(status) {
@@ -10,7 +10,7 @@ function phaseStyles(status) {
     case 'completed':
       return 'bg-green-100 text-green-700 border-green-200';
     case 'active':
-      return 'bg-sky-100 text-sky-700 border-sky-300 shadow-[0_0_0_1px_rgba(56,189,248,0.2)] animate-pulse';
+      return 'bg-sky-100 text-sky-700 border-sky-300 shadow-[0_0_0_1px_rgba(56,189,248,0.2)]';
     case 'failed':
       return 'bg-red-100 text-red-700 border-red-200';
     default:
@@ -25,6 +25,11 @@ export default function StoryDetail() {
   const [detail, setDetail] = useState(() => buildFallbackStoryDetail(id, statusData, location.state?.story));
   const [detailsUnavailable, setDetailsUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
+  const numericId = Number(id);
+  const liveStatusDetail = useMemo(
+    () => buildFallbackStoryDetail(id, statusData, location.state?.story),
+    [id, location.state?.story, statusData],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +47,6 @@ export default function StoryDetail() {
 
         if (!response) {
           setDetailsUnavailable(true);
-          setDetail(buildFallbackStoryDetail(id, statusData, location.state?.story));
           return;
         }
 
@@ -54,12 +58,10 @@ export default function StoryDetail() {
 
         if (error.code === 404) {
           setDetailsUnavailable(true);
-          setDetail(buildFallbackStoryDetail(id, statusData, location.state?.story));
           return;
         }
 
         setDetailsUnavailable(true);
-        setDetail(buildFallbackStoryDetail(id, statusData, location.state?.story));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -72,9 +74,12 @@ export default function StoryDetail() {
     return () => {
       cancelled = true;
     };
-  }, [appKey, id, location.state?.story, statusData]);
+  }, [appKey, id]);
 
-  const metadata = useMemo(() => detail ?? buildFallbackStoryDetail(id, statusData, location.state?.story), [detail, id, location.state?.story, statusData]);
+  const metadata = useMemo(() => {
+    const stableDetail = detail?.id === numericId ? detail : null;
+    return mergeStoryDetailWithLiveStatus(stableDetail, liveStatusDetail);
+  }, [detail, liveStatusDetail, numericId]);
 
   if (loading && !metadata) {
     return <div className="rounded-xl bg-white px-5 py-8 text-sm text-gray-500 shadow-xs">Loading story details...</div>;
