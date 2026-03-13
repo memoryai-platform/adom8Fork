@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "github-mcp-server": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/readonly",
+      "tools": [
+        "*"
+      ],
+      "headers": {
+        "X-MCP-Toolsets": "repos,issues,users,pull_requests,code_security,secret_protection,actions,web_search"
+      }
+    },
+    "ado": {
+      "type": "local",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure-devops/mcp",
+        "my-credit-plan",
+        "--authentication",
+        "envvar",
+        "-d",
+        "core",
+        "-d",
+        "work-items"
+      ],
+      "tools": [
+        "*"
+      ],
+      "env": {
+        "ADO_MCP_AUTH_TOKEN": "COPILOT_MCP_AZURE_DEVOPS_PAT"
+      }
+    }
+  },
+  "notes": [
+    "Schema-valid MCP template for GitHub Copilot Coding Agent.",
+    "For ADO MCP server auth, create Copilot environment secret COPILOT_MCP_AZURE_DEVOPS_PAT and map to ADO_MCP_AUTH_TOKEN.",
+    "If Coding Agent internet firewall is enabled, allowlist dev.azure.com, vssps.dev.azure.com, vsrm.dev.azure.com.",
+    "ADOm8 stage bridge REST endpoints (non-MCP): https://adom8-func-751787bd.azurewebsites.net/api/mcp/set-stage|add-comment|stage-event?code=<FUNCTION_KEY>"
+  ]
+}
