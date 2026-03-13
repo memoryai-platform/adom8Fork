@@ -12,6 +12,7 @@ import json
 import secrets
 import requests
 import time
+from urllib.parse import urlparse
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.core.exceptions import ResourceNotFoundError
@@ -86,14 +87,10 @@ def main():
     # For this script, we will simulate the creation or use the onboarding PAT if API fails.
     # The actual API endpoint is POST https://vssps.dev.azure.com/{organization}/_apis/tokens/pats?api-version=7.1-preview.1
     
-    ado_org_url = args.ado_org.rstrip('/')
-    if not ado_org_url.lower().startswith("https://dev.azure.com/"):
-        print("Error: --ado-org must be a full Azure DevOps URL like https://dev.azure.com/<org>.")
-        sys.exit(1)
+    ado_org_url, org_name = normalize_ado_org(args.ado_org)
     if "YOUR_ORG" in ado_org_url.upper() or "<YOUR_ORG>" in ado_org_url.upper():
         print("Error: --ado-org contains placeholder text (YOUR_ORG). Use your real org URL.")
         sys.exit(1)
-    org_name = ado_org_url.split('/')[-1]
     
     headers = {
         "Content-Type": "application/json",
@@ -655,6 +652,38 @@ Use `mcp.template.json` as a starting point in your MCP client and provide crede
     print("\nNext Steps:")
     print("Visit https://adom8.dev/get-started for instructions on creating your first story.")
     print("================================================================")
+
+
+def normalize_ado_org(raw_value):
+    value = (raw_value or "").strip().rstrip("/")
+    if not value:
+        print("Error: --ado-org is required.")
+        sys.exit(1)
+
+    if "://" not in value:
+        return f"https://dev.azure.com/{value}", value
+
+    parsed = urlparse(value)
+    host = (parsed.netloc or "").lower()
+    path = parsed.path.strip("/")
+
+    if host == "dev.azure.com":
+        if not path:
+            print("Error: --ado-org must include the organization name, e.g. https://dev.azure.com/<org>.")
+            sys.exit(1)
+        org_name = path.split("/")[0]
+        return f"https://dev.azure.com/{org_name}", org_name
+
+    if host.endswith(".visualstudio.com"):
+        org_name = host.split(".")[0]
+        return f"https://dev.azure.com/{org_name}", org_name
+
+    print(
+        "Error: --ado-org must be an Azure DevOps organization URL "
+        "(https://dev.azure.com/<org>), a legacy visualstudio.com URL, or just the org name."
+    )
+    sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
