@@ -107,7 +107,7 @@ function StoryCard({ story, recentActivity }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Work Item #{story.workItemId}</div>
-          <h2 className="mt-2 text-lg font-semibold text-gray-900 group-hover:text-violet-700">{story.title}</h2>
+          <h2 className="mt-2 text-lg font-semibold text-gray-900 group-hover:text-ado-700">{story.title}</h2>
         </div>
         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone.pill}`}>{tone.label}</span>
       </div>
@@ -123,7 +123,7 @@ function StoryCard({ story, recentActivity }) {
           </span>
         ) : null}
         {story.autonomyLevel ? (
-          <span className="inline-flex rounded-full bg-violet-100 px-2.5 py-1 font-semibold text-violet-700">
+          <span className="inline-flex rounded-full bg-ado-100 px-2.5 py-1 font-semibold text-ado-700">
             Autonomy L{story.autonomyLevel}
           </span>
         ) : null}
@@ -174,7 +174,7 @@ function StoryTable({ title, stories, recentActivity, emptyMessage }) {
                         <Link
                           to={`/story/${story.workItemId}`}
                           state={{ story }}
-                          className="font-semibold text-violet-500 hover:text-violet-600"
+                          className="font-semibold text-ado-500 hover:text-ado-600"
                         >
                           #{story.workItemId}
                         </Link>
