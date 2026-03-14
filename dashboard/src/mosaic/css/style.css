@@ -85,6 +85,18 @@
   --color-yellow-900: #4f3d0e;
   --color-yellow-950: #342809;
 
+  --color-ado-50: #e8f3fb;
+  --color-ado-100: #cce4f6;
+  --color-ado-200: #99caed;
+  --color-ado-300: #66afe4;
+  --color-ado-400: #3395db;
+  --color-ado-500: #0078d4;
+  --color-ado-600: #006bbd;
+  --color-ado-700: #005ba0;
+  --color-ado-800: #004a84;
+  --color-ado-900: #003a68;
+  --color-ado-950: #002b4e;
+
   --font-inter: "Inter", "sans-serif";
 
   --text-xs: 0.75rem;
