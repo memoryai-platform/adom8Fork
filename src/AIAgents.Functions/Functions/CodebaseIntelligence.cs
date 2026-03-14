@@ -202,7 +202,6 @@ public sealed class CodebaseIntelligence
                     new Dictionary<string, object>
                     {
                         ["/fields/System.Tags"] = $"ADOM8;{AIPipelineNames.InitializeCodebaseTag}",
-                        [CustomFieldNames.Paths.CodingProvider] = "Copilot",
                         [CustomFieldNames.Paths.CurrentAIAgent] = AIPipelineNames.CurrentAgentValues.Coding
                     },
                     cancellationToken);

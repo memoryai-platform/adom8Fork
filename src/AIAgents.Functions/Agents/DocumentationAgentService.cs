@@ -1,11 +1,13 @@
 using System.Net;
 using System.Text.Json;
+using AIAgents.Core.Configuration;
 using AIAgents.Core.Constants;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Models;
 using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIAgents.Functions.Agents;
 
@@ -25,6 +27,7 @@ public sealed class DocumentationAgentService : IAgentService
     private readonly ICodebaseContextProvider _codebaseContext;
     private readonly ILogger<DocumentationAgentService> _logger;
     private readonly IAgentTaskQueue _taskQueue;
+    private readonly string _baseBranch;
 
     public DocumentationAgentService(
         IAIClientFactory aiClientFactory,
@@ -35,7 +38,8 @@ public sealed class DocumentationAgentService : IAgentService
         ITemplateEngine templateEngine,
         ICodebaseContextProvider codebaseContext,
         ILogger<DocumentationAgentService> logger,
-        IAgentTaskQueue taskQueue)
+        IAgentTaskQueue taskQueue,
+        IOptions<GitHubOptions> gitHubOptions)
     {
         _aiClientFactory = aiClientFactory;
         _adoClient = adoClient;
@@ -46,13 +50,14 @@ public sealed class DocumentationAgentService : IAgentService
         _codebaseContext = codebaseContext;
         _logger = logger;
         _taskQueue = taskQueue;
+        _baseBranch = gitHubOptions.Value.BaseBranch;
     }
 
     public async Task<AgentResult> ExecuteAsync(AgentTask task, CancellationToken cancellationToken = default)
     {
         var failureStage = "initialization";
         var sourceBranch = $"feature/US-{task.WorkItemId}";
-        var targetBranch = "main";
+        var targetBranch = _baseBranch;
         try
         {
         _logger.LogInformation("Documentation agent starting for WI-{WorkItemId}", task.WorkItemId);

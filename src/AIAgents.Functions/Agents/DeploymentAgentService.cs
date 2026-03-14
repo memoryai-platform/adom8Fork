@@ -96,19 +96,8 @@ public sealed class DeploymentAgentService : IAgentService
             {
                 var fieldUpdates = new Dictionary<string, object>
                 {
-                    [CustomFieldNames.Paths.LastAgent] = "Deployment",
-                    [CustomFieldNames.Paths.DeploymentDecision] = decision.Action
+                    [CustomFieldNames.Paths.LastAgent] = "Deployment"
                 };
-
-                if (reviewScore.HasValue)
-                {
-                    fieldUpdates[CustomFieldNames.Paths.ReviewScore] = reviewScore.Value;
-                }
-
-                if (prId.HasValue)
-                {
-                    fieldUpdates[CustomFieldNames.Paths.PRNumber] = prId.Value;
-                }
 
                 await _adoClient.UpdateWorkItemFieldsAsync(workItem.Id, fieldUpdates, cancellationToken);
             }

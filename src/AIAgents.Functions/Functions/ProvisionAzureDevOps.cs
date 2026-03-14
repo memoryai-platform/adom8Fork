@@ -75,27 +75,25 @@ public sealed class ProvisionAzureDevOps
     private static readonly FieldDefinition[] RequiredFields =
     [
         new("AI Minimum Review Score", "Custom.AIMinimumReviewScore", "integer"),
-        new("AI Last Agent", "Custom.AILastAgent", "string"),
+        new("AI Last Agent",           "Custom.AILastAgent",          "string"),
 
-        // TODO: POC — remaining fields commented out for future enhancement
+        // Future phase — model overrides
         // new("AI Model Tier", "Custom.AIModelTier", "string"),
         // new("AI Planning Model", "Custom.AIPlanningModel", "string"),
         // new("AI Coding Model", "Custom.AICodingModel", "string"),
         // new("AI Testing Model", "Custom.AITestingModel", "string"),
         // new("AI Review Model", "Custom.AIReviewModel", "string"),
         // new("AI Documentation Model", "Custom.AIDocumentationModel", "string"),
-        // new("AI Coding Provider", "Custom.AICodingProvider", "string"),
+
+        // Future phase — output metrics
         // new("AI Tokens Used", "Custom.AITokensUsed", "integer"),
         // new("AI Cost", "Custom.AICost", "string"),
         // new("AI Complexity", "Custom.AIComplexity", "string"),
         // new("AI Model", "Custom.AIModel", "string"),
-        // new("AI Review Score", "Custom.AIReviewScore", "integer"),
         // new("AI Processing Time", "Custom.AIProcessingTime", "integer"),
         // new("AI Files Generated", "Custom.AIFilesGenerated", "integer"),
         // new("AI Tests Generated", "Custom.AITestsGenerated", "integer"),
-        // new("AI PR Number", "Custom.AIPRNumber", "integer"),
         // new("AI Critical Issues", "Custom.AICriticalIssues", "integer"),
-        // new("AI Deployment Decision", "Custom.AIDeploymentDecision", "string")
     ];
 
     private readonly IHttpClientFactory _httpClientFactory;
