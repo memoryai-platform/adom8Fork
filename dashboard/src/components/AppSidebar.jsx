@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
+import brandLogo from '/brand/logo-option-chunky-infinity-box.svg';
 import packageJson from '../../package.json';
 import { initializeCodebase } from '../api';
 import { formatRelativeTime } from '../utils/formatting';
@@ -12,12 +13,12 @@ function NavItem({ to, label, icon, end = false }) {
         end={end}
         to={to}
         className={({ isActive }) => `flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
-          isActive ? 'bg-violet-500/[0.12] text-violet-600' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+          isActive ? 'bg-ado-500/[0.12] text-ado-600' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
         }`}
       >
         {({ isActive }) => (
           <>
-            <span className={`mr-3 transition ${isActive ? 'text-violet-500' : 'text-gray-400'}`}>{icon}</span>
+            <span className={`mr-3 transition ${isActive ? 'text-ado-500' : 'text-gray-400'}`}>{icon}</span>
             <span>{label}</span>
           </>
         )}
@@ -237,7 +238,7 @@ function CodebaseCard({
         <button
           onClick={handleInitializeCodebase}
           disabled={initializing}
-          className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-300"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-ado-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ado-700 disabled:cursor-not-allowed disabled:bg-ado-300"
         >
           {initializing ? 'Starting...' : hasAnalysis ? 'Re-run Codebase Init' : 'Initialize Codebase'}
         </button>
@@ -310,11 +311,8 @@ export default function AppSidebar({
             </svg>
           </button>
           <NavLink end to="/" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-lg shadow-violet-500/20">
-              <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
-                <path d="M16 3l10 5.8v14.4L16 29 6 23.2V8.8L16 3Z" fill="currentColor" />
-                <path d="M16 8.7l5 2.9v5.8L16 20.3l-5-2.9v-5.8l5-2.9Z" fill="white" />
-              </svg>
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-ado-500 text-white shadow-lg shadow-ado-500/20">
+              <img src={brandLogo} alt="ADOm8" className="h-8 w-8" />
             </span>
             <span>
               <span className="block text-sm font-semibold text-gray-900">ADOm8</span>
@@ -407,7 +405,7 @@ export default function AppSidebar({
             href="https://adom8.dev"
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-flex text-sm font-medium text-violet-500 hover:text-violet-600"
+            className="mt-3 inline-flex text-sm font-medium text-ado-500 hover:text-ado-600"
           >
             adom8.dev
           </a>
