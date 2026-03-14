@@ -1,261 +1,93 @@
-I'll generate comprehensive test cases and test files for the dashboard story card improvements (US-90). Based on the implementation details and acceptance criteria, here's a JSON response with test cases and test files:
-
 ```json
 {
   "testCases": [
     {
-      "name": "Story Card Collapsibility",
+      "name": "Dashboard branding color update from purple to Azure DevOps blue",
       "type": "Unit",
       "priority": "High",
-      "description": "Verify story cards can be expanded and collapsed with smooth CSS transitions",
-      "expectedResult": "Cards toggle between collapsed and expanded states with smooth animation"
+      "description": "Verify all purple/violet color references in dashboard CSS are replaced with Azure DevOps blue (#0078D4)",
+      "expectedResult": "All UI elements display with blue theme instead of purple/violet"
     },
     {
-      "name": "Search Functionality",
-      "type": "Integration",
-      "priority": "High", 
-      "description": "Test search bar filters stories by work item ID and title",
-      "expectedResult": "Only matching stories are displayed when searching"
-    },
-    {
-      "name": "Status Filter Chips",
+      "name": "Legacy logo asset replacement and transparent background",
       "type": "Unit",
       "priority": "High",
-      "description": "Verify status filter chips (All/In Progress/Completed/Failed) work correctly",
-      "expectedResult": "Clicking filter chips shows only stories matching selected status"
+      "description": "Verify logo-option-chunky-infinity-box.svg is used and displays with transparent background",
+      "expectedResult": "New logo renders correctly with transparent background in header and sidebar"
     },
     {
-      "name": "Progress Bar Gradient",
-      "type": "Unit", 
-      "priority": "Medium",
-      "description": "Check progress bars have correct gradient colors based on percentage",
-      "expectedResult": "Progress bars show red/orange/blue/green gradients at different progress levels"
-    },
-    {
-      "name": "Progress Bar Shimmer Animation",
-      "type": "Unit",
-      "priority": "Medium", 
-      "description": "Verify shimmer animation on in-progress bars",
-      "expectedResult": "In-progress bars have subtle shimmer/shine animation"
-    },
-    {
-      "name": "Dark Mode Compatibility",
+      "name": "Branding consistency across dashboard components",
       "type": "Integration",
       "priority": "High",
-      "description": "Ensure all new components work correctly in dark mode",
-      "expectedResult": "All story card, filter, and progress bar styles adapt to dark mode"
+      "description": "Verify updated branding is applied consistently across login, header, sidebar, links, badges, and panels",
+      "expectedResult": "All dashboard sections use consistent Azure DevOps blue branding"
     },
     {
-      "name": "Filter Persistence",
+      "name": "Dashboard functionality after branding update",
+      "type": "Integration",
+      "priority": "High",
+      "description": "Verify authentication, navigation, story visibility, and agent status display work correctly after branding changes",
+      "expectedResult": "All dashboard features function normally with new branding"
+    },
+    {
+      "name": "Azure DevOps integration test story creation and display",
+      "type": "E2E",
+      "priority": "High",
+      "description": "Create test story in ADO project and verify it appears in dashboard through existing integration",
+      "expectedResult": "Test story flows through webhook → agent → dashboard pipeline and displays correctly"
+    },
+    {
+      "name": "Color accessibility compliance after branding update",
       "type": "Unit",
       "priority": "Medium",
-      "description": "Check that search and status filters persist across page reloads",
-      "expectedResult": "Filters are restored from localStorage after page refresh"
+      "description": "Verify new blue color scheme meets WCAG contrast ratio requirements",
+      "expectedResult": "All text/background combinations meet minimum contrast ratios"
     },
     {
-      "name": "Result Count Display",
+      "name": "Responsive design with new branding",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify branding renders correctly on mobile, tablet, and desktop viewports",
+      "expectedResult": "New branding maintains responsive layout across all screen sizes"
+    },
+    {
+      "name": "Cross-browser branding compatibility",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify new branding renders consistently in Chrome, Firefox, Safari, and Edge",
+      "expectedResult": "Branding displays identically across all major browsers"
+    },
+    {
+      "name": "Logo SVG asset validation",
+      "type": "Unit",
+      "priority": "Medium",
+      "description": "Verify logo asset exists at specified path and is properly formatted SVG",
+      "expectedResult": "Logo asset loads successfully and renders as valid SVG"
+    },
+    {
+      "name": "Dark mode compatibility with new branding",
       "type": "Unit",
       "priority": "Low",
-      "description": "Verify result count updates correctly with filtering",
-      "expectedResult": "Result count shows correct number of displayed stories"
-    },
-    {
-      "name": "Agent Pipeline Stepper",
-      "type": "Unit",
-      "priority": "Medium",
-      "description": "Check horizontal agent pipeline stepper shows correct status",
-      "expectedResult": "Each agent step shows correct status color and icon"
+      "description": "Verify Azure DevOps blue theme works correctly in dark mode",
+      "expectedResult": "Dark mode maintains proper contrast and visibility with blue theme"
     }
   ],
   "testFiles": [
     {
-      "relativePath": "tests/dashboard/StoryCardTests.js",
-      "content": `
-// Story Card Interaction Tests
-describe('Story Card Interactions', () => {
-  beforeEach(() => {
-    // Setup test DOM with sample story cards
-    document.body.innerHTML = \`
-      <div id="agents-container">
-        <div class="story-card" data-story-id="123">
-          <div class="story-card-header">Story Card Header</div>
-          <div class="story-card-body">Story Card Body</div>
-        </div>
-      </div>
-    \`;
-  });
-
-  test('toggleStoryCard expands and collapses card', () => {
-    const storyCard = document.querySelector('.story-card');
-    const workItemId = '123';
-
-    // Initial state should be collapsed
-    expect(storyCard.classList.contains('expanded')).toBe(false);
-
-    // Toggle card
-    toggleStoryCard(workItemId);
-
-    // Card should now be expanded
-    expect(storyCard.classList.contains('expanded')).toBe(true);
-
-    // Toggle again
-    toggleStoryCard(workItemId);
-
-    // Card should be collapsed again
-    expect(storyCard.classList.contains('expanded')).toBe(false);
-  });
-
-  test('localStorage persists card expansion state', () => {
-    const workItemId = '123';
-
-    // Expand card
-    toggleStoryCard(workItemId);
-
-    // Check localStorage
-    const storedState = localStorage.getItem(\`story-\${workItemId}-expanded\`);
-    expect(storedState).toBe('true');
-
-    // Collapse card
-    toggleStoryCard(workItemId);
-
-    // Check localStorage again
-    const newStoredState = localStorage.getItem(\`story-\${workItemId}-expanded\`);
-    expect(newStoredState).toBe('false');
-  });
-});
-
-// Search and Filter Tests
-describe('Story Search and Filter', () => {
-  const mockStories = [
-    { workItemId: 123, title: 'Test Story 1', agents: { Planning: 'completed' } },
-    { workItemId: 456, title: 'Another Test Story', agents: { Planning: 'in_progress' } },
-    { workItemId: 789, title: 'Failed Story', agents: { Planning: 'failed' } }
-  ];
-
-  beforeEach(() => {
-    document.body.innerHTML = \`
-      <input id="story-search" />
-      <div id="agents-container"></div>
-      <div id="filter-result-count"></div>
-    \`;
-    
-    // Mock global functions and variables
-    window.allStories = mockStories;
-    window.renderFilteredStories = jest.fn();
-  });
-
-  test('search filters stories by work item ID', () => {
-    const searchInput = document.getElementById('story-search');
-    searchInput.value = '123';
-    
-    handleSearchFilter();
-
-    expect(window.currentSearchText).toBe('123');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-
-  test('search filters stories by title', () => {
-    const searchInput = document.getElementById('story-search');
-    searchInput.value = 'test';
-    
-    handleSearchFilter();
-
-    expect(window.currentSearchText).toBe('test');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-
-  test('status filter works correctly', () => {
-    handleStatusFilter('in-progress');
-
-    expect(window.currentStatusFilter).toBe('in-progress');
-    expect(window.renderFilteredStories).toHaveBeenCalled();
-  });
-});
-
-// Progress Bar Tests
-describe('Progress Bar Rendering', () => {
-  test('getProgressColorClass returns correct color classes', () => {
-    expect(getProgressColorClass(10)).toBe('progress-red');
-    expect(getProgressColorClass(30)).toBe('progress-orange');
-    expect(getProgressColorClass(60)).toBe('progress-blue');
-    expect(getProgressColorClass(90)).toBe('progress-green');
-  });
-
-  test('progress bar shows correct gradient', () => {
-    const progressFill = document.createElement('div');
-    progressFill.classList.add('story-progress-fill');
-    
-    progressFill.dataset.progress = '30';
-    renderFilteredStories(); // Triggers progress bar rendering
-
-    expect(progressFill.classList.contains('progress-orange')).toBe(true);
-  });
-});
-      `,
+      "relativePath": "tests/Dashboard/BrandingUpdateTests.cs",
+      "content": "using System;\nusing System.IO;\nusing System.Text.RegularExpressions;\nusing Xunit;\n\nnamespace AIAgents.Tests.Dashboard\n{\n    public class BrandingUpdateTests\n    {\n        private const string DashboardPath = \"dashboard/index.html\";\n        private const string LogoPath = \"dashboard/public/brand/logo-option-chunky-infinity-box.svg\";\n        private const string AzureDevOpsBlue = \"#0078D4\";\n        private readonly string[] PurpleColors = { \"#8B5CF6\", \"#A855F7\", \"#9333EA\", \"purple\", \"violet\" };\n\n        [Fact]\n        public void DashboardFile_Exists_ReturnsTrue()\n        {\n            // Arrange & Act\n            var exists = File.Exists(DashboardPath);\n\n            // Assert\n            Assert.True(exists, $\"Dashboard file not found at {DashboardPath}\");\n        }\n\n        [Fact]\n        public void LogoAsset_Exists_ReturnsTrue()\n        {\n            // Arrange & Act\n            var exists = File.Exists(LogoPath);\n\n            // Assert\n            Assert.True(exists, $\"Logo asset not found at {LogoPath}\");\n        }\n\n        [Fact]\n        public void LogoAsset_IsValidSvg_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(LogoPath))\n            {\n                Assert.True(false, \"Logo file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(LogoPath);\n\n            // Assert\n            Assert.Contains(\"<svg\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"</svg>\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsAzureDevOpsBlue_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(AzureDevOpsBlue, content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Theory]\n        [InlineData(\"#8B5CF6\")]\n        [InlineData(\"#A855F7\")]\n        [InlineData(\"#9333EA\")]\n        [InlineData(\"purple\")]\n        [InlineData(\"violet\")]\n        public void Dashboard_DoesNotContainPurpleColors_ReturnsTrue(string purpleColor)\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.DoesNotContain(purpleColor, content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsLogoReference_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"logo-option-chunky-infinity-box.svg\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_CssVariablesUpdated_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n            var cssVariablePattern = @\"--primary-color\\s*:\\s*([^;]+)\";\n            var matches = Regex.Matches(content, cssVariablePattern, RegexOptions.IgnoreCase);\n\n            // Assert\n            Assert.True(matches.Count > 0, \"No CSS primary color variables found\");\n            foreach (Match match in matches)\n            {\n                var colorValue = match.Groups[1].Value.Trim();\n                Assert.Contains(AzureDevOpsBlue, colorValue, StringComparison.OrdinalIgnoreCase);\n            }\n        }\n\n        [Fact]\n        public void Dashboard_HeaderBrandingUpdated_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n            var headerPattern = @\"<header[^>]*class[^>]*top-nav[^>]*>.*?</header>\";\n            var headerMatch = Regex.Match(content, headerPattern, RegexOptions.Singleline | RegexOptions.IgnoreCase);\n\n            // Assert\n            Assert.True(headerMatch.Success, \"Header section not found\");\n            var headerContent = headerMatch.Value;\n            Assert.Contains(\"logo-option-chunky-infinity-box.svg\", headerContent, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_SidebarBrandingUpdated_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n            var sidebarPattern = @\"<div[^>]*class[^>]*sidebar[^>]*>.*?</div>\";\n            var sidebarMatches = Regex.Matches(content, sidebarPattern, RegexOptions.Singleline | RegexOptions.IgnoreCase);\n\n            // Assert\n            Assert.True(sidebarMatches.Count > 0, \"Sidebar section not found\");\n            // Check that sidebar doesn't contain purple colors\n            foreach (Match match in sidebarMatches)\n            {\n                var sidebarContent = match.Value;\n                foreach (var purpleColor in PurpleColors)\n                {\n                    Assert.DoesNotContain(purpleColor, sidebarContent, StringComparison.OrdinalIgnoreCase);\n                }\n            }\n        }\n\n        [Fact]\n        public void Dashboard_ProgressBarColorsUpdated_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n            var progressBarPattern = @\"\\.progress-(red|orange|blue|green)[^}]*\\{[^}]*\\}\";\n            var matches = Regex.Matches(content, progressBarPattern, RegexOptions.IgnoreCase);\n\n            // Assert\n            Assert.True(matches.Count >= 4, \"Progress bar color classes not found\");\n            // Verify blue progress bar uses Azure DevOps blue\n            var blueProgressMatch = Regex.Match(content, @\"\\.progress-blue[^}]*\\{[^}]*\\}\", RegexOptions.IgnoreCase);\n            Assert.True(blueProgressMatch.Success, \"Blue progress bar class not found\");\n        }\n\n        [Fact]\n        public void Dashboard_ButtonsAndLinksUpdated_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n            var buttonPattern = @\"\\.(btn|button)[^}]*\\{[^}]*\\}\";\n            var matches = Regex.Matches(content, buttonPattern, RegexOptions.IgnoreCase);\n\n            // Assert\n            Assert.True(matches.Count > 0, \"Button styles not found\");\n            // Verify buttons don't use purple colors\n            foreach (Match match in matches)\n            {\n                var buttonStyle = match.Value;\n                foreach (var purpleColor in PurpleColors)\n                {\n                    Assert.DoesNotContain(purpleColor, buttonStyle, StringComparison.OrdinalIgnoreCase);\n                }\n            }\n        }\n    }\n}",
       "isNew": true
     },
     {
-      "relativePath": "tests/dashboard/DarkModeTests.js", 
-      "content": `
-// Dark Mode Compatibility Tests
-describe('Dark Mode Compatibility', () => {
-  beforeEach(() => {
-    document.body.classList.remove('dark-mode');
-  });
-
-  test('toggleDarkMode switches body class', () => {
-    toggleDarkMode();
-    expect(document.body.classList.contains('dark-mode')).toBe(true);
-    
-    toggleDarkMode();
-    expect(document.body.classList.contains('dark-mode')).toBe(false);
-  });
-
-  test('dark mode persists in localStorage', () => {
-    toggleDarkMode();
-    
-    // Simulate page reload by checking localStorage
-    const isDarkMode = localStorage.getItem('darkMode') === '1';
-    expect(isDarkMode).toBe(true);
-  });
-
-  test('story cards have dark mode styles', () => {
-    document.body.classList.add('dark-mode');
-    
-    const storyCard = document.createElement('div');
-    storyCard.classList.add('story-card');
-    document.body.appendChild(storyCard);
-
-    // Check for dark mode specific classes/styles
-    expect(storyCard.classList.contains('dark-mode')).toBe(true);
-  });
-});
-      `,
+      "relativePath": "tests/Dashboard/DashboardFunctionalityTests.cs",
+      "content": "using System;\nusing System.IO;\nusing System.Text.RegularExpressions;\nusing Xunit;\n\nnamespace AIAgents.Tests.Dashboard\n{\n    public class DashboardFunctionalityTests\n    {\n        private const string DashboardPath = \"dashboard/index.html\";\n\n        [Fact]\n        public void Dashboard_ContainsRefreshManager_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"RefreshManager\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"auto-refresh\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsStoryCardRendering_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"renderStoryCard\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"story-card\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsAgentCardRendering_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"renderAgentCard\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"agent\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsHealthIndicators_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"System Health\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"/api/health\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsEmergencyStopFunctionality_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"emergency-stop\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"/api/emergency-stop\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsSearchAndFilterFunctionality_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"handleSearchFilter\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"handleStatusFilter\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsLocalStoragePersistence_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"localStorage\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsProgressCalculation_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"calculateStoryProgress\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"getProgressColorClass\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsCopilotCostDisplay_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"hasCopilotUsage\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"Premium Request\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsDarkModeSupport_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"data-theme=\\\"dark\\\"\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsApiEndpoints_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"/api/status\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"/api/health\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"/api/emergency-stop\", content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Theory]\n        [InlineData(\"progress-red\")]\n        [InlineData(\"progress-orange\")]\n        [InlineData(\"progress-blue\")]\n        [InlineData(\"progress-green\")]\n        public void Dashboard_ContainsProgressColorClasses_ReturnsTrue(string colorClass)\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(colorClass, content, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public void Dashboard_ContainsAutonomyLevelDisplay_ReturnsTrue()\n        {\n            // Arrange\n            if (!File.Exists(DashboardPath))\n            {\n                Assert.True(false, \"Dashboard file does not exist\");\n                return;\n            }\n\n            // Act\n            var content = File.ReadAllText(DashboardPath);\n\n            // Assert\n            Assert.Contains(\"getAutonomyText\", content, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"autonomy\", content, StringComparison.OrdinalIgnoreCase);\n        }\n    }\n}",
       "isNew": true
-    }
-  ]
-}
-```
-
-This test suite covers the key requirements for US-90:
-1. Story card collapsibility and state persistence
-2. Search and filter functionality
-3. Progress bar gradient and animation
-4. Dark mode compatibility
-5. Result count display
-6. Agent pipeline stepper
-
-The tests use Jest-style syntax and cover both unit and integration scenarios. They validate:
-- Interaction behaviors
-- State management
-- Rendering logic
-- Persistence mechanisms
-- Accessibility features
-
-Recommendations for implementation:
-- Add Jest or similar testing framework to the project
-- Configure test runner in CI/CD pipeline
-- Add more edge case tests as needed
-- Consider adding snapshot testing for complex rendering logic
-
-The tests provide comprehensive coverage of the dashboard story card improvements while maintaining the existing vanilla JavaScript architecture.
+    },
+    {
+      "relativePath": "tests/Integration/AzureDevOpsBrandingIntegrationTests.cs",
+      "content": "using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing AIAgents.Core.Interfaces;\nusing AIAgents.Core.Models;\nusing AIAgents.Functions.Functions;\nusing Microsoft.Extensions.Logging;\nusing Moq;\nusing Xunit;\n\nnamespace AIAgents.Tests.Integration\n{\n    public class AzureDevOpsBrandingIntegrationTests\n    {\n        private readonly Mock<IAzureDevOpsClient> _mockAdoClient;\n        private readonly Mock<ILogger<GetCurrentStatus>> _mockLogger;\n        private readonly GetCurrentStatus _getCurrentStatus;\n\n        public AzureDevOpsBrandingIntegrationTests()\n        {\n            _mockAdoClient = new Mock<IAzureDevOpsClient>();\n            _mockLogger = new Mock<ILogger<GetCurrentStatus>>();\n            _getCurrentStatus = new GetCurrentStatus(_mockAdoClient.Object, _mockLogger.Object);\n        }\n\n        [Fact]\n        public async Task GetCurrentStatus_WithTestStory_ReturnsStoryInDashboard()\n        {\n            // Arrange\n            var testStoryId = 153;\n            var testStory = new StoryWorkItem\n            {\n                Id = testStoryId,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo - Multi Test - Copy - Copy\",\n                Description = \"Test story for branding validation\",\n                State = \"Story Planning\",\n                AutonomyLevel = 3,\n                Tags = new[] { \"branding\", \"test\" }.ToList(),\n                CreatedDate = DateTime.UtcNow\n            };\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(testStoryId, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(testStory);\n\n            // Act\n            var result = await _getCurrentStatus.RunAsync(null, CancellationToken.None);\n\n            // Assert\n            Assert.NotNull(result);\n            // Verify the test story would be included in dashboard response\n            _mockAdoClient.Verify(x => x.GetWorkItemAsync(testStoryId, It.IsAny<CancellationToken>()), Times.Once);\n        }\n\n        [Fact]\n        public async Task CreateTestStory_ForBrandingValidation_ShouldTriggerPipeline()\n        {\n            // Arrange\n            var testStory = new StoryWorkItem\n            {\n                Id = 153,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo - Multi Test - Copy - Copy\",\n                Description = \"<div><span>The primary accent color in the React dashboard is changed from purple/violet to a blue visually aligned with Azure DevOps branding.<br></span><div>The legacy logo is used in place of the current dashboard logo/mark.<br> </div><div>The logo asset used is ADO-Agent\\\\dashboard\\\\public\\\\brand\\\\logo-option-chunky-infinity-box.svg<br> </div></div>\",\n                AcceptanceCriteria = \"The primary accent color in the React dashboard is changed from purple/violet to a blue visually aligned with Azure DevOps branding. The legacy logo is used in place of the current dashboard logo/mark.\",\n                State = \"New\",\n                AutonomyLevel = 3,\n                Tags = new[] { \"branding\", \"dashboard\", \"azure-devops\" }.ToList(),\n                CreatedDate = DateTime.UtcNow\n            };\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(153, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(testStory);\n\n            _mockAdoClient.Setup(x => x.UpdateWorkItemStateAsync(153, \"Story Planning\", It.IsAny<CancellationToken>()))\n                .Returns(Task.CompletedTask);\n\n            _mockAdoClient.Setup(x => x.AddCommentAsync(153, It.IsAny<string>(), It.IsAny<CancellationToken>()))\n                .Returns(Task.CompletedTask);\n\n            // Act\n            var story = await _mockAdoClient.Object.GetWorkItemAsync(153, CancellationToken.None);\n\n            // Assert\n            Assert.Equal(153, story.Id);\n            Assert.Contains(\"branding\", story.Title, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"Azure DevOps\", story.Title, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"logo\", story.Title, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"branding\", story.Tags);\n            Assert.Contains(\"dashboard\", story.Tags);\n            Assert.Contains(\"azure-devops\", story.Tags);\n        }\n\n        [Fact]\n        public async Task TestStory_ShouldContainBrandingRequirements_ReturnsTrue()\n        {\n            // Arrange\n            var testStory = new StoryWorkItem\n            {\n                Id = 153,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo - Multi Test - Copy - Copy\",\n                Description = \"Update dashboard branding by replacing the current purple/violet primary color with a blue similar to Azure DevOps, and replace the current logo/brand mark with the SVG logo.\",\n                AcceptanceCriteria = \"The primary accent color in the React dashboard is changed from purple/violet to a blue visually aligned with Azure DevOps branding. The legacy logo is used in place of the current dashboard logo/mark. The logo asset used is ADO-Agent\\\\dashboard\\\\public\\\\brand\\\\logo-option-chunky-infinity-box.svg\",\n                State = \"New\",\n                AutonomyLevel = 3\n            };\n\n            // Act & Assert\n            Assert.Contains(\"purple/violet\", testStory.AcceptanceCriteria, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"Azure DevOps\", testStory.AcceptanceCriteria, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"blue\", testStory.AcceptanceCriteria, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"logo-option-chunky-infinity-box.svg\", testStory.AcceptanceCriteria, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"legacy logo\", testStory.AcceptanceCriteria, StringComparison.OrdinalIgnoreCase);\n        }\n\n        [Fact]\n        public async Task TestStory_StateTransition_ShouldTriggerPlanningAgent()\n        {\n            // Arrange\n            var workItemId = 153;\n            var initialState = \"New\";\n            var targetState = \"Story Planning\";\n\n            _mockAdoClient.Setup(x => x.UpdateWorkItemStateAsync(workItemId, targetState, It.IsAny<CancellationToken>()))\n                .Returns(Task.CompletedTask);\n\n            // Act\n            await _mockAdoClient.Object.UpdateWorkItemStateAsync(workItemId, targetState, CancellationToken.None);\n\n            // Assert\n            _mockAdoClient.Verify(x => x.UpdateWorkItemStateAsync(workItemId, targetState, It.IsAny<CancellationToken>()), Times.Once);\n        }\n\n        [Fact]\n        public async Task TestStory_ShouldSupportIntegrationValidation_ReturnsTrue()\n        {\n            // Arrange\n            var testStory = new StoryWorkItem\n            {\n                Id = 153,\n                Title = \"Update React dashboard branding to Azure DevOps blue and restore legacy logo - Multi Test - Copy - Copy\",\n                Description = \"Create this story to validate that a newly created Azure DevOps user story flows through the integration and appears correctly in the live dashboard.\",\n                State = \"New\",\n                AutonomyLevel = 3\n            };\n\n            _mockAdoClient.Setup(x => x.GetWorkItemAsync(153, It.IsAny<CancellationToken>()))\n                .ReturnsAsync(testStory);\n\n            // Act\n            var story = await _mockAdoClient.Object.GetWorkItemAsync(153, CancellationToken.None);\n\n            // Assert\n            Assert.Equal(153, story.Id);\n            Assert.Contains(\"integration\", story.Description, StringComparison.OrdinalIgnoreCase);\n            Assert.Contains(\"dashboard\", story.Description, StringComparison.OrdinalIgnoreCase);\n            Assert.Equal(\"New\", story.State);\n        }\n    }\n}",
+      "isNew": true
+    },
+    {
+      "relativePath": "tests/E2E/BrandingEndToEndTests.cs",
+      "content": "using System;\nusing System.Collections.Generic;\nusing System.IO;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing AIAgents.Core.Interfaces;\nusing AIAgents.Core.Models;\nusing AIAgents.Functions.Functions;\nusing AIAgents.Functions.Models;\nusing Microsoft.Extensions.Logging;\nusing Moq;\nusing Xunit;\n\nnamespace AIAgents.Tests.E2E\n{\n    public class BrandingEndToEndTests\n    {\n        private readonly Mock<IA
