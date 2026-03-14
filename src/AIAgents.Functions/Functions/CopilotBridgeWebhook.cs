@@ -79,7 +79,7 @@ public sealed class CopilotBridgeWebhook
         CancellationToken cancellationToken)
     {
         var action = root.GetProperty("action").GetString() ?? string.Empty;
-        if (action is not ("ready_for_review" or "edited" or "review_requested" or "synchronize"))
+        if (action is not ("opened" or "ready_for_review" or "edited" or "review_requested" or "reopened" or "synchronize"))
         {
             _logger.LogDebug("Ignoring pull_request action: {Action}", action);
             return req.CreateResponse(HttpStatusCode.OK);
@@ -280,7 +280,7 @@ public sealed class CopilotBridgeWebhook
             return false;
         }
 
-        if (string.Equals(action, "opened", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(action, "closed", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

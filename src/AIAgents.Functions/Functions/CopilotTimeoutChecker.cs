@@ -75,20 +75,16 @@ public sealed class CopilotTimeoutChecker
         CancellationToken cancellationToken)
     {
         var elapsed = DateTime.UtcNow - delegation.DelegatedAt;
-        if (elapsed < timeout)
-        {
-            return;
-        }
 
         var completionResult = await _completionService.ProbeAndCompletePendingDelegationAsync(
             delegation,
-            "Copilot timeout fallback detected completion signal",
+            "Copilot timer poll detected completion signal",
             cancellationToken);
 
         if (completionResult == CopilotCompletionProbeResult.Completed)
         {
             _logger.LogInformation(
-                "Recovered Copilot completion for WI-{WorkItemId} during timeout fallback",
+                "Recovered Copilot completion for WI-{WorkItemId} during timer poll",
                 delegation.WorkItemId);
             return;
         }
@@ -98,6 +94,11 @@ public sealed class CopilotTimeoutChecker
             _logger.LogInformation(
                 "GitHub completion signal detected for WI-{WorkItemId}, but the PR is not ready to reconcile yet. Keeping delegation pending.",
                 delegation.WorkItemId);
+            return;
+        }
+
+        if (elapsed < timeout)
+        {
             return;
         }
 

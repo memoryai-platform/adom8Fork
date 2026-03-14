@@ -27,10 +27,10 @@ public sealed class CopilotBridgeWebhookTests
     }
 
     [Fact]
-    public void IsReadyToReconcile_Opened_AlwaysFalse()
+    public void IsReadyToReconcile_OpenedWithoutWip_IsTrue()
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile("opened", "Feature implementation", false);
-        Assert.False(result);
+        Assert.True(result);
     }
 
     [Fact]
@@ -52,6 +52,13 @@ public sealed class CopilotBridgeWebhookTests
     {
         var result = CopilotBridgeWebhook.IsReadyToReconcile("edited", "Feature implementation", true);
         Assert.True(result);
+    }
+
+    [Fact]
+    public void IsReadyToReconcile_Closed_IsFalse()
+    {
+        var result = CopilotBridgeWebhook.IsReadyToReconcile("closed", "Feature implementation", false);
+        Assert.False(result);
     }
 
     [Theory]

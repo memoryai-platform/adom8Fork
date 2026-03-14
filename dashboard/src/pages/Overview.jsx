@@ -14,7 +14,6 @@ import AgentActivityFeed from '../components/AgentActivityFeed';
 import AgentCard from '../components/AgentCard';
 import MetricCard from '../components/MetricCard';
 import StoryQueueTable from '../components/StoryQueueTable';
-import ModalBasic from '../mosaic/components/ModalBasic';
 import { clearActivity, clearStories } from '../api';
 import { AGENT_ORDER } from '../constants';
 import { formatDuration, formatPercent, formatRelativeTime } from '../utils/formatting';
@@ -336,32 +335,49 @@ function ConfirmActionModal({ action, loading, onConfirm, onCancel, setModalOpen
   }
 
   return (
-    <ModalBasic
-      id="dashboard-confirm-action-modal"
-      title={action.title}
-      modalOpen={Boolean(action)}
-      setModalOpen={setModalOpen}
-    >
-      <div className="px-5 py-4">
-        <p className="text-sm leading-6 text-gray-600">{action.description}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6">
+      <button
+        type="button"
+        aria-label="Close confirmation dialog"
+        className="absolute inset-0 bg-gray-900/40 backdrop-blur-[1px]"
+        onClick={() => setModalOpen(false)}
+      />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div className="font-semibold text-gray-900">{action.title}</div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="sr-only">Close</span>
+            <svg className="fill-current" width="16" height="16" viewBox="0 0 16 16">
+              <path d="M7.95 6.536l4.242-4.243a1 1 0 111.415 1.414L9.364 7.95l4.243 4.242a1 1 0 11-1.415 1.415L7.95 9.364l-4.243 4.243a1 1 0 01-1.414-1.415L6.536 7.95 2.293 3.707a1 1 0 011.414-1.414L7.95 6.536z" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-sm leading-6 text-gray-600">{action.description}</p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-5 py-4">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="inline-flex items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
+            {loading ? 'Clearing...' : action.confirmLabel}
+          </button>
+        </div>
       </div>
-      <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-5 py-4">
-        <button
-          onClick={onCancel}
-          disabled={loading}
-          className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={loading}
-          className="inline-flex items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-        >
-          {loading ? 'Clearing...' : action.confirmLabel}
-        </button>
-      </div>
-    </ModalBasic>
+    </div>
   );
 }
 
@@ -520,7 +536,10 @@ export default function Overview() {
           <p className="mt-1 text-sm text-gray-500">Administrative dashboard controls for the current environment.</p>
         </div>
         <button
-          onClick={() => openConfirmation('stories')}
+          onClick={(event) => {
+            event.stopPropagation();
+            openConfirmation('stories');
+          }}
           disabled={clearingStories}
           className="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
         >

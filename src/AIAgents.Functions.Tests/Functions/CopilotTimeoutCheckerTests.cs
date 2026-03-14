@@ -145,4 +145,49 @@ public sealed class CopilotTimeoutCheckerTests
             x => x.LogAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
+
+    [Fact]
+    public async Task RunAsync_BeforeTimeout_StillPollsForCompletion()
+    {
+        var delegation = new CopilotDelegation
+        {
+            WorkItemId = 148,
+            IssueNumber = 30,
+            CorrelationId = "corr-4",
+            BranchName = "feature/US-148",
+            DelegatedAt = DateTime.UtcNow.AddMinutes(-5),
+            Status = "Pending"
+        };
+
+        var delegationService = new Mock<ICopilotDelegationService>();
+        delegationService.Setup(x => x.GetPendingAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { delegation });
+
+        var activityLogger = new Mock<IActivityLogger>();
+        var completionService = new Mock<ICopilotCompletionService>();
+        completionService.Setup(x => x.ProbeAndCompletePendingDelegationAsync(
+                delegation,
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CopilotCompletionProbeResult.NoSignal);
+
+        var checker = new CopilotTimeoutChecker(
+            Options.Create(new CopilotOptions { Enabled = true, TimeoutMinutes = 30 }),
+            delegationService.Object,
+            activityLogger.Object,
+            completionService.Object,
+            Mock.Of<ILogger<CopilotTimeoutChecker>>());
+
+        await checker.RunAsync(null!, CancellationToken.None);
+
+        completionService.Verify(
+            x => x.ProbeAndCompletePendingDelegationAsync(
+                delegation,
+                It.Is<string>(source => source.Contains("timer poll", StringComparison.OrdinalIgnoreCase)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        delegationService.Verify(
+            x => x.UpdateAsync(It.IsAny<CopilotDelegation>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 }
