@@ -10,6 +10,7 @@ import { useCodebaseIntelligence } from './hooks/useCodebaseIntelligence';
 import { useSystemHealth } from './hooks/useSystemHealth';
 import AgentLog from './pages/AgentLog';
 import Overview from './pages/Overview';
+import Stories from './pages/Stories';
 import StoryDetail from './pages/StoryDetail';
 import PageNotFound from './mosaic/pages/utility/PageNotFound';
 
@@ -62,6 +63,7 @@ export default function App() {
         }
       >
         <Route path="/" element={<Overview />} />
+        <Route path="/stories" element={<Stories />} />
         <Route path="/story/:id" element={<StoryDetail />} />
         <Route path="/log" element={<AgentLog />} />
         <Route path="/404" element={<PageNotFound />} />

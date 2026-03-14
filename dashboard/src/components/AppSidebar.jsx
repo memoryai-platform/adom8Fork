@@ -347,6 +347,15 @@ export default function AppSidebar({
                   </svg>
                 )}
               />
+              <NavItem
+                to="/stories"
+                label="Workstreams"
+                icon={(
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h2A1.5 1.5 0 0 1 7 3.5v2A1.5 1.5 0 0 1 5.5 7h-2A1.5 1.5 0 0 1 2 5.5v-2ZM9 3.5A1.5 1.5 0 0 1 10.5 2h2A1.5 1.5 0 0 1 14 3.5v2A1.5 1.5 0 0 1 12.5 7h-2A1.5 1.5 0 0 1 9 5.5v-2ZM2 10.5A1.5 1.5 0 0 1 3.5 9h2A1.5 1.5 0 0 1 7 10.5v2A1.5 1.5 0 0 1 5.5 14h-2A1.5 1.5 0 0 1 2 12.5v-2ZM9 10.5A1.5 1.5 0 0 1 10.5 9h2A1.5 1.5 0 0 1 14 10.5v2A1.5 1.5 0 0 1 12.5 14h-2A1.5 1.5 0 0 1 9 12.5v-2Z" />
+                  </svg>
+                )}
+              />
             </ul>
           </div>
 

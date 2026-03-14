@@ -18,7 +18,7 @@ import ModalBasic from '../mosaic/components/ModalBasic';
 import { clearActivity, clearStories } from '../api';
 import { AGENT_ORDER } from '../constants';
 import { formatDuration, formatPercent, formatRelativeTime } from '../utils/formatting';
-import { stripAgentSuffix } from '../utils/story';
+import { formatAgentLabel, stripAgentSuffix } from '../utils/story';
 
 const CLEAR_ACTIONS = {
   stories: {
@@ -182,6 +182,90 @@ function IdleBanner() {
   return (
     <div className="mb-6 rounded-xl border border-dashed border-gray-200 bg-white px-5 py-5 text-sm text-gray-500 shadow-xs">
       Pipeline idle
+    </div>
+  );
+}
+
+function getStoryPanelStatus(story) {
+  const statuses = Object.values(story?.agents ?? {}).map((value) => String(value ?? '').toLowerCase());
+
+  if (statuses.some((status) => status === 'failed' || status === 'needs_revision')) {
+    return 'failed';
+  }
+
+  if (statuses.some((status) => status === 'in_progress' || status === 'awaiting_code')) {
+    return 'active';
+  }
+
+  if (statuses.length && statuses.every((status) => status === 'completed' || status === 'skipped')) {
+    return 'completed';
+  }
+
+  return 'pending';
+}
+
+function ParallelStoriesPanel({ stories, recentActivity }) {
+  const activeStories = (stories ?? [])
+    .filter((story) => getStoryPanelStatus(story) === 'active')
+    .sort((left, right) => {
+      const leftTs = resolveLatestTimestamp(left.workItemId, recentActivity);
+      const rightTs = resolveLatestTimestamp(right.workItemId, recentActivity);
+      return new Date(rightTs ?? 0).getTime() - new Date(leftTs ?? 0).getTime();
+    });
+
+  return (
+    <div className="mb-6 rounded-xl bg-white p-5 shadow-xs">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-semibold text-gray-800">Parallel Work</h2>
+          <p className="mt-1 text-sm text-gray-500">Quick visibility into every story currently in flight.</p>
+        </div>
+        <Link to="/stories" className="inline-flex text-sm font-semibold text-violet-500 hover:text-violet-600">
+          Open Workstreams
+        </Link>
+      </div>
+      {activeStories.length ? (
+        <div className="grid gap-3 xl:grid-cols-3">
+          {activeStories.slice(0, 6).map((story) => {
+            const stage = formatAgentLabel(story.currentAiAgent ?? story.currentAgent)
+              ?? formatAgentLabel(
+                Object.entries(story.agents ?? {}).find(([, status]) =>
+                  ['in_progress', 'awaiting_code'].includes(String(status ?? '').toLowerCase()),
+                )?.[0],
+              )
+              ?? 'Queued';
+
+            return (
+              <Link
+                key={story.workItemId}
+                to={`/story/${story.workItemId}`}
+                state={{ story }}
+                className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-4 transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-600">#{story.workItemId}</div>
+                    <div className="mt-2 line-clamp-2 text-sm font-semibold text-gray-900">{story.title}</div>
+                  </div>
+                  <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                    Active
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-gray-700">{stage}</span>
+                  {story.workItemState ? (
+                    <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-gray-700">{story.workItemState}</span>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+          No active stories to surface right now.
+        </div>
+      )}
     </div>
   );
 }
@@ -452,6 +536,7 @@ export default function Overview() {
       {data?.currentWorkItem ? <CurrentWorkItemBanner currentWorkItem={data.currentWorkItem} /> : null}
       {!data?.currentWorkItem && latestFailedStory ? <FailedWorkItemBanner story={latestFailedStory} recentActivity={recentActivity} /> : null}
       {!data?.currentWorkItem && !latestFailedStory ? <IdleBanner /> : null}
+      <ParallelStoriesPanel stories={data?.stories} recentActivity={recentActivity} />
       <AgentPipeline agents={agents} />
 
       <div className="grid grid-cols-12 gap-6">

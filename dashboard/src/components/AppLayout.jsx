@@ -9,6 +9,10 @@ function getPageTitle(pathname) {
     return 'Story Detail';
   }
 
+  if (pathname === '/stories') {
+    return 'Workstreams';
+  }
+
   if (pathname === '/log') {
     return 'Agent Log';
   }
