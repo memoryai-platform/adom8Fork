@@ -147,6 +147,7 @@ function buildStorySnapshot({ liveStory, currentItem, queuedItem, seedStory }) {
     agents: liveStory?.agents ?? seedStory?.agents ?? queuedItem?.agents ?? {},
     agentDetails: mergeAgentData(queuedItem?.agentDetails, seedStory?.agentDetails, liveStory?.agentDetails),
     agentTimings: mergeAgentData(queuedItem?.agentTimings, seedStory?.agentTimings, liveStory?.agentTimings),
+    tokenUsage: liveStory?.tokenUsage ?? seedStory?.tokenUsage ?? queuedItem?.tokenUsage ?? null,
   };
 }
 
@@ -184,9 +185,15 @@ export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
     githubIssueUrl,
     githubDelegated: codingDetails?.mode === 'copilot-delegated',
     delegatedAgent: codingDetails?.agent ?? null,
+    tokenUsage: story.tokenUsage ?? null,
     phases: AGENT_ORDER.map((agentName) => ({
       agent: agentName,
       status: getPhaseStatus(story, agentName),
+      tokenUsage: story?.tokenUsage?.agents?.[stripAgentSuffix(agentName)] ?? story?.tokenUsage?.agents?.[agentName] ?? null,
+      durationSeconds:
+        story?.agentTimings?.[stripAgentSuffix(agentName)]?.durationSeconds
+        ?? story?.agentTimings?.[agentName]?.durationSeconds
+        ?? null,
       completedAt:
         (story?.agentTimings?.[stripAgentSuffix(agentName)]?.completedAt ?? story?.agentTimings?.[agentName]?.completedAt ?? null)
         || (getPhaseStatus(story, agentName) === 'completed' ? updatedDate : null),
@@ -229,6 +236,7 @@ export function mergeStoryDetailWithLiveStatus(detail, liveStatusDetail) {
     githubIssueUrl: liveStatusDetail.githubIssueUrl ?? detail.githubIssueUrl,
     githubDelegated: liveStatusDetail.githubDelegated ?? detail.githubDelegated,
     delegatedAgent: liveStatusDetail.delegatedAgent ?? detail.delegatedAgent,
+    tokenUsage: liveStatusDetail.tokenUsage ?? detail.tokenUsage,
     phases: mergedPhases,
     activity: liveStatusDetail.activity ?? detail.activity,
   };

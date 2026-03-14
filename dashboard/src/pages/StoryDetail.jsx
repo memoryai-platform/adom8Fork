@@ -3,7 +3,7 @@ import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom
 
 import { getStoryDetail } from '../api';
 import { buildFallbackStoryDetail, mergeStoryDetailWithLiveStatus } from '../utils/story';
-import { formatRelativeTime, formatTimestamp } from '../utils/formatting';
+import { formatDuration, formatRelativeTime, formatTimestamp } from '../utils/formatting';
 
 function phaseStyles(status) {
   switch (status) {
@@ -16,6 +16,42 @@ function phaseStyles(status) {
     default:
       return 'bg-gray-100 text-gray-600 border-gray-200';
   }
+}
+
+function formatAgentTokenValue(phase, metadata) {
+  const isCopilotCoding = phase.agent === 'CodingAgent'
+    && (phase.details?.additionalData?.mode === 'copilot-delegated' || metadata.githubDelegated);
+
+  if (isCopilotCoding) {
+    return '1 premium token';
+  }
+
+  const totalTokens = phase.tokenUsage?.totalTokens;
+  if (typeof totalTokens === 'number' && totalTokens >= 0) {
+    return totalTokens.toLocaleString();
+  }
+
+  return '—';
+}
+
+function formatAgentCostValue(phase, metadata) {
+  const isCopilotCoding = phase.agent === 'CodingAgent'
+    && (phase.details?.additionalData?.mode === 'copilot-delegated' || metadata.githubDelegated);
+
+  if (isCopilotCoding) {
+    return '—';
+  }
+
+  const estimatedCost = phase.tokenUsage?.estimatedCost;
+  if (typeof estimatedCost === 'number') {
+    return `$${estimatedCost.toFixed(4)}`;
+  }
+
+  return '—';
+}
+
+function formatAgentDurationValue(phase) {
+  return phase.durationSeconds == null ? '—' : formatDuration(phase.durationSeconds);
 }
 
 export default function StoryDetail() {
@@ -187,6 +223,11 @@ export default function StoryDetail() {
                           Backend: {phase.rawStatus}
                         </div>
                       ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+                        <span>Tokens: {formatAgentTokenValue(phase, metadata)}</span>
+                        <span>Cost: {formatAgentCostValue(phase, metadata)}</span>
+                        <span>Duration: {formatAgentDurationValue(phase)}</span>
+                      </div>
                       {phase.agent === 'CodingAgent' && metadata.githubDelegated && metadata.githubIssueUrl && phase.status === 'active' ? (
                         <a
                           href={metadata.githubIssueUrl}
