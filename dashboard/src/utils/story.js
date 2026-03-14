@@ -167,6 +167,9 @@ export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
   const updatedDate = getLatestTimestamp(activity);
   const codingDetails = story.agentDetails?.Coding?.additionalData ?? story.agentDetails?.CodingAgent?.additionalData ?? null;
   const githubIssueNumber = Number(codingDetails?.issueNumber ?? 0) || null;
+  const githubAgentsUrl = statusData?.githubOwner && statusData?.githubRepo
+    ? `https://github.com/${statusData.githubOwner}/${statusData.githubRepo}/agents`
+    : null;
   const githubIssueUrl = githubIssueNumber && statusData?.githubOwner && statusData?.githubRepo
     ? `https://github.com/${statusData.githubOwner}/${statusData.githubRepo}/issues/${githubIssueNumber}`
     : null;
@@ -183,6 +186,7 @@ export function buildFallbackStoryDetail(storyId, statusData, seedStory) {
     updatedDate,
     githubIssueNumber,
     githubIssueUrl,
+    githubAgentsUrl,
     githubDelegated: codingDetails?.mode === 'copilot-delegated',
     delegatedAgent: codingDetails?.agent ?? null,
     tokenUsage: story.tokenUsage ?? null,
@@ -234,6 +238,7 @@ export function mergeStoryDetailWithLiveStatus(detail, liveStatusDetail) {
     updatedDate: liveStatusDetail.updatedDate ?? detail.updatedDate,
     githubIssueNumber: liveStatusDetail.githubIssueNumber ?? detail.githubIssueNumber,
     githubIssueUrl: liveStatusDetail.githubIssueUrl ?? detail.githubIssueUrl,
+    githubAgentsUrl: liveStatusDetail.githubAgentsUrl ?? detail.githubAgentsUrl,
     githubDelegated: liveStatusDetail.githubDelegated ?? detail.githubDelegated,
     delegatedAgent: liveStatusDetail.delegatedAgent ?? detail.delegatedAgent,
     tokenUsage: liveStatusDetail.tokenUsage ?? detail.tokenUsage,

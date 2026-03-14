@@ -54,6 +54,14 @@ function formatAgentDurationValue(phase) {
   return phase.durationSeconds == null ? '—' : formatDuration(phase.durationSeconds);
 }
 
+function GitHubMark({ className = '', style }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className={className} style={style} fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.67 0 8.2c0 3.62 2.29 6.69 5.47 7.77.4.08.55-.18.55-.39 0-.19-.01-.83-.01-1.5-2.01.38-2.53-.5-2.69-.95-.09-.24-.48-.95-.82-1.14-.28-.16-.68-.55-.01-.56.63-.01 1.08.59 1.23.84.72 1.25 1.87.9 2.33.69.07-.54.28-.9.51-1.11-1.78-.21-3.64-.92-3.64-4.07 0-.9.31-1.63.82-2.2-.08-.21-.36-1.05.08-2.18 0 0 .67-.22 2.2.84a7.35 7.35 0 0 1 4 0c1.53-1.06 2.2-.84 2.2-.84.44 1.13.16 1.97.08 2.18.51.57.82 1.29.82 2.2 0 3.16-1.87 3.86-3.66 4.07.29.26.54.75.54 1.52 0 1.1-.01 1.99-.01 2.26 0 .21.14.47.55.39A8.24 8.24 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z" />
+    </svg>
+  );
+}
+
 export default function StoryDetail() {
   const { id } = useParams();
   const location = useLocation();
@@ -228,6 +236,29 @@ export default function StoryDetail() {
                         <span>Cost: {formatAgentCostValue(phase, metadata)}</span>
                         <span>Duration: {formatAgentDurationValue(phase)}</span>
                       </div>
+                      {phase.agent === 'CodingAgent' && metadata.githubDelegated && phase.status === 'active' ? (
+                        <div className="mt-3 inline-flex max-w-full items-center gap-3 rounded-2xl border border-sky-200 bg-white/90 px-3 py-2 text-xs shadow-sm ring-1 ring-sky-100">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-white shadow-sm">
+                            <GitHubMark className="h-4 w-4 animate-spin" style={{ animationDuration: '2.8s' }} />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-semibold uppercase tracking-[0.14em] text-sky-700">Delegated To GitHub Copilot</div>
+                            <div className="mt-0.5 text-gray-600">
+                              Coding is running in the GitHub agent workspace.
+                            </div>
+                          </div>
+                          {metadata.githubAgentsUrl ? (
+                            <a
+                              href={metadata.githubAgentsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 rounded-full bg-gray-900 px-3 py-1.5 font-semibold text-white transition hover:bg-gray-800"
+                            >
+                              Open /agents
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {phase.agent === 'CodingAgent' && metadata.githubDelegated && metadata.githubIssueUrl && phase.status === 'active' ? (
                         <a
                           href={metadata.githubIssueUrl}
