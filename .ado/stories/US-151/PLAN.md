@@ -18,21 +18,23 @@
 ## Technical Analysis
 
 ### Problem Analysis
-This story combines two objectives: (1) updating the React dashboard's visual branding from purple/violet to Azure DevOps blue theme with a new logo, and (2) validating the end-to-end integration by ensuring newly created Azure DevOps stories appear in the live dashboard. The branding update involves changing CSS color variables, updating logo references, and ensuring consistent application across all UI components. The integration validation serves as a smoke test for the complete pipeline.
+This story combines UI branding updates with end-to-end integration testing. The React dashboard needs visual updates (purple/violet to Azure DevOps blue theme, logo replacement) while validating that the full ADO → Azure Function → dashboard pipeline works correctly. The story references a specific logo asset that exists in the codebase.
 
 ### Recommended Approach
-1. Update CSS color variables in dashboard/index.html to replace purple/violet (#8B5CF6, #A855F7, etc.) with Azure DevOps blue variants (#0078D4, #106EBE, #005A9E). 2. Replace logo references to use the specified SVG asset (logo-option-chunky-infinity-box.svg) which already has transparent background and Azure blue gradient. 3. Systematically review and update all UI components (header, sidebar, buttons, badges, status panels) to use the new color scheme. 4. Test the updated dashboard locally, then deploy to validate that new ADO work items flow through the integration correctly. The logo asset already exists and uses appropriate Azure-aligned colors, simplifying the implementation.
+1. Update CSS variables/theme colors from purple/violet to Azure DevOps blue (#0078D4 and related shades). 2. Replace current logo references with the specified SVG asset (logo-option-chunky-infinity-box.svg). 3. Ensure logo renders with transparent background. 4. Apply branding consistently across all dashboard components (header, sidebar, badges, panels). 5. Test the integration by creating a test story in ADO and verifying it appears in the live dashboard. The logo asset already exists and has transparent background via SVG structure.
 
 ### Affected Files
 
 - `dashboard/index.html`
+
+- `dashboard/public/brand/logo-option-chunky-infinity-box.svg`
 
 
 ### Complexity Estimate
 **Story Points:** 5
 
 ### Architecture Considerations
-Single-file dashboard modification with CSS color variable updates and logo asset replacement. No architectural changes required - this is purely a visual/branding update with integration validation.
+Single-file dashboard modification with CSS variable updates and asset replacement. The dashboard is a vanilla JS SPA in index.html with embedded CSS. Logo replacement involves updating image src references and ensuring proper styling. Integration testing validates the existing webhook → queue → agent pipeline.
 
 ---
 
@@ -40,35 +42,31 @@ Single-file dashboard modification with CSS color variable updates and logo asse
 
 ### Sub-Tasks
 
-1. Identify all purple/violet color references in dashboard CSS
+1. Update CSS color variables from purple/violet to Azure DevOps blue theme
 
-2. Define new Azure DevOps blue color palette
+2. Replace logo/brand mark references with logo-option-chunky-infinity-box.svg
 
-3. Update CSS color variables and class definitions
+3. Verify logo displays with transparent background
 
-4. Replace logo/brand mark references with new SVG asset
+4. Apply consistent branding across header, sidebar, navigation, badges, and status panels
 
-5. Update favicon reference if needed
+5. Remove obvious purple/violet branding elements (except semantic non-brand usage)
 
-6. Test branding consistency across all dashboard components
+6. Create test user story in ADO - ai agents azure project
 
-7. Deploy updated dashboard to staging/production
+7. Verify test story appears in published dashboard through existing integration
 
-8. Create test Azure DevOps work item to validate integration
-
-9. Verify test story appears correctly in live dashboard
+8. Validate dashboard functionality after branding update (auth, navigation, story display, agent status)
 
 
 ### Dependencies
 
 
-- Existing logo asset at dashboard/public/brand/logo-option-chunky-infinity-box.svg
-
-- Azure DevOps integration and webhook configuration
-
-- Dashboard deployment pipeline
+- Existing React dashboard deployment and Azure Function integration
 
 - Access to ADO - ai agents azure project for creating test story
+
+- Published dashboard URL for integration testing
 
 
 
@@ -78,36 +76,32 @@ Single-file dashboard modification with CSS color variable updates and logo asse
 
 ### Identified Risks
 
-- Color changes might affect readability or accessibility
+- CSS changes might break responsive layout or accessibility
 
-- Logo replacement might break layout if dimensions differ significantly
+- Logo replacement could affect header/sidebar layout if dimensions differ significantly
 
-- Integration test might fail due to unrelated pipeline issues
-
-- Cached CSS might prevent immediate visibility of changes
+- Integration test depends on existing webhook and Azure Function pipeline being operational
 
 
 ---
 
 ## Assumptions Made
 
-- The specified logo asset exists and is properly formatted
+- The logo asset logo-option-chunky-infinity-box.svg exists and is properly formatted
 
-- Current dashboard deployment pipeline is functional
+- The React dashboard is already published and connected to Azure Functions
 
-- Azure DevOps webhook integration is properly configured
+- The ADO - ai agents azure project webhook integration is active
 
-- The dashboard is currently using a purple/violet color scheme that needs updating
-
-- Logo asset has transparent background as stated in acceptance criteria
+- Current dashboard uses CSS variables or classes that can be easily updated for theming
 
 
 ---
 
 ## Testing Strategy
-1. Visual testing: Compare before/after screenshots of all major dashboard sections (login, header, sidebar, story cards, status panels) to ensure consistent blue branding. 2. Cross-browser testing: Verify color changes render correctly in Chrome, Firefox, Safari, Edge. 3. Integration testing: Create a new user story in the ADO - ai agents azure project and verify it appears in the live dashboard with correct branding. 4. Accessibility testing: Ensure new color scheme maintains adequate contrast ratios. 5. Cache testing: Verify changes are visible after clearing browser cache and in incognito/private browsing mode.
+1. Visual testing: Compare before/after screenshots of all dashboard views to ensure consistent blue branding and logo placement. 2. Cross-browser testing: Verify branding appears correctly in Chrome, Firefox, Safari, Edge. 3. Responsive testing: Check branding on mobile, tablet, desktop viewports. 4. Integration testing: Create a test user story in ADO, verify it flows through the pipeline and appears in the dashboard with correct branding. 5. Functionality testing: Verify all dashboard features work after branding update (login, navigation, story filtering, agent status display).
 
 ---
 
 *Generated by Planning Agent*  
-*Timestamp: 2026-03-14T03:53:40.1040641Z*
+*Timestamp: 2026-03-14T03:53:52.6251904Z*
