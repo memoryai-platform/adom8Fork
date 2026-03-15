@@ -2,6 +2,7 @@ using AIAgents.Core.Configuration;
 using AIAgents.Core.Interfaces;
 using AIAgents.Core.Services;
 using AIAgents.Functions.Agents;
+using AIAgents.Functions.Extensions;
 using AIAgents.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
@@ -79,6 +80,7 @@ var host = new HostBuilder()
         services.AddSingleton<IGitOperations, GitOperations>();
         services.AddSingleton<IStoryContextFactory, StoryContextFactory>();
         services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
+        services.AddSingleton<IErrorFingerprintService, ErrorFingerprintService>();
 
         // Repository provider — GitHub or Azure DevOps Repos (based on Git:Provider config)
         var gitProvider = configuration[$"{GitOptions.SectionName}:Provider"] ?? "GitHub";
@@ -146,6 +148,7 @@ var host = new HostBuilder()
         {
             client.Timeout = TimeSpan.FromSeconds(10);
         });
+        services.AddDataverseMonitoring(configuration);
 
         // Agent services — keyed DI for dispatcher routing
         services.AddKeyedScoped<IAgentService, PlanningAgentService>("Planning");
