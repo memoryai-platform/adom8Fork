@@ -6,6 +6,7 @@ using AIAgents.Functions.Models;
 using AIAgents.Functions.Services;
 using AIAgents.Functions.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AIAgents.Functions.Tests.Agents;
@@ -41,7 +42,14 @@ public sealed class DocumentationAgentServiceTests
             _aiFactoryMock.Object, _adoMock.Object, _repoMock.Object,
             _githubContextMock.Object, _contextFactoryMock.Object, _templateMock.Object,
             _codebaseMock.Object, NullLogger<DocumentationAgentService>.Instance,
-            _taskQueueMock.Object);
+            _taskQueueMock.Object,
+            Options.Create(new AIAgents.Core.Configuration.GitHubOptions
+            {
+                Owner = "contoso",
+                Repo = "ADO-Agent",
+                Token = "test-token",
+                BaseBranch = "main"
+            }));
     }
 
     private void SetupHappyPath()
