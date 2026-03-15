@@ -82,40 +82,40 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONN-01 | Pending | Pending |
-| CONN-02 | Pending | Pending |
-| CONN-03 | Pending | Pending |
-| CONN-04 | Pending | Pending |
-| DETECT-01 | Pending | Pending |
-| DETECT-02 | Pending | Pending |
-| DETECT-03 | Pending | Pending |
-| DETECT-04 | Pending | Pending |
-| DETECT-05 | Pending | Pending |
-| DETECT-06 | Pending | Pending |
-| DETECT-07 | Pending | Pending |
-| DETECT-08 | Pending | Pending |
-| DETECT-09 | Pending | Pending |
-| TRIAGE-01 | Pending | Pending |
-| TRIAGE-02 | Pending | Pending |
-| TRIAGE-03 | Pending | Pending |
-| TRIAGE-04 | Pending | Pending |
-| TRIAGE-05 | Pending | Pending |
-| BUG-01 | Pending | Pending |
-| BUG-02 | Pending | Pending |
-| BUG-03 | Pending | Pending |
-| BUG-04 | Pending | Pending |
-| BUG-05 | Pending | Pending |
-| MGMT-01 | Pending | Pending |
-| MGMT-02 | Pending | Pending |
-| MGMT-03 | Pending | Pending |
-| MGMT-04 | Pending | Pending |
-| MGMT-05 | Pending | Pending |
+| CONN-01 | Phase 1 | Pending |
+| CONN-02 | Phase 1 | Pending |
+| CONN-03 | Phase 1 | Pending |
+| CONN-04 | Phase 1 | Pending |
+| DETECT-01 | Phase 1 | Pending |
+| DETECT-02 | Phase 1 | Pending |
+| DETECT-03 | Phase 1 | Pending |
+| DETECT-06 | Phase 1 | Pending |
+| DETECT-04 | Phase 2 | Pending |
+| DETECT-05 | Phase 2 | Pending |
+| DETECT-07 | Phase 2 | Pending |
+| DETECT-08 | Phase 2 | Pending |
+| DETECT-09 | Phase 2 | Pending |
+| TRIAGE-01 | Phase 2 | Pending |
+| TRIAGE-02 | Phase 2 | Pending |
+| TRIAGE-03 | Phase 2 | Pending |
+| TRIAGE-04 | Phase 2 | Pending |
+| TRIAGE-05 | Phase 2 | Pending |
+| BUG-01 | Phase 2 | Pending |
+| BUG-02 | Phase 2 | Pending |
+| BUG-03 | Phase 3 | Pending |
+| BUG-04 | Phase 3 | Pending |
+| BUG-05 | Phase 3 | Pending |
+| MGMT-05 | Phase 3 | Pending |
+| MGMT-01 | Phase 4 | Pending |
+| MGMT-02 | Phase 4 | Pending |
+| MGMT-03 | Phase 4 | Pending |
+| MGMT-04 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 — traceability mapped after roadmap creation*
