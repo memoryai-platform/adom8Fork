@@ -59,7 +59,7 @@ Plans:
 5. Cascade errors (PluginTraceLog entries with depth > 0) are skipped - only root-cause entries (depth = 0) progress through the triage funnel
 6. Existing callers of `CreateWorkItemAsync` continue to compile and behave identically - the Bug type parameter defaults to User Story
 
-**Plans**: TBD
+**Plans**: 3 planned
 
 Plans:
 - [ ] 02-01: ErrorTriageService skeleton - 5-layer funnel structure, rule-based noise filter, per-plugin threshold config, cascade depth filter
@@ -120,6 +120,6 @@ Phases execute in numeric order. Phase 4 can begin after Phase 1 completes (no d
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Infrastructure Foundation | 3/3 | Complete | 2026-03-15 |
-| 2. Triage Orchestrator | 0/3 | Not started | - |
+| 2. Triage Orchestrator | 0/3 | Planned | - |
 | 3. Timer Trigger and Lifecycle Detection | 0/3 | Not started | - |
 | 4. Management Endpoints | 0/2 | Not started | - |
