@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import AuthImage from '../mosaic/images/auth-image.jpg';
+import AuthImage from '../mosaic/images/auth-image.png';
 import { validateAppKey } from '../api';
 
 export default function LoginGate({ onAuthenticated }) {

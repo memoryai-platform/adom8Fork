@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-import AuthImage from "../images/auth-image.jpg";
+import AuthImage from "../images/auth-image.png";
 
 function Signin() {
   return (
