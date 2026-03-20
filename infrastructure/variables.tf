@@ -10,6 +10,12 @@ variable "location" {
   default     = "eastus"
 }
 
+variable "static_web_app_location" {
+  description = "Azure region for Static Web App (valid: westus2, centralus, eastus2, westeurope, eastasia)"
+  type        = string
+  default     = "eastus2"
+}
+
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string

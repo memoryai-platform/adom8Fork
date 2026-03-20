@@ -36,7 +36,7 @@ variables:
   FUNCTION_APP_NAME: 'adom8-func-placeholder'
   STORAGE_ACCOUNT_NAME: 'adom8stplaceholder'
   KEY_VAULT_NAME: 'adom8-kv-placeholder'
-  STATIC_WEB_APP_LOCATION: '$(LOCATION)'
+  STATIC_WEB_APP_LOCATION: 'eastus2'
   COPILOT_ENABLED: 'true'
   COPILOT_MODE: 'Auto'
   COPILOT_COMPLEXITY_THRESHOLD: '8'

@@ -1137,6 +1137,7 @@ stages:
 | `TF_VAR_static_web_app_name` | `ai-agent-dashboard-YOURNAME` |
 | `TF_VAR_resource_group_name` | `ai-agents-rg` |
 | `TF_VAR_location` | `eastus` |
+| `TF_VAR_static_web_app_location` | `eastus2` |
 
 ### 12e. Create the Pipeline
 
